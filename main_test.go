@@ -31,3 +31,14 @@ func TestNewRequiresModuleName(t *testing.T) {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
 }
+
+func TestNewRejectsMissingSourceDirArgument(t *testing.T) {
+	var stderr bytes.Buffer
+
+	if code := execute([]string{"new", "--source-dir"}, nil, &bytes.Buffer{}, &stderr); code != 1 {
+		t.Fatalf("exit code = %d, want 1", code)
+	}
+	if !strings.Contains(stderr.String(), "flag needs an argument") {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+}

@@ -112,6 +112,55 @@ func TestClonesRenamesAndValidates(t *testing.T) {
 	}
 }
 
+func TestCopiesSourceDirectoryRenamesAndValidates(t *testing.T) {
+	dir := t.TempDir()
+	source := filepath.Join(dir, "sample_app")
+	if err := os.MkdirAll(filepath.Join(source, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(source, "go.mod"), "module sample_app\n")
+	writeFile(
+		t,
+		filepath.Join(source, "main.go"),
+		"package main\nimport \"sample_app/app\"\n",
+	)
+
+	var stdout bytes.Buffer
+	var calls []invocation
+
+	command := Command{
+		Version:   readVersion(t),
+		SourceDir: source,
+		Dir:       dir,
+		Stdout:    &stdout,
+		Runner: func(name string, args []string, options commands.Options) error {
+			calls = append(calls, invocation{command: name, args: args, options: options})
+			return nil
+		},
+	}
+
+	if err := command.Execute("github.com/guillermo/my_app"); err != nil {
+		t.Fatal(err)
+	}
+
+	destination := filepath.Join(dir, "my_app")
+	if _, err := os.Stat(filepath.Join(destination, ".git")); !os.IsNotExist(err) {
+		t.Fatalf(".git still exists: %v", err)
+	}
+	assertFileContains(t, filepath.Join(destination, "go.mod"), "module github.com/guillermo/my_app")
+	assertFileContains(t, filepath.Join(destination, "main.go"), `"github.com/guillermo/my_app/app"`)
+
+	if len(calls) != 2 {
+		t.Fatalf("calls = %d, want 2", len(calls))
+	}
+	if got, want := calls[0].args, []string{"mod", "tidy"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("tidy args = %#v, want %#v", got, want)
+	}
+	if got, want := calls[1].args, []string{"test", "./..."}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("test args = %#v, want %#v", got, want)
+	}
+}
+
 func TestDoesNotOverwriteDestination(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.Mkdir(filepath.Join(dir, "my_app"), 0o755); err != nil {
@@ -130,6 +179,22 @@ func TestDoesNotOverwriteDestination(t *testing.T) {
 
 	err := command.Execute("github.com/guillermo/my_app")
 	if err == nil || !strings.Contains(err.Error(), `destination "my_app" already exists`) {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestRejectsMissingSourceDirectory(t *testing.T) {
+	dir := t.TempDir()
+
+	command := Command{
+		Version:   readVersion(t),
+		SourceDir: filepath.Join(dir, "missing"),
+		Dir:       dir,
+		Stdout:    &bytes.Buffer{},
+	}
+
+	err := command.Execute("github.com/guillermo/my_app")
+	if err == nil || !strings.Contains(err.Error(), "inspect source dir") {
 		t.Fatalf("error = %v", err)
 	}
 }

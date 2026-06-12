@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -40,14 +41,21 @@ func execute(
 		fmt.Fprintf(stdout, "lazy %s\n", currentVersion())
 		return 0
 	case "new":
-		if len(args) != 2 {
+		flags := flag.NewFlagSet("new", flag.ContinueOnError)
+		flags.SetOutput(stderr)
+		sourceDir := flags.String("source-dir", "", "copy the template from a local directory")
+		if err := flags.Parse(args[1:]); err != nil {
+			return 1
+		}
+		if flags.NArg() != 1 {
 			fmt.Fprintln(stderr, "lazy: usage: lazy new <module>")
 			return 1
 		}
 		err := (newcommand.Command{
-			Version: currentVersion(),
-			Stdout:  stdout,
-		}).Execute(args[1])
+			Version:   currentVersion(),
+			SourceDir: *sourceDir,
+			Stdout:    stdout,
+		}).Execute(flags.Arg(0))
 		if err != nil {
 			fmt.Fprintf(stderr, "lazy: %v\n", err)
 			return 1

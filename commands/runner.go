@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -14,6 +15,7 @@ type Options struct {
 	Stdin   io.Reader
 	Stdout  io.Writer
 	Stderr  io.Writer
+	Env     []string
 	Capture bool
 }
 
@@ -36,6 +38,9 @@ func Exec(command string, args []string, options Options) error {
 	process := exec.Command(command, args...)
 	process.Dir = options.Dir
 	process.Stdin = options.Stdin
+	if len(options.Env) != 0 {
+		process.Env = append(os.Environ(), options.Env...)
+	}
 
 	var output bytes.Buffer
 	if options.Capture {

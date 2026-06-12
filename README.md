@@ -24,6 +24,13 @@ The command creates `./my_app` from the `golazy/sample_app` tag matching the
 CLI version, removes the template Git history, changes the module and imports,
 then runs `go mod tidy` and `go test ./...`.
 
+For local validation against the checked-out sample application, point `lazy
+new` at a directory:
+
+```sh
+lazy new --source-dir ../sample_app github.com/guillermo/my_app
+```
+
 ## Version
 
 ```sh
