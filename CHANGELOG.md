@@ -14,6 +14,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `lazy` and `lazy routes` now run applications with the `lazydev` build tag,
   so development commands use local disk views while production builds keep
   embedded views.
+- `lazy new --source-dir` validates generated applications with temporary
+  workspace replacements when preparing an unpublished framework release,
+  without leaving local `replace` directives in the generated app.
 - Updated the CLI release version to `v0.1.4` so `lazy new` selects the
   matching `golazy/sample_app` template tag.
 

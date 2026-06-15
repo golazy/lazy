@@ -161,6 +161,73 @@ func TestCopiesSourceDirectoryRenamesAndValidates(t *testing.T) {
 	}
 }
 
+func TestCopiesSourceDirectoryValidatesWithWorkspaceReplaces(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "golazy"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(
+		t,
+		filepath.Join(dir, "go.work"),
+		"go 1.26.0\n\nreplace golazy.dev v0.1.4 => ./golazy\n",
+	)
+
+	source := filepath.Join(dir, "sample_app")
+	if err := os.MkdirAll(source, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(
+		t,
+		filepath.Join(source, "go.mod"),
+		"module sample_app\n\ngo 1.26.0\n\nrequire golazy.dev v0.1.4\n",
+	)
+	writeFile(
+		t,
+		filepath.Join(source, "main.go"),
+		"package main\nimport \"sample_app/app\"\n",
+	)
+
+	var calls []invocation
+	command := Command{
+		Version:   "v0.1.4",
+		SourceDir: source,
+		Dir:       dir,
+		Stdout:    &bytes.Buffer{},
+		Runner: func(name string, args []string, options commands.Options) error {
+			calls = append(calls, invocation{command: name, args: args, options: options})
+			return nil
+		},
+	}
+
+	if err := command.Execute("github.com/guillermo/my_app"); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(calls) != 2 {
+		t.Fatalf("calls = %d, want 2", len(calls))
+	}
+	if got, want := calls[0].args, []string{"mod", "tidy", "-modfile=.lazy-go.mod"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("tidy args = %#v, want %#v", got, want)
+	}
+	if got, want := calls[1].args, []string{"test", "-modfile=.lazy-go.mod", "./..."}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("test args = %#v, want %#v", got, want)
+	}
+	for _, call := range calls {
+		if !contains(call.options.Env, "GOWORK=off") {
+			t.Fatalf("%s env = %#v, does not contain GOWORK=off", call.command, call.options.Env)
+		}
+	}
+
+	destination := filepath.Join(dir, "my_app")
+	if _, err := os.Stat(filepath.Join(destination, ".lazy-go.mod")); !os.IsNotExist(err) {
+		t.Fatalf(".lazy-go.mod still exists: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(destination, ".lazy-go.sum")); !os.IsNotExist(err) {
+		t.Fatalf(".lazy-go.sum still exists: %v", err)
+	}
+	assertFileContains(t, filepath.Join(destination, "go.mod"), "require golazy.dev v0.1.4")
+}
+
 func TestDoesNotOverwriteDestination(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.Mkdir(filepath.Join(dir, "my_app"), 0o755); err != nil {
@@ -218,4 +285,13 @@ func assertFileContains(t *testing.T, filename, expected string) {
 	if !strings.Contains(string(data), expected) {
 		t.Fatalf("%s = %q, does not contain %q", filename, data, expected)
 	}
+}
+
+func contains(values []string, expected string) bool {
+	for _, value := range values {
+		if value == expected {
+			return true
+		}
+	}
+	return false
 }

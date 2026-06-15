@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/golazy/lazy/commands"
+	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/module"
 )
 
@@ -85,21 +86,24 @@ func (c Command) Execute(modulePath string) error {
 		return err
 	}
 
-	commandEnv, cleanupWorkfile, err := localWorkspaceEnv(destination)
+	commandEnv, goArgs, cleanupWorkfile, err := localValidation(destination, c.SourceDir != "")
 	if err != nil {
 		return err
 	}
 	defer cleanupWorkfile()
 
 	fmt.Fprintln(c.Stdout, "* Validating")
-	if err := runner("go", []string{"mod", "tidy"}, commands.Options{
+	tidyArgs := append([]string{"mod", "tidy"}, goArgs...)
+	if err := runner("go", tidyArgs, commands.Options{
 		Dir:     destination,
 		Env:     commandEnv,
 		Capture: true,
 	}); err != nil {
 		return fmt.Errorf("go mod tidy: %w", err)
 	}
-	if err := runner("go", []string{"test", "./..."}, commands.Options{
+	testArgs := append([]string{"test"}, goArgs...)
+	testArgs = append(testArgs, "./...")
+	if err := runner("go", testArgs, commands.Options{
 		Dir:     destination,
 		Env:     commandEnv,
 		Capture: true,
@@ -194,6 +198,81 @@ func copyTemplateDirectory(source, destination string) error {
 	}
 
 	return nil
+}
+
+func localValidation(destination string, sourceDir bool) ([]string, []string, func(), error) {
+	if sourceDir {
+		env, args, cleanup, err := localModfileValidation(destination)
+		if err != nil || len(args) != 0 {
+			return env, args, cleanup, err
+		}
+	}
+	env, cleanup, err := localWorkspaceEnv(destination)
+	return env, nil, cleanup, err
+}
+
+func localModfileValidation(destination string) ([]string, []string, func(), error) {
+	workspaceFile, workspaceRoot, found := findWorkspace(destination)
+	if !found {
+		return nil, nil, func() {}, nil
+	}
+
+	data, err := os.ReadFile(workspaceFile)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("read %s: %w", workspaceFile, err)
+	}
+	workFile, err := modfile.ParseWork(workspaceFile, data, nil)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("parse %s: %w", workspaceFile, err)
+	}
+	if len(workFile.Replace) == 0 {
+		return nil, nil, func() {}, nil
+	}
+
+	modPath := filepath.Join(destination, "go.mod")
+	modData, err := os.ReadFile(modPath)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("read %s: %w", modPath, err)
+	}
+	modFile, err := modfile.Parse(modPath, modData, nil)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("parse %s: %w", modPath, err)
+	}
+
+	added := false
+	for _, replacement := range workFile.Replace {
+		newPath := replacement.New.Path
+		if replacement.New.Version == "" && newPath != "" && !filepath.IsAbs(newPath) {
+			newPath = filepath.Join(workspaceRoot, filepath.FromSlash(newPath))
+		}
+		if err := modFile.AddReplace(replacement.Old.Path, replacement.Old.Version, newPath, replacement.New.Version); err != nil {
+			return nil, nil, nil, fmt.Errorf("add temporary replace for %s: %w", replacement.Old.Path, err)
+		}
+		added = true
+	}
+	if !added {
+		return nil, nil, func() {}, nil
+	}
+
+	tempMod := filepath.Join(destination, ".lazy-go.mod")
+	formatted, err := modFile.Format()
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("format temporary go.mod: %w", err)
+	}
+	if err := os.WriteFile(tempMod, formatted, 0o644); err != nil {
+		return nil, nil, nil, fmt.Errorf("write %s: %w", tempMod, err)
+	}
+
+	cleanup := func() {
+		_ = os.Remove(tempMod)
+		_ = os.Remove(filepath.Join(destination, ".lazy-go.sum"))
+	}
+	env := []string{
+		"GOWORK=off",
+		"GOPRIVATE=golazy.dev",
+		"GONOSUMDB=golazy.dev",
+	}
+	return env, []string{"-modfile=.lazy-go.mod"}, cleanup, nil
 }
 
 func localWorkspaceEnv(destination string) ([]string, func(), error) {
