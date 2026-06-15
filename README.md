@@ -22,9 +22,9 @@ From a GoLazy application module:
 lazy routes
 ```
 
-The command runs the application with the `printroutes` build tag, lets
-`lazyapp.New` initialize the app and call `Draw`, then prints the route table
-without starting the HTTP server.
+The command runs the application with the `lazydev,printroutes` build tags,
+lets `lazyapp.New` initialize the app and call `Draw`, then prints the route
+table without starting the HTTP server.
 
 ## Create an application
 
@@ -67,3 +67,7 @@ is embedded into the binary at build time.
 ```sh
 go build .
 ```
+
+## License
+
+The GoLazy CLI is released under the MIT License. See [LICENSE](LICENSE).
