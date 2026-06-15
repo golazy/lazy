@@ -7,6 +7,16 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-06-15
+
+### Changed
+
+- `lazy` and `lazy routes` now run applications with the `lazydev` build tag,
+  so development commands use local disk views while production builds keep
+  embedded views.
+- Updated the CLI release version to `v0.1.4` so `lazy new` selects the
+  matching `golazy/sample_app` template tag.
+
 ## [0.1.3] - 2026-06-15
 
 ### Added
@@ -43,7 +53,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The CLI version now comes from the checked-in `VERSION` file embedded into
   the binary at build time.
 
-[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/golazy/lazy/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/golazy/lazy/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/golazy/lazy/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/golazy/lazy/releases/tag/v0.1.1
