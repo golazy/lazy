@@ -15,12 +15,7 @@ func main() {
 	os.Exit(execute(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
 
-func execute(
-	args []string,
-	stdin io.Reader,
-	stdout io.Writer,
-	stderr io.Writer,
-) int {
+func execute(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
 	if len(args) == 0 {
 		code, err := (runcommand.Command{
 			Stdin:  stdin,
