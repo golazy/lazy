@@ -1,0 +1,129 @@
+package routes
+
+import (
+	"bytes"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+
+	"github.com/golazy/lazy/commands"
+)
+
+type invocation struct {
+	command string
+	args    []string
+	options commands.Options
+}
+
+func TestCommandRunsApplicationWithPrintRoutesTag(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "go.mod"), "module example.com/team/my_app\n")
+	mkdir(t, filepath.Join(dir, "cmd", "app"))
+
+	var calls []invocation
+	var stdout bytes.Buffer
+	command := Command{
+		Dir:    dir,
+		Stdout: &stdout,
+		Stderr: &bytes.Buffer{},
+		Runner: func(name string, args []string, options commands.Options) ([]byte, error) {
+			calls = append(calls, invocation{command: name, args: args, options: options})
+			return []byte(`{"method":"GET","path":"/","name":"root","controller":"home","action":"Index","params":{}}` + "\n"), nil
+		},
+	}
+
+	code, err := command.Execute()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+	if len(calls) != 1 {
+		t.Fatalf("calls = %d, want 1", len(calls))
+	}
+	if got, want := calls[0].command, "go"; got != want {
+		t.Fatalf("command = %q, want %q", got, want)
+	}
+	if got, want := calls[0].args, []string{"run", "-tags", "printroutes", "./cmd/app"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("args = %#v, want %#v", got, want)
+	}
+	if !strings.Contains(stdout.String(), "root") || !strings.Contains(stdout.String(), "home#Index") {
+		t.Fatalf("stdout = %q, want route table", stdout.String())
+	}
+}
+
+func TestCommandUsesModuleNamedCommandFirst(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "go.mod"), "module example.com/team/blog\n")
+	mkdir(t, filepath.Join(dir, "cmd", "blog"))
+	mkdir(t, filepath.Join(dir, "cmd", "app"))
+
+	var calls []invocation
+	command := Command{
+		Dir:    dir,
+		Stdout: &bytes.Buffer{},
+		Stderr: &bytes.Buffer{},
+		Runner: func(name string, args []string, options commands.Options) ([]byte, error) {
+			calls = append(calls, invocation{command: name, args: args, options: options})
+			return []byte{}, nil
+		},
+	}
+
+	code, err := command.Execute()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+	if got, want := calls[0].args, []string{"run", "-tags", "printroutes", "./cmd/blog"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("args = %#v, want %#v", got, want)
+	}
+}
+
+func TestParseRoutesRejectsInvalidJSONL(t *testing.T) {
+	_, err := parseRoutes([]byte("not json\n"))
+	if err == nil || !strings.Contains(err.Error(), "line 1") {
+		t.Fatalf("error = %v, want line parse error", err)
+	}
+}
+
+func TestWriteTableSortsParams(t *testing.T) {
+	var out bytes.Buffer
+	err := writeTable(&out, []Route{
+		{
+			Method:     "GET",
+			Path:       "/posts/{post_id}/comments/{comment_id}",
+			Name:       "comment",
+			Controller: "comments",
+			Action:     "Show",
+			Params:     map[string]bool{"post_id": true, "comment_id": true},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "comment_id,post_id") {
+		t.Fatalf("stdout = %q, want sorted params", out.String())
+	}
+}
+
+func writeFile(t *testing.T, filename, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(filename), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filename, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func mkdir(t *testing.T, path string) {
+	t.Helper()
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		t.Fatal(err)
+	}
+}

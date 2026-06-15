@@ -7,6 +7,7 @@ import (
 	"os"
 
 	newcommand "github.com/golazy/lazy/commands/new"
+	routescommand "github.com/golazy/lazy/commands/routes"
 	runcommand "github.com/golazy/lazy/commands/run"
 )
 
@@ -61,6 +62,19 @@ func execute(
 			return 1
 		}
 		return 0
+	case "routes":
+		if len(args) != 1 {
+			fmt.Fprintln(stderr, "lazy: routes does not accept arguments")
+			return 1
+		}
+		code, err := (routescommand.Command{
+			Stdout: stdout,
+			Stderr: stderr,
+		}).Execute()
+		if err != nil {
+			fmt.Fprintf(stderr, "lazy: %v\n", err)
+		}
+		return code
 	default:
 		fmt.Fprintf(stderr, "lazy: unknown command %q\n", args[0])
 		return 1

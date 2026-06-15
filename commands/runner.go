@@ -21,6 +21,8 @@ type Options struct {
 
 type Runner func(command string, args []string, options Options) error
 
+type OutputRunner func(command string, args []string, options Options) ([]byte, error)
+
 type ExitError struct {
 	Code int
 	Err  error
@@ -62,4 +64,26 @@ func Exec(command string, args []string, options Options) error {
 		return err
 	}
 	return nil
+}
+
+func ExecOutput(command string, args []string, options Options) ([]byte, error) {
+	process := exec.Command(command, args...)
+	process.Dir = options.Dir
+	process.Stdin = options.Stdin
+	if len(options.Env) != 0 {
+		process.Env = append(os.Environ(), options.Env...)
+	}
+
+	var output bytes.Buffer
+	process.Stdout = &output
+	process.Stderr = options.Stderr
+
+	if err := process.Run(); err != nil {
+		var processError *exec.ExitError
+		if errors.As(err, &processError) {
+			return output.Bytes(), &ExitError{Code: processError.ExitCode(), Err: err}
+		}
+		return output.Bytes(), err
+	}
+	return output.Bytes(), nil
 }

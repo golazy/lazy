@@ -42,3 +42,14 @@ func TestNewRejectsMissingSourceDirArgument(t *testing.T) {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
 }
+
+func TestRoutesRejectsArguments(t *testing.T) {
+	var stderr bytes.Buffer
+
+	if code := execute([]string{"routes", "extra"}, nil, &bytes.Buffer{}, &stderr); code != 1 {
+		t.Fatalf("exit code = %d, want 1", code)
+	}
+	if !strings.Contains(stderr.String(), "routes does not accept arguments") {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+}

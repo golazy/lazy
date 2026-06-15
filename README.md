@@ -14,6 +14,18 @@ The command reads the module path from `go.mod` and first looks for
 `./cmd/<module-name>`. If that directory does not exist, it falls back to
 `./cmd/app`.
 
+## Inspect routes
+
+From a GoLazy application module:
+
+```sh
+lazy routes
+```
+
+The command runs the application with the `printroutes` build tag, lets
+`lazyapp.New` initialize the app and call `Draw`, then prints the route table
+without starting the HTTP server.
+
 ## Create an application
 
 ```sh
@@ -45,6 +57,8 @@ is embedded into the binary at build time.
 - `main.go`: command dispatch and version output.
 - `VERSION`: build version embedded into the binary.
 - `commands/run`: application discovery and execution.
+- `commands/routes`: route-table inspection.
+- `commands/appcmd`: shared application command discovery.
 - `commands/new`: tagged template cloning, renaming, and validation.
 - `commands`: shared subprocess execution.
 

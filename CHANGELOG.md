@@ -7,6 +7,20 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-06-15
+
+### Added
+
+- `lazy routes` to inspect a GoLazy application's route table without starting
+  the HTTP server.
+
+### Changed
+
+- Shared application command discovery between `lazy` and `lazy routes`, using
+  `./cmd/<module-name>` first and falling back to `./cmd/app`.
+- Updated the CLI release version to `v0.1.3` so `lazy new` selects the matching
+  `golazy/sample_app` template tag.
+
 ## [0.1.2] - 2026-06-12
 
 ### Changed
@@ -29,6 +43,7 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The CLI version now comes from the checked-in `VERSION` file embedded into
   the binary at build time.
 
-[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/golazy/lazy/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/golazy/lazy/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/golazy/lazy/releases/tag/v0.1.1
