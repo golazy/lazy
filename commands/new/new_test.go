@@ -113,6 +113,8 @@ func TestClonesRenamesAndValidates(t *testing.T) {
 }
 
 func TestCopiesSourceDirectoryRenamesAndValidates(t *testing.T) {
+	t.Setenv("GOWORK", "off")
+
 	dir := t.TempDir()
 	source := filepath.Join(dir, "sample_app")
 	if err := os.MkdirAll(filepath.Join(source, ".git"), 0o755); err != nil {
@@ -171,6 +173,7 @@ func TestCopiesSourceDirectoryValidatesWithWorkspaceReplaces(t *testing.T) {
 		filepath.Join(dir, "go.work"),
 		"go 1.26.0\n\nreplace golazy.dev v0.1.4 => ./golazy\n",
 	)
+	t.Setenv("GOWORK", filepath.Join(dir, "go.work"))
 
 	source := filepath.Join(dir, "sample_app")
 	if err := os.MkdirAll(source, 0o755); err != nil {
