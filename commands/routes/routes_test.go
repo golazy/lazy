@@ -47,7 +47,7 @@ func TestCommandRunsApplicationWithPrintRoutesTag(t *testing.T) {
 	if got, want := calls[0].command, "go"; got != want {
 		t.Fatalf("command = %q, want %q", got, want)
 	}
-	if got, want := calls[0].args, []string{"run", "-tags", "printroutes", "./cmd/app"}; !reflect.DeepEqual(got, want) {
+	if got, want := calls[0].args, []string{"run", "-tags", "lazydev,printroutes", "./cmd/app"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("args = %#v, want %#v", got, want)
 	}
 	if !strings.Contains(stdout.String(), "root") || !strings.Contains(stdout.String(), "home#Index") {
@@ -79,7 +79,7 @@ func TestCommandUsesModuleNamedCommandFirst(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0", code)
 	}
-	if got, want := calls[0].args, []string{"run", "-tags", "printroutes", "./cmd/blog"}; !reflect.DeepEqual(got, want) {
+	if got, want := calls[0].args, []string{"run", "-tags", "lazydev,printroutes", "./cmd/blog"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("args = %#v, want %#v", got, want)
 	}
 }

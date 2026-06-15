@@ -45,7 +45,7 @@ func TestUsesModuleNamedCommandFirst(t *testing.T) {
 	if len(calls) != 1 {
 		t.Fatalf("calls = %d, want 1", len(calls))
 	}
-	if got, want := calls[0].args, []string{"run", "./cmd/sample_app"}; !reflect.DeepEqual(got, want) {
+	if got, want := calls[0].args, []string{"run", "-tags", "lazydev", "./cmd/sample_app"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("args = %#v, want %#v", got, want)
 	}
 }
@@ -71,7 +71,7 @@ func TestFallsBackToAppCommand(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit code = %d", code)
 	}
-	if got, want := calls[0].args, []string{"run", "./cmd/app"}; !reflect.DeepEqual(got, want) {
+	if got, want := calls[0].args, []string{"run", "-tags", "lazydev", "./cmd/app"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("args = %#v, want %#v", got, want)
 	}
 }

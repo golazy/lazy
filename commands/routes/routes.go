@@ -56,7 +56,7 @@ func (c Command) Execute() (int, error) {
 	output, err := runner("go", []string{
 		"run",
 		"-tags",
-		"printroutes",
+		"lazydev,printroutes",
 		"./" + filepath.ToSlash(candidate),
 	}, commands.Options{
 		Dir:    dir,

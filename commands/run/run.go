@@ -38,7 +38,7 @@ func (c Command) Execute() (int, error) {
 	if runner == nil {
 		runner = commands.Exec
 	}
-	err = runner("go", []string{"run", "./" + filepath.ToSlash(candidate)}, commands.Options{
+	err = runner("go", []string{"run", "-tags", "lazydev", "./" + filepath.ToSlash(candidate)}, commands.Options{
 		Dir:    dir,
 		Stdin:  c.Stdin,
 		Stdout: c.Stdout,
