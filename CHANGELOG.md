@@ -7,6 +7,13 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-06-16
+
+### Changed
+
+- Updated the CLI release version to `v0.1.5` so `lazy new` selects the
+  matching `golazy/sample_app` template tag with asset permalink support.
+
 ## [0.1.4] - 2026-06-15
 
 ### Changed
@@ -56,7 +63,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The CLI version now comes from the checked-in `VERSION` file embedded into
   the binary at build time.
 
-[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/golazy/lazy/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/golazy/lazy/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/golazy/lazy/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/golazy/lazy/compare/v0.1.1...v0.1.2
