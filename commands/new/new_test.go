@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -59,6 +60,11 @@ func TestClonesRenamesAndValidates(t *testing.T) {
 				filepath.Join(destination, "main.go"),
 				"package main\nimport \"sample_app/app\"\n",
 			)
+			writeFile(
+				t,
+				filepath.Join(destination, "init", "app.go"),
+				"package appinit\n\nconst secureCookieKey = \"template-secure-cookie-key\"\n",
+			)
 			return nil
 		},
 	}
@@ -73,6 +79,7 @@ func TestClonesRenamesAndValidates(t *testing.T) {
 	}
 	assertFileContains(t, filepath.Join(destination, "go.mod"), "module github.com/guillermo/my_app")
 	assertFileContains(t, filepath.Join(destination, "main.go"), `"github.com/guillermo/my_app/app"`)
+	assertGeneratedSecureCookieKey(t, filepath.Join(destination, "init", "app.go"))
 
 	wantOutput := strings.Join([]string{
 		"* Initializing the core app",
@@ -110,6 +117,25 @@ func TestClonesRenamesAndValidates(t *testing.T) {
 			t.Fatalf("%s was not captured", call.command)
 		}
 	}
+}
+
+func TestReplaceSecureCookieKeyGeneratesRandomHexKey(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "init", "app.go")
+	writeFile(t, path, strings.Join([]string{
+		"package appinit",
+		"",
+		"const secureCookieKey = \"template-secure-cookie-key\"",
+		"const otherKey = \"template-secure-cookie-key\"",
+		"",
+	}, "\n"))
+
+	if err := replaceSecureCookieKey(dir); err != nil {
+		t.Fatal(err)
+	}
+
+	assertGeneratedSecureCookieKey(t, path)
+	assertFileContains(t, path, `const otherKey = "template-secure-cookie-key"`)
 }
 
 func TestCopiesSourceDirectoryRenamesAndValidates(t *testing.T) {
@@ -287,6 +313,20 @@ func assertFileContains(t *testing.T, filename, expected string) {
 	}
 	if !strings.Contains(string(data), expected) {
 		t.Fatalf("%s = %q, does not contain %q", filename, data, expected)
+	}
+}
+
+func assertGeneratedSecureCookieKey(t *testing.T, filename string) {
+	t.Helper()
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), `secureCookieKey = "template-secure-cookie-key"`) {
+		t.Fatalf("%s still contains the template secure cookie key", filename)
+	}
+	if !regexp.MustCompile(`secureCookieKey = "[a-f0-9]{64}"`).Match(data) {
+		t.Fatalf("%s does not contain a generated 32-byte hex secure cookie key: %s", filename, data)
 	}
 }
 

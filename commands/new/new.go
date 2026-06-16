@@ -2,11 +2,17 @@ package newcommand
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -83,6 +89,9 @@ func (c Command) Execute(modulePath string) error {
 
 	fmt.Fprintln(c.Stdout, "* Naming the app")
 	if err := replaceTemplateName(destination, modulePath); err != nil {
+		return err
+	}
+	if err := replaceSecureCookieKey(destination); err != nil {
 		return err
 	}
 
@@ -384,4 +393,88 @@ func replaceTemplateName(root, modulePath string) error {
 		}
 	}
 	return nil
+}
+
+func replaceSecureCookieKey(root string) error {
+	key, err := randomHexKey(32)
+	if err != nil {
+		return err
+	}
+
+	err = filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() || filepath.Ext(path) != ".go" {
+			return nil
+		}
+
+		if _, err := replaceGoStringConst(path, "secureCookieKey", key); err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("replace secure cookie key: %w", err)
+	}
+	return nil
+}
+
+func randomHexKey(size int) (string, error) {
+	key := make([]byte, size)
+	if _, err := rand.Read(key); err != nil {
+		return "", fmt.Errorf("generate secure cookie key: %w", err)
+	}
+	return hex.EncodeToString(key), nil
+}
+
+func replaceGoStringConst(path, name, value string) (bool, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false, fmt.Errorf("read %s: %w", path, err)
+	}
+
+	fileSet := token.NewFileSet()
+	parsed, err := parser.ParseFile(fileSet, path, data, parser.ParseComments)
+	if err != nil {
+		return false, fmt.Errorf("parse %s: %w", path, err)
+	}
+
+	var literal *ast.BasicLit
+	ast.Inspect(parsed, func(node ast.Node) bool {
+		if literal != nil {
+			return false
+		}
+		valueSpec, ok := node.(*ast.ValueSpec)
+		if !ok {
+			return true
+		}
+		for i, ident := range valueSpec.Names {
+			if ident.Name != name || i >= len(valueSpec.Values) {
+				continue
+			}
+			if lit, ok := valueSpec.Values[i].(*ast.BasicLit); ok && lit.Kind == token.STRING {
+				literal = lit
+				return false
+			}
+		}
+		return true
+	})
+	if literal == nil {
+		return false, nil
+	}
+
+	start := fileSet.Position(literal.Pos()).Offset
+	end := fileSet.Position(literal.End()).Offset
+	updated := append([]byte(nil), data[:start]...)
+	updated = append(updated, []byte(strconv.Quote(value))...)
+	updated = append(updated, data[end:]...)
+	info, err := os.Stat(path)
+	if err != nil {
+		return false, fmt.Errorf("stat %s: %w", path, err)
+	}
+	if err := os.WriteFile(path, updated, info.Mode().Perm()); err != nil {
+		return false, fmt.Errorf("write %s: %w", path, err)
+	}
+	return true, nil
 }
