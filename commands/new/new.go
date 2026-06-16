@@ -396,7 +396,7 @@ func replaceTemplateName(root, modulePath string) error {
 }
 
 func replaceSecureCookieKey(root string) error {
-	key, err := randomHexKey(32)
+	key, err := randomHexKey(8)
 	if err != nil {
 		return err
 	}
@@ -409,6 +409,9 @@ func replaceSecureCookieKey(root string) error {
 			return nil
 		}
 
+		if _, err := replaceLazySessionConfigKey(path, key); err != nil {
+			return err
+		}
 		if _, err := replaceGoStringConst(path, "secureCookieKey", key); err != nil {
 			return err
 		}
@@ -426,6 +429,62 @@ func randomHexKey(size int) (string, error) {
 		return "", fmt.Errorf("generate secure cookie key: %w", err)
 	}
 	return hex.EncodeToString(key), nil
+}
+
+func replaceLazySessionConfigKey(path, value string) (bool, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false, fmt.Errorf("read %s: %w", path, err)
+	}
+
+	fileSet := token.NewFileSet()
+	parsed, err := parser.ParseFile(fileSet, path, data, parser.ParseComments)
+	if err != nil {
+		return false, fmt.Errorf("parse %s: %w", path, err)
+	}
+
+	var literal *ast.BasicLit
+	ast.Inspect(parsed, func(node ast.Node) bool {
+		if literal != nil {
+			return false
+		}
+		composite, ok := node.(*ast.CompositeLit)
+		if !ok || !isLazySessionConfigType(composite.Type) {
+			return true
+		}
+		for _, element := range composite.Elts {
+			keyValue, ok := element.(*ast.KeyValueExpr)
+			if !ok {
+				continue
+			}
+			ident, ok := keyValue.Key.(*ast.Ident)
+			if !ok || ident.Name != "Key" {
+				continue
+			}
+			if lit, ok := keyValue.Value.(*ast.BasicLit); ok && lit.Kind == token.STRING {
+				literal = lit
+				return false
+			}
+		}
+		return true
+	})
+	if literal == nil {
+		return false, nil
+	}
+
+	if err := replaceStringLiteral(path, data, fileSet, literal, value); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func isLazySessionConfigType(expr ast.Expr) bool {
+	selector, ok := expr.(*ast.SelectorExpr)
+	if !ok || selector.Sel.Name != "Config" {
+		return false
+	}
+	ident, ok := selector.X.(*ast.Ident)
+	return ok && ident.Name == "lazysession"
 }
 
 func replaceGoStringConst(path, name, value string) (bool, error) {
@@ -464,6 +523,13 @@ func replaceGoStringConst(path, name, value string) (bool, error) {
 		return false, nil
 	}
 
+	if err := replaceStringLiteral(path, data, fileSet, literal, value); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func replaceStringLiteral(path string, data []byte, fileSet *token.FileSet, literal *ast.BasicLit, value string) error {
 	start := fileSet.Position(literal.Pos()).Offset
 	end := fileSet.Position(literal.End()).Offset
 	updated := append([]byte(nil), data[:start]...)
@@ -471,10 +537,10 @@ func replaceGoStringConst(path, name, value string) (bool, error) {
 	updated = append(updated, data[end:]...)
 	info, err := os.Stat(path)
 	if err != nil {
-		return false, fmt.Errorf("stat %s: %w", path, err)
+		return fmt.Errorf("stat %s: %w", path, err)
 	}
 	if err := os.WriteFile(path, updated, info.Mode().Perm()); err != nil {
-		return false, fmt.Errorf("write %s: %w", path, err)
+		return fmt.Errorf("write %s: %w", path, err)
 	}
-	return true, nil
+	return nil
 }
