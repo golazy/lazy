@@ -7,6 +7,19 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-06-17
+
+### Changed
+
+- Updated the CLI release version to `v0.1.6` so `lazy new` selects the
+  matching `golazy/sample_app` template tag with sessions, server helpers, and
+  pooled-controller conventions.
+
+### Fixed
+
+- `lazy new` now replaces the sample app's session key with fresh random
+  16-character hex key material in generated applications.
+
 ## [0.1.5] - 2026-06-16
 
 ### Changed
@@ -63,7 +76,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The CLI version now comes from the checked-in `VERSION` file embedded into
   the binary at build time.
 
-[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/golazy/lazy/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/golazy/lazy/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/golazy/lazy/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/golazy/lazy/compare/v0.1.2...v0.1.3
