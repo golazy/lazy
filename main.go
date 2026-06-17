@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 
+	jscommand "github.com/golazy/lazy/commands/js"
 	newcommand "github.com/golazy/lazy/commands/new"
 	routescommand "github.com/golazy/lazy/commands/routes"
 	runcommand "github.com/golazy/lazy/commands/run"
@@ -36,6 +37,19 @@ func execute(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer)
 		}
 		fmt.Fprintf(stdout, "lazy %s\n", currentVersion())
 		return 0
+	case "js":
+		if len(args) != 1 {
+			fmt.Fprintln(stderr, "lazy: js does not accept arguments")
+			return 1
+		}
+		code, err := (jscommand.Command{
+			Stdout: stdout,
+			Stderr: stderr,
+		}).Execute()
+		if err != nil {
+			fmt.Fprintf(stderr, "lazy: %v\n", err)
+		}
+		return code
 	case "new":
 		flags := flag.NewFlagSet("new", flag.ContinueOnError)
 		flags.SetOutput(stderr)

@@ -186,6 +186,7 @@ func TestCopiesSourceDirectoryRenamesAndValidates(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeFile(t, filepath.Join(source, "go.mod"), "module sample_app\n")
+	writeFile(t, filepath.Join(source, "node_modules", "library", "index.js"), "export {}\n")
 	writeFile(
 		t,
 		filepath.Join(source, "main.go"),
@@ -213,6 +214,9 @@ func TestCopiesSourceDirectoryRenamesAndValidates(t *testing.T) {
 	destination := filepath.Join(dir, "my_app")
 	if _, err := os.Stat(filepath.Join(destination, ".git")); !os.IsNotExist(err) {
 		t.Fatalf(".git still exists: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(destination, "node_modules")); !os.IsNotExist(err) {
+		t.Fatalf("node_modules was copied: %v", err)
 	}
 	assertFileContains(t, filepath.Join(destination, "go.mod"), "module github.com/guillermo/my_app")
 	assertFileContains(t, filepath.Join(destination, "main.go"), `"github.com/guillermo/my_app/app"`)

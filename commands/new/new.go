@@ -179,6 +179,12 @@ func copyTemplateDirectory(source, destination string) error {
 			}
 			return nil
 		}
+		if relative == "node_modules" || strings.Contains(relative, string(filepath.Separator)+"node_modules"+string(filepath.Separator)) {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 
 		target := filepath.Join(destination, relative)
 		if entry.IsDir() {

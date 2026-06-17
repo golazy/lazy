@@ -53,3 +53,14 @@ func TestRoutesRejectsArguments(t *testing.T) {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
 }
+
+func TestJSRejectsArguments(t *testing.T) {
+	var stderr bytes.Buffer
+
+	if code := execute([]string{"js", "extra"}, nil, &bytes.Buffer{}, &stderr); code != 1 {
+		t.Fatalf("exit code = %d, want 1", code)
+	}
+	if !strings.Contains(stderr.String(), "js does not accept arguments") {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+}

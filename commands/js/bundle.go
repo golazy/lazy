@@ -1,0 +1,427 @@
+package jscommand
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+	"path"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
+	"unicode"
+
+	"github.com/evanw/esbuild/pkg/api"
+)
+
+type BuildResult struct {
+	Imports map[string]string
+}
+
+type metafile struct {
+	Outputs map[string]metafileOutput `json:"outputs"`
+}
+
+type metafileOutput struct {
+	EntryPoint string `json:"entryPoint"`
+}
+
+type importMap struct {
+	Imports map[string]string `json:"imports"`
+}
+
+func Bundle(manifest Manifest, root, packageDir string) (BuildResult, error) {
+	outputDir := resolvePath(root, manifest.Output.Dir)
+	if err := os.RemoveAll(outputDir); err != nil {
+		return BuildResult{}, fmt.Errorf("clean JavaScript output: %w", err)
+	}
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+		return BuildResult{}, fmt.Errorf("create JavaScript output directory: %w", err)
+	}
+
+	entrypoints, normalOutputs, err := buildEntrypoints(manifest)
+	if err != nil {
+		return BuildResult{}, err
+	}
+
+	result := api.Build(api.BuildOptions{
+		AbsWorkingDir:       root,
+		EntryPointsAdvanced: entrypoints,
+		Bundle:              true,
+		Format:              api.FormatESModule,
+		Platform:            api.PlatformBrowser,
+		Target:              targetFor(manifest.Bundle.Target),
+		Outdir:              outputDir,
+		EntryNames:          "[name]-[hash]",
+		ChunkNames:          "shared-[hash]",
+		AssetNames:          "assets/[name]-[hash]",
+		Splitting:           manifest.Bundle.Shared,
+		MinifyWhitespace:    manifest.Bundle.Minify,
+		MinifyIdentifiers:   manifest.Bundle.Minify,
+		MinifySyntax:        manifest.Bundle.Minify,
+		Sourcemap:           sourcemapFor(manifest.Bundle.Sourcemap),
+		Write:               true,
+		Metafile:            true,
+		LogLevel:            api.LogLevelSilent,
+		NodePaths:           []string{filepath.Join(packageDir, "node_modules")},
+	})
+	if len(result.Errors) != 0 {
+		return BuildResult{}, fmt.Errorf("bundle JavaScript: %s", formatMessages(result.Errors))
+	}
+	if result.Metafile == "" {
+		return BuildResult{}, fmt.Errorf("bundle JavaScript: esbuild did not return a metafile")
+	}
+
+	paths, err := outputPaths(result.Metafile, outputDir, normalOutputs)
+	if err != nil {
+		return BuildResult{}, err
+	}
+	if err := copyAssets(root, outputDir, manifest.Entrypoints); err != nil {
+		return BuildResult{}, err
+	}
+
+	imports, err := importmapImports(manifest, outputDir, paths)
+	if err != nil {
+		return BuildResult{}, err
+	}
+	if err := writeImportmap(root, manifest.Output.Importmap, imports); err != nil {
+		return BuildResult{}, err
+	}
+	return BuildResult{Imports: imports}, nil
+}
+
+func buildEntrypoints(manifest Manifest) ([]api.EntryPoint, map[string]int, error) {
+	used := map[string]int{}
+	entrypoints := make([]api.EntryPoint, 0, len(manifest.Entrypoints))
+	normalOutputs := map[string]int{}
+
+	for index, entrypoint := range manifest.Entrypoints {
+		outputName := uniqueOutputName(used, sanitizeName(entrypoint.Name))
+		normalOutputs[outputName] = index
+		entrypoints = append(entrypoints, api.EntryPoint{
+			InputPath:  entrypoint.Module,
+			OutputPath: outputName,
+		})
+
+		for _, extra := range entrypoint.ExtraFiles {
+			base := strings.TrimSuffix(filepath.Base(extra), filepath.Ext(extra))
+			extraName := uniqueOutputName(used, sanitizeName(entrypoint.Name+"-"+base))
+			entrypoints = append(entrypoints, api.EntryPoint{
+				InputPath:  extra,
+				OutputPath: extraName,
+			})
+		}
+	}
+	return entrypoints, normalOutputs, nil
+}
+
+func outputPaths(metafileJSON, outputDir string, normalOutputs map[string]int) (map[int]string, error) {
+	var meta metafile
+	if err := json.Unmarshal([]byte(metafileJSON), &meta); err != nil {
+		return nil, fmt.Errorf("parse esbuild metafile: %w", err)
+	}
+
+	paths := map[int]string{}
+	outputNames := make([]string, 0, len(normalOutputs))
+	for name := range normalOutputs {
+		outputNames = append(outputNames, name)
+	}
+	sort.Slice(outputNames, func(i, j int) bool {
+		if len(outputNames[i]) == len(outputNames[j]) {
+			return outputNames[i] < outputNames[j]
+		}
+		return len(outputNames[i]) > len(outputNames[j])
+	})
+
+	for output := range meta.Outputs {
+		if strings.HasSuffix(output, ".map") {
+			continue
+		}
+		base := strings.TrimSuffix(path.Base(output), ".map")
+		for _, name := range outputNames {
+			if !strings.HasPrefix(base, name+"-") || !strings.HasSuffix(base, ".js") {
+				continue
+			}
+			outputPath := resolveBuildOutputPath(outputDir, output)
+			paths[normalOutputs[name]] = outputPath
+		}
+	}
+
+	for _, index := range normalOutputs {
+		if paths[index] == "" {
+			return nil, fmt.Errorf("bundle JavaScript: output for entrypoint %d not found", index)
+		}
+	}
+	return paths, nil
+}
+
+func importmapImports(manifest Manifest, outputDir string, outputs map[int]string) (map[string]string, error) {
+	imports := map[string]string{}
+	for index, entrypoint := range manifest.Entrypoints {
+		output := outputs[index]
+		if output == "" {
+			return nil, fmt.Errorf("entrypoint %q output is missing", entrypoint.Name)
+		}
+		aliases := entrypoint.Imports
+		if len(aliases) == 0 {
+			aliases = []string{entrypoint.Module}
+		}
+
+		for _, specifier := range aliases {
+			if existing, ok := imports[specifier]; ok {
+				return nil, fmt.Errorf("import %q is already mapped to %s", specifier, existing)
+			}
+			imports[specifier] = publicAssetPath(manifest.Output.PublicPath, outputDir, output)
+		}
+	}
+	return imports, nil
+}
+
+func resolveBuildOutputPath(outputDir, output string) string {
+	outputPath := filepath.FromSlash(output)
+	if filepath.IsAbs(outputPath) {
+		return outputPath
+	}
+	return filepath.Join(outputDir, filepath.Base(output))
+}
+
+func publicAssetPath(publicPath, outputDir, output string) string {
+	outputRoot := filepath.Clean(outputDir)
+	relative, err := filepath.Rel(outputRoot, filepath.Clean(output))
+	if err != nil || strings.HasPrefix(relative, "..") {
+		relative = filepath.Base(output)
+	}
+	return path.Join(publicPath, filepath.ToSlash(relative))
+}
+
+func writeImportmap(root, importmapPath string, imports map[string]string) error {
+	fullPath := resolvePath(root, importmapPath)
+	data, err := json.MarshalIndent(importMap{Imports: imports}, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal importmap: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
+		return fmt.Errorf("create importmap directory: %w", err)
+	}
+	if err := os.WriteFile(fullPath, append(data, '\n'), 0o644); err != nil {
+		return fmt.Errorf("write importmap: %w", err)
+	}
+	return nil
+}
+
+func copyAssets(root, outputDir string, entrypoints []Entrypoint) error {
+	for _, entrypoint := range entrypoints {
+		for _, pattern := range entrypoint.Assets {
+			matches, base, err := globFiles(root, pattern)
+			if err != nil {
+				return err
+			}
+			for _, source := range matches {
+				info, err := os.Stat(source)
+				if err != nil {
+					return fmt.Errorf("stat asset %s: %w", source, err)
+				}
+				if info.IsDir() {
+					continue
+				}
+				relative, err := filepath.Rel(base, source)
+				if err != nil {
+					return fmt.Errorf("resolve asset %s relative to %s: %w", source, base, err)
+				}
+				target := filepath.Join(outputDir, relative)
+				if err := copyFile(source, target, info.Mode().Perm()); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func globFiles(root, pattern string) ([]string, string, error) {
+	absolutePattern := resolvePath(root, pattern)
+	base := assetCopyBase(root, pattern)
+	if !strings.Contains(absolutePattern, "**") {
+		matches, err := filepath.Glob(absolutePattern)
+		if err != nil {
+			return nil, "", fmt.Errorf("match asset pattern %q: %w", pattern, err)
+		}
+		return matches, base, nil
+	}
+
+	regex, err := globstarRegexp(filepath.ToSlash(filepath.Clean(absolutePattern)))
+	if err != nil {
+		return nil, "", fmt.Errorf("compile asset pattern %q: %w", pattern, err)
+	}
+
+	walkRoot := globWalkRoot(root, pattern)
+	var matches []string
+	if err := filepath.WalkDir(walkRoot, func(candidate string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if regex.MatchString(filepath.ToSlash(filepath.Clean(candidate))) {
+			matches = append(matches, candidate)
+		}
+		return nil
+	}); err != nil {
+		return nil, "", fmt.Errorf("walk asset pattern %q: %w", pattern, err)
+	}
+	sort.Strings(matches)
+	return matches, base, nil
+}
+
+func assetCopyBase(root, pattern string) string {
+	if firstGlob(pattern) == -1 {
+		return filepath.Dir(resolvePath(root, pattern))
+	}
+	prefix := strings.TrimSuffix(pattern[:firstGlob(pattern)], "/")
+	if prefix == "" {
+		return root
+	}
+	return resolvePath(root, filepath.Dir(prefix))
+}
+
+func globWalkRoot(root, pattern string) string {
+	if firstGlob(pattern) == -1 {
+		return filepath.Dir(resolvePath(root, pattern))
+	}
+	prefix := strings.TrimSuffix(pattern[:firstGlob(pattern)], "/")
+	if prefix == "" {
+		return root
+	}
+	return resolvePath(root, prefix)
+}
+
+func firstGlob(pattern string) int {
+	for index, char := range pattern {
+		if char == '*' || char == '?' || char == '[' {
+			return index
+		}
+	}
+	return -1
+}
+
+func globstarRegexp(pattern string) (*regexp.Regexp, error) {
+	var builder strings.Builder
+	builder.WriteByte('^')
+	for index := 0; index < len(pattern); {
+		switch pattern[index] {
+		case '*':
+			if strings.HasPrefix(pattern[index:], "**/") {
+				builder.WriteString("(?:.*/)?")
+				index += 3
+				continue
+			}
+			if strings.HasPrefix(pattern[index:], "**") {
+				builder.WriteString(".*")
+				index += 2
+				continue
+			}
+			builder.WriteString("[^/]*")
+			index++
+		case '?':
+			builder.WriteString("[^/]")
+			index++
+		default:
+			builder.WriteString(regexp.QuoteMeta(string(pattern[index])))
+			index++
+		}
+	}
+	builder.WriteByte('$')
+	return regexp.Compile(builder.String())
+}
+
+func copyFile(source, target string, mode os.FileMode) error {
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		return fmt.Errorf("create asset directory %s: %w", filepath.Dir(target), err)
+	}
+	input, err := os.Open(source)
+	if err != nil {
+		return fmt.Errorf("open asset %s: %w", source, err)
+	}
+	defer input.Close()
+
+	var buffer bytes.Buffer
+	if _, err := io.Copy(&buffer, input); err != nil {
+		return fmt.Errorf("read asset %s: %w", source, err)
+	}
+	if err := os.WriteFile(target, buffer.Bytes(), mode); err != nil {
+		return fmt.Errorf("write asset %s: %w", target, err)
+	}
+	return nil
+}
+
+func targetFor(target string) api.Target {
+	switch strings.ToLower(strings.TrimSpace(target)) {
+	case "", "es2020":
+		return api.ES2020
+	case "es2017":
+		return api.ES2017
+	case "es2018":
+		return api.ES2018
+	case "es2019":
+		return api.ES2019
+	case "es2021":
+		return api.ES2021
+	case "es2022":
+		return api.ES2022
+	case "es2023":
+		return api.ES2023
+	case "es2024":
+		return api.ES2024
+	default:
+		return api.ES2020
+	}
+}
+
+func sourcemapFor(enabled bool) api.SourceMap {
+	if enabled {
+		return api.SourceMapLinked
+	}
+	return api.SourceMapNone
+}
+
+func formatMessages(messages []api.Message) string {
+	var parts []string
+	for _, message := range messages {
+		parts = append(parts, message.Text)
+	}
+	return strings.Join(parts, "; ")
+}
+
+func uniqueOutputName(used map[string]int, name string) string {
+	if name == "" {
+		name = "entrypoint"
+	}
+	count := used[name]
+	used[name] = count + 1
+	if count == 0 {
+		return name
+	}
+	return fmt.Sprintf("%s-%d", name, count+1)
+}
+
+func sanitizeName(value string) string {
+	var builder strings.Builder
+	lastDash := false
+	for _, char := range strings.ToLower(value) {
+		if unicode.IsLetter(char) || unicode.IsDigit(char) {
+			builder.WriteRune(char)
+			lastDash = false
+			continue
+		}
+		if char == '.' || char == '_' || char == '-' {
+			builder.WriteRune(char)
+			lastDash = char == '-'
+			continue
+		}
+		if !lastDash {
+			builder.WriteByte('-')
+			lastDash = true
+		}
+	}
+	return strings.Trim(builder.String(), "-")
+}
