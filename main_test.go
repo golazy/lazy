@@ -64,3 +64,14 @@ func TestJSRejectsArguments(t *testing.T) {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
 }
+
+func TestTailwindRejectsArguments(t *testing.T) {
+	var stderr bytes.Buffer
+
+	if code := execute([]string{"tailwind", "extra"}, nil, &bytes.Buffer{}, &stderr); code != 1 {
+		t.Fatalf("exit code = %d, want 1", code)
+	}
+	if !strings.Contains(stderr.String(), "usage: lazy tailwind") {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+}

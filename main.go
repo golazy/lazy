@@ -12,6 +12,7 @@ import (
 	newcommand "github.com/golazy/lazy/commands/new"
 	routescommand "github.com/golazy/lazy/commands/routes"
 	runcommand "github.com/golazy/lazy/commands/run"
+	tailwindcommand "github.com/golazy/lazy/commands/tailwind"
 )
 
 func main() {
@@ -44,6 +45,8 @@ func execute(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer)
 			fmt.Fprintf(stderr, "lazy: %v\n", err)
 		}
 		return code
+	case "tailwind":
+		return executeTailwind(args[1:], stdout, stderr)
 	case "new":
 		flags := flag.NewFlagSet("new", flag.ContinueOnError)
 		flags.SetOutput(stderr)
@@ -95,6 +98,33 @@ func executeRun(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writ
 		Stdin:    stdin,
 		Stdout:   stdout,
 		Stderr:   stderr,
+	}).Execute()
+	if err != nil {
+		fmt.Fprintf(stderr, "lazy: %v\n", err)
+	}
+	return code
+}
+
+func executeTailwind(args []string, stdout io.Writer, stderr io.Writer) int {
+	flags := flag.NewFlagSet("tailwind", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	input := flags.String("input", "", "Tailwind input stylesheet")
+	output := flags.String("output", "", "compiled public stylesheet")
+	watch := flags.Bool("watch", false, "watch source files and rebuild styles")
+	if err := flags.Parse(args); err != nil {
+		return 1
+	}
+	if flags.NArg() != 0 {
+		fmt.Fprintln(stderr, "lazy: usage: lazy tailwind [--input <path>] [--output <path>] [--watch]")
+		return 1
+	}
+
+	code, err := (tailwindcommand.Command{
+		Input:  *input,
+		Output: *output,
+		Watch:  *watch,
+		Stdout: stdout,
+		Stderr: stderr,
 	}).Execute()
 	if err != nil {
 		fmt.Fprintf(stderr, "lazy: %v\n", err)

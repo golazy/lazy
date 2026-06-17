@@ -39,6 +39,34 @@ blocks, bundles those library entrypoints with esbuild, and writes an
 importmap for app-owned browser modules. Application JavaScript is not bundled
 by this command.
 
+## Build Tailwind styles
+
+From a GoLazy application module:
+
+```sh
+lazy tailwind
+```
+
+The command installs `tailwindcss` and `@tailwindcss/cli` when they are
+missing, creates a Tailwind input stylesheet if needed, and compiles it into
+the app's public stylesheet. Conventional apps default to:
+
+```text
+app/styles/application.css -> app/public/styles.css
+```
+
+Use watch mode during UI work:
+
+```sh
+lazy tailwind --watch
+```
+
+Override paths when needed:
+
+```sh
+lazy tailwind --input app/styles/site.css --output app/public/site.css
+```
+
 ## Create an application
 
 ```sh
@@ -72,6 +100,7 @@ is embedded into the binary at build time.
 - `commands/run`: application discovery and execution.
 - `commands/routes`: route-table inspection.
 - `commands/js`: JavaScript library bundling and importmap generation.
+- `commands/tailwind`: Tailwind CLI setup and stylesheet compilation.
 - `commands/appcmd`: shared application command discovery.
 - `commands/new`: tagged template cloning, renaming, and validation.
 - `commands`: shared subprocess execution.
