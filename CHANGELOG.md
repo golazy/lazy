@@ -7,6 +7,31 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-06-17
+
+### Added
+
+- `lazy js` to install JavaScript package dependencies declared in `js.toml`,
+  bundle library entrypoints with esbuild, copy declared assets, and write the
+  generated importmap used by application browser modules.
+- `--cmdpath` and `--viewpath` flags for `lazy` and `lazy routes`, allowing
+  applications to choose a command entrypoint and local view directory during
+  development.
+
+### Changed
+
+- Application command discovery now scans `./cmd` for main packages that import
+  `golazy.dev/lazyapp` instead of only trying `./cmd/<module-name>` and
+  `./cmd/app`.
+- Updated the CLI release version to `v0.1.7` so `lazy new` selects the
+  matching `golazy/sample_app` template tag with JavaScript library assets and
+  form helpers.
+
+### Fixed
+
+- `lazy new --source-dir` now skips `node_modules` when copying local sample
+  app templates.
+
 ## [0.1.6] - 2026-06-17
 
 ### Changed
@@ -76,7 +101,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The CLI version now comes from the checked-in `VERSION` file embedded into
   the binary at build time.
 
-[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.7...HEAD
+[0.1.7]: https://github.com/golazy/lazy/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/golazy/lazy/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/golazy/lazy/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/golazy/lazy/compare/v0.1.3...v0.1.4
