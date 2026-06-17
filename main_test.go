@@ -49,7 +49,7 @@ func TestRoutesRejectsArguments(t *testing.T) {
 	if code := execute([]string{"routes", "extra"}, nil, &bytes.Buffer{}, &stderr); code != 1 {
 		t.Fatalf("exit code = %d, want 1", code)
 	}
-	if !strings.Contains(stderr.String(), "routes does not accept arguments") {
+	if !strings.Contains(stderr.String(), "usage: lazy routes") {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
 }

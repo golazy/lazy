@@ -17,10 +17,12 @@ import (
 )
 
 type Command struct {
-	Dir    string
-	Stdout io.Writer
-	Stderr io.Writer
-	Runner commands.OutputRunner
+	Dir      string
+	CmdPath  string
+	ViewPath string
+	Stdout   io.Writer
+	Stderr   io.Writer
+	Runner   commands.OutputRunner
 }
 
 type Route struct {
@@ -43,7 +45,7 @@ func (c Command) Execute() (int, error) {
 		}
 	}
 
-	candidate, err := appcmd.Find(dir)
+	candidate, err := appcmd.Find(dir, c.CmdPath)
 	if err != nil {
 		return 1, err
 	}
@@ -53,12 +55,7 @@ func (c Command) Execute() (int, error) {
 		runner = commands.ExecOutput
 	}
 
-	output, err := runner("go", []string{
-		"run",
-		"-tags",
-		"lazydev,printroutes",
-		"./" + filepath.ToSlash(candidate),
-	}, commands.Options{
+	output, err := runner("go", appcmd.GoRunArgs("lazydev,printroutes", filepath.ToSlash(candidate), c.ViewPath), commands.Options{
 		Dir:    dir,
 		Stdout: c.Stdout,
 		Stderr: c.Stderr,

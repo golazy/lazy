@@ -12,11 +12,13 @@ import (
 )
 
 type Command struct {
-	Dir    string
-	Stdin  io.Reader
-	Stdout io.Writer
-	Stderr io.Writer
-	Runner commands.Runner
+	Dir      string
+	CmdPath  string
+	ViewPath string
+	Stdin    io.Reader
+	Stdout   io.Writer
+	Stderr   io.Writer
+	Runner   commands.Runner
 }
 
 func (c Command) Execute() (int, error) {
@@ -29,7 +31,7 @@ func (c Command) Execute() (int, error) {
 		}
 	}
 
-	candidate, err := appcmd.Find(dir)
+	candidate, err := appcmd.Find(dir, c.CmdPath)
 	if err != nil {
 		return 1, err
 	}
@@ -38,7 +40,7 @@ func (c Command) Execute() (int, error) {
 	if runner == nil {
 		runner = commands.Exec
 	}
-	err = runner("go", []string{"run", "-tags", "lazydev", "./" + filepath.ToSlash(candidate)}, commands.Options{
+	err = runner("go", appcmd.GoRunArgs("lazydev", filepath.ToSlash(candidate), c.ViewPath), commands.Options{
 		Dir:    dir,
 		Stdin:  c.Stdin,
 		Stdout: c.Stdout,

@@ -17,11 +17,11 @@ type invocation struct {
 	options commands.Options
 }
 
-func TestUsesModuleNamedCommandFirst(t *testing.T) {
+func TestUsesFirstCommandUnderCmd(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "go.mod"), "module github.com/golazy/sample_app\n")
-	mkdir(t, filepath.Join(dir, "cmd", "sample_app"))
-	mkdir(t, filepath.Join(dir, "cmd", "app"))
+	writeCommand(t, filepath.Join(dir, "cmd", "sample_app"))
+	writeCommand(t, filepath.Join(dir, "cmd", "admin"))
 
 	var calls []invocation
 	command := Command{
@@ -45,19 +45,29 @@ func TestUsesModuleNamedCommandFirst(t *testing.T) {
 	if len(calls) != 1 {
 		t.Fatalf("calls = %d, want 1", len(calls))
 	}
-	if got, want := calls[0].args, []string{"run", "-tags", "lazydev", "./cmd/sample_app"}; !reflect.DeepEqual(got, want) {
+	if got, want := calls[0].args, []string{
+		"run",
+		"-tags",
+		"lazydev",
+		"-ldflags",
+		"-X golazy.dev/lazyviews.ViewsPath=app/views",
+		"./cmd/admin",
+	}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("args = %#v, want %#v", got, want)
 	}
 }
 
-func TestFallsBackToAppCommand(t *testing.T) {
+func TestUsesExplicitCommandPathAndViewPath(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "go.mod"), "module example.com/team/my_app\n")
-	mkdir(t, filepath.Join(dir, "cmd", "app"))
+	writeCommand(t, filepath.Join(dir, "cmd", "app"))
+	writeCommand(t, dir)
 
 	var calls []invocation
 	command := Command{
-		Dir: dir,
+		Dir:      dir,
+		CmdPath:  ".",
+		ViewPath: "views",
 		Runner: func(name string, args []string, options commands.Options) error {
 			calls = append(calls, invocation{command: name, args: args, options: options})
 			return nil
@@ -71,7 +81,14 @@ func TestFallsBackToAppCommand(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit code = %d", code)
 	}
-	if got, want := calls[0].args, []string{"run", "-tags", "lazydev", "./cmd/app"}; !reflect.DeepEqual(got, want) {
+	if got, want := calls[0].args, []string{
+		"run",
+		"-tags",
+		"lazydev",
+		"-ldflags",
+		"-X golazy.dev/lazyviews.ViewsPath=views",
+		".",
+	}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("args = %#v, want %#v", got, want)
 	}
 }
@@ -84,7 +101,7 @@ func TestErrorsWhenCommandIsMissing(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("exit code = %d, want 1", code)
 	}
-	if err == nil || !strings.Contains(err.Error(), "./cmd/my_app and ./cmd/app") {
+	if err == nil || !strings.Contains(err.Error(), "./cmd does not exist") {
 		t.Fatalf("error = %v", err)
 	}
 }
@@ -99,9 +116,7 @@ func writeFile(t *testing.T, filename, content string) {
 	}
 }
 
-func mkdir(t *testing.T, path string) {
+func writeCommand(t *testing.T, path string) {
 	t.Helper()
-	if err := os.MkdirAll(path, 0o755); err != nil {
-		t.Fatal(err)
-	}
+	writeFile(t, filepath.Join(path, "main.go"), "package main\nimport _ \"golazy.dev/lazyapp\"\nfunc main() {}\n")
 }

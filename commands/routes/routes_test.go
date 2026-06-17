@@ -20,7 +20,7 @@ type invocation struct {
 func TestCommandRunsApplicationWithPrintRoutesTag(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "go.mod"), "module example.com/team/my_app\n")
-	mkdir(t, filepath.Join(dir, "cmd", "app"))
+	writeCommand(t, filepath.Join(dir, "cmd", "app"))
 
 	var calls []invocation
 	var stdout bytes.Buffer
@@ -47,7 +47,14 @@ func TestCommandRunsApplicationWithPrintRoutesTag(t *testing.T) {
 	if got, want := calls[0].command, "go"; got != want {
 		t.Fatalf("command = %q, want %q", got, want)
 	}
-	if got, want := calls[0].args, []string{"run", "-tags", "lazydev,printroutes", "./cmd/app"}; !reflect.DeepEqual(got, want) {
+	if got, want := calls[0].args, []string{
+		"run",
+		"-tags",
+		"lazydev,printroutes",
+		"-ldflags",
+		"-X golazy.dev/lazyviews.ViewsPath=app/views",
+		"./cmd/app",
+	}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("args = %#v, want %#v", got, want)
 	}
 	if !strings.Contains(stdout.String(), "root") || !strings.Contains(stdout.String(), "home#Index") {
@@ -55,17 +62,19 @@ func TestCommandRunsApplicationWithPrintRoutesTag(t *testing.T) {
 	}
 }
 
-func TestCommandUsesModuleNamedCommandFirst(t *testing.T) {
+func TestCommandUsesExplicitCommandAndViewPath(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "go.mod"), "module example.com/team/blog\n")
-	mkdir(t, filepath.Join(dir, "cmd", "blog"))
-	mkdir(t, filepath.Join(dir, "cmd", "app"))
+	writeCommand(t, filepath.Join(dir, "cmd", "blog"))
+	writeCommand(t, filepath.Join(dir, "cmd", "app"))
 
 	var calls []invocation
 	command := Command{
-		Dir:    dir,
-		Stdout: &bytes.Buffer{},
-		Stderr: &bytes.Buffer{},
+		Dir:      dir,
+		CmdPath:  "cmd/blog",
+		ViewPath: "views",
+		Stdout:   &bytes.Buffer{},
+		Stderr:   &bytes.Buffer{},
 		Runner: func(name string, args []string, options commands.Options) ([]byte, error) {
 			calls = append(calls, invocation{command: name, args: args, options: options})
 			return []byte{}, nil
@@ -79,7 +88,14 @@ func TestCommandUsesModuleNamedCommandFirst(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0", code)
 	}
-	if got, want := calls[0].args, []string{"run", "-tags", "lazydev,printroutes", "./cmd/blog"}; !reflect.DeepEqual(got, want) {
+	if got, want := calls[0].args, []string{
+		"run",
+		"-tags",
+		"lazydev,printroutes",
+		"-ldflags",
+		"-X golazy.dev/lazyviews.ViewsPath=views",
+		"./cmd/blog",
+	}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("args = %#v, want %#v", got, want)
 	}
 }
@@ -121,9 +137,7 @@ func writeFile(t *testing.T, filename, content string) {
 	}
 }
 
-func mkdir(t *testing.T, path string) {
+func writeCommand(t *testing.T, path string) {
 	t.Helper()
-	if err := os.MkdirAll(path, 0o755); err != nil {
-		t.Fatal(err)
-	}
+	writeFile(t, filepath.Join(path, "main.go"), "package main\nimport _ \"golazy.dev/lazyapp\"\nfunc main() {}\n")
 }
