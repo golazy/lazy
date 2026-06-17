@@ -39,6 +39,9 @@ module = "@hotwired/stimulus"
 	if got, want := manifest.Entrypoints[0].Name, "turbo"; got != want {
 		t.Fatalf("Entrypoints[0].Name = %q, want %q", got, want)
 	}
+	if got, want := manifest.Entrypoints[0].Group, DefaultEntrypointGroup; got != want {
+		t.Fatalf("Entrypoints[0].Group = %q, want %q", got, want)
+	}
 	if got, want := manifest.Entrypoints[0].Module, "@hotwired/turbo"; got != want {
 		t.Fatalf("Entrypoints[0].Module = %q, want %q", got, want)
 	}
@@ -59,6 +62,7 @@ sourcemap = true
 target = "es2022"
 
 [entrypoint.monaco]
+group = "editors"
 module = "monaco-editor/esm/vs/editor/editor.api.js"
 imports = ["monaco-editor"]
 extra_files = [
@@ -85,6 +89,9 @@ assets = ["node_modules/monaco-editor/min/vs/**/*"]
 	}
 
 	entrypoint := manifest.Entrypoints[0]
+	if got, want := entrypoint.Group, "editors"; got != want {
+		t.Fatalf("Group = %q, want %q", got, want)
+	}
 	if got, want := entrypoint.Imports, []string{"monaco-editor"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("Imports = %#v, want %#v", got, want)
 	}
@@ -103,5 +110,39 @@ assets = ["node_modules/monaco-editor/min/vs/**/*"]
 func TestParseManifestRequiresEntrypoints(t *testing.T) {
 	if _, err := ParseManifest([]byte(`package = "package.json"`)); err == nil {
 		t.Fatal("ParseManifest succeeded without entrypoints")
+	}
+}
+
+func TestFormatManifestOmitsDefaultGroupAndWritesExplicitGroups(t *testing.T) {
+	manifest := defaultManifest()
+	manifest.Entrypoints = []Entrypoint{
+		{
+			Name:   "turbo",
+			Group:  DefaultEntrypointGroup,
+			Module: "@hotwired/turbo",
+		},
+		{
+			Name:    "admin.editor",
+			Group:   "admin",
+			Module:  "monaco-editor/esm/vs/editor/editor.api.js",
+			Imports: []string{"monaco-editor"},
+		},
+	}
+
+	data, err := FormatManifest(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := `[entrypoint.turbo]
+module = "@hotwired/turbo"
+
+[entrypoint."admin.editor"]
+group = "admin"
+module = "monaco-editor/esm/vs/editor/editor.api.js"
+imports = ["monaco-editor"]
+`
+	if string(data) != want {
+		t.Fatalf("formatted manifest:\n%s\nwant:\n%s", data, want)
 	}
 }

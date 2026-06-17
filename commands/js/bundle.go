@@ -32,7 +32,18 @@ type importMap struct {
 	Imports map[string]string `json:"imports"`
 }
 
+type buildGroup struct {
+	Name          string
+	Entrypoints   []api.EntryPoint
+	NormalOutputs map[string]int
+}
+
 func Bundle(manifest Manifest, root, packageDir string) (BuildResult, error) {
+	manifest = normalizeManifest(manifest)
+	if err := ValidateManifest(manifest); err != nil {
+		return BuildResult{}, err
+	}
+
 	outputDir := resolvePath(root, manifest.Output.Dir)
 	if err := os.RemoveAll(outputDir); err != nil {
 		return BuildResult{}, fmt.Errorf("clean JavaScript output: %w", err)
@@ -41,42 +52,48 @@ func Bundle(manifest Manifest, root, packageDir string) (BuildResult, error) {
 		return BuildResult{}, fmt.Errorf("create JavaScript output directory: %w", err)
 	}
 
-	entrypoints, normalOutputs, err := buildEntrypoints(manifest)
+	groups, err := buildEntrypointGroups(manifest)
 	if err != nil {
 		return BuildResult{}, err
 	}
 
-	result := api.Build(api.BuildOptions{
-		AbsWorkingDir:       root,
-		EntryPointsAdvanced: entrypoints,
-		Bundle:              true,
-		Format:              api.FormatESModule,
-		Platform:            api.PlatformBrowser,
-		Target:              targetFor(manifest.Bundle.Target),
-		Outdir:              outputDir,
-		EntryNames:          "[name]-[hash]",
-		ChunkNames:          "shared-[hash]",
-		AssetNames:          "assets/[name]-[hash]",
-		Splitting:           manifest.Bundle.Shared,
-		MinifyWhitespace:    manifest.Bundle.Minify,
-		MinifyIdentifiers:   manifest.Bundle.Minify,
-		MinifySyntax:        manifest.Bundle.Minify,
-		Sourcemap:           sourcemapFor(manifest.Bundle.Sourcemap),
-		Write:               true,
-		Metafile:            true,
-		LogLevel:            api.LogLevelSilent,
-		NodePaths:           []string{filepath.Join(packageDir, "node_modules")},
-	})
-	if len(result.Errors) != 0 {
-		return BuildResult{}, fmt.Errorf("bundle JavaScript: %s", formatMessages(result.Errors))
-	}
-	if result.Metafile == "" {
-		return BuildResult{}, fmt.Errorf("bundle JavaScript: esbuild did not return a metafile")
-	}
+	paths := map[int]string{}
+	for _, group := range groups {
+		result := api.Build(api.BuildOptions{
+			AbsWorkingDir:       root,
+			EntryPointsAdvanced: group.Entrypoints,
+			Bundle:              true,
+			Format:              api.FormatESModule,
+			Platform:            api.PlatformBrowser,
+			Target:              targetFor(manifest.Bundle.Target),
+			Outdir:              outputDir,
+			EntryNames:          "[name]-[hash]",
+			ChunkNames:          chunkNamesFor(group.Name, len(groups)),
+			AssetNames:          "assets/[name]-[hash]",
+			Splitting:           manifest.Bundle.Shared,
+			MinifyWhitespace:    manifest.Bundle.Minify,
+			MinifyIdentifiers:   manifest.Bundle.Minify,
+			MinifySyntax:        manifest.Bundle.Minify,
+			Sourcemap:           sourcemapFor(manifest.Bundle.Sourcemap),
+			Write:               true,
+			Metafile:            true,
+			LogLevel:            api.LogLevelSilent,
+			NodePaths:           []string{filepath.Join(packageDir, "node_modules")},
+		})
+		if len(result.Errors) != 0 {
+			return BuildResult{}, fmt.Errorf("bundle JavaScript: %s", formatMessages(result.Errors))
+		}
+		if result.Metafile == "" {
+			return BuildResult{}, fmt.Errorf("bundle JavaScript: esbuild did not return a metafile")
+		}
 
-	paths, err := outputPaths(result.Metafile, outputDir, normalOutputs)
-	if err != nil {
-		return BuildResult{}, err
+		groupPaths, err := outputPaths(result.Metafile, outputDir, group.NormalOutputs)
+		if err != nil {
+			return BuildResult{}, err
+		}
+		for index, output := range groupPaths {
+			paths[index] = output
+		}
 	}
 	if err := copyAssets(root, outputDir, manifest.Entrypoints); err != nil {
 		return BuildResult{}, err
@@ -92,15 +109,30 @@ func Bundle(manifest Manifest, root, packageDir string) (BuildResult, error) {
 	return BuildResult{Imports: imports}, nil
 }
 
-func buildEntrypoints(manifest Manifest) ([]api.EntryPoint, map[string]int, error) {
+func buildEntrypointGroups(manifest Manifest) ([]buildGroup, error) {
 	used := map[string]int{}
-	entrypoints := make([]api.EntryPoint, 0, len(manifest.Entrypoints))
-	normalOutputs := map[string]int{}
+	groupByName := map[string]int{}
+	groups := make([]buildGroup, 0, len(manifest.Entrypoints))
 
 	for index, entrypoint := range manifest.Entrypoints {
+		groupName := entrypoint.Group
+		if !manifest.Bundle.Shared {
+			groupName = DefaultEntrypointGroup
+		}
+		groupIndex, ok := groupByName[groupName]
+		if !ok {
+			groups = append(groups, buildGroup{
+				Name:          groupName,
+				NormalOutputs: map[string]int{},
+			})
+			groupIndex = len(groups) - 1
+			groupByName[groupName] = groupIndex
+		}
+		group := &groups[groupIndex]
+
 		outputName := uniqueOutputName(used, sanitizeName(entrypoint.Name))
-		normalOutputs[outputName] = index
-		entrypoints = append(entrypoints, api.EntryPoint{
+		group.NormalOutputs[outputName] = index
+		group.Entrypoints = append(group.Entrypoints, api.EntryPoint{
 			InputPath:  entrypoint.Module,
 			OutputPath: outputName,
 		})
@@ -108,13 +140,24 @@ func buildEntrypoints(manifest Manifest) ([]api.EntryPoint, map[string]int, erro
 		for _, extra := range entrypoint.ExtraFiles {
 			base := strings.TrimSuffix(filepath.Base(extra), filepath.Ext(extra))
 			extraName := uniqueOutputName(used, sanitizeName(entrypoint.Name+"-"+base))
-			entrypoints = append(entrypoints, api.EntryPoint{
+			group.Entrypoints = append(group.Entrypoints, api.EntryPoint{
 				InputPath:  extra,
 				OutputPath: extraName,
 			})
 		}
 	}
-	return entrypoints, normalOutputs, nil
+	return groups, nil
+}
+
+func chunkNamesFor(groupName string, groupCount int) string {
+	if groupCount <= 1 {
+		return "shared-[hash]"
+	}
+	name := sanitizeName(groupName)
+	if name == "" {
+		name = DefaultEntrypointGroup
+	}
+	return "shared-" + name + "-[hash]"
 }
 
 func outputPaths(metafileJSON, outputDir string, normalOutputs map[string]int) (map[int]string, error) {

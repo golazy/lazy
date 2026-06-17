@@ -55,6 +55,38 @@ func TestBundleWritesImportmapAndCopiesAssets(t *testing.T) {
 	}
 }
 
+func TestBundleSharesChunksWithinEntrypointGroups(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "shared.js"), "export const value = 42;\n")
+	writeFile(t, filepath.Join(dir, "one.js"), "import { value } from './shared.js'; console.log('one', value);\n")
+	writeFile(t, filepath.Join(dir, "two.js"), "import { value } from './shared.js'; console.log('two', value);\n")
+
+	manifest := defaultManifest()
+	manifest.Bundle.Minify = false
+	manifest.Entrypoints = []Entrypoint{
+		{Name: "one", Module: "./one.js"},
+		{Name: "two", Module: "./two.js"},
+	}
+
+	if _, err := Bundle(manifest, dir, dir); err != nil {
+		t.Fatal(err)
+	}
+	outputs := listFiles(t, filepath.Join(dir, "app", "public", "assets", "lazyshaft"))
+	if !containsPrefix(outputs, "shared-") {
+		t.Fatalf("outputs = %#v, want shared chunk for matching group", outputs)
+	}
+
+	manifest.Entrypoints[0].Group = "admin"
+	manifest.Entrypoints[1].Group = "public"
+	if _, err := Bundle(manifest, dir, dir); err != nil {
+		t.Fatal(err)
+	}
+	outputs = listFiles(t, filepath.Join(dir, "app", "public", "assets", "lazyshaft"))
+	if containsPrefix(outputs, "shared-") {
+		t.Fatalf("outputs = %#v, want no shared chunk across different groups", outputs)
+	}
+}
+
 func readImportmap(t *testing.T, path string) importMap {
 	t.Helper()
 	data, err := os.ReadFile(path)
