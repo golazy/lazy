@@ -127,6 +127,27 @@ func TestWriteTableSortsParams(t *testing.T) {
 	}
 }
 
+func TestWriteTablePrefixesNamespacedControllerTarget(t *testing.T) {
+	var out bytes.Buffer
+	err := writeTable(&out, []Route{
+		{
+			Method:     "GET",
+			Path:       "/admin/posts",
+			Name:       "admin_posts",
+			Namespace:  "admin",
+			Controller: "posts",
+			Action:     "Index",
+			Params:     map[string]bool{},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "admin/posts#Index") {
+		t.Fatalf("stdout = %q, want namespaced controller target", out.String())
+	}
+}
+
 func writeFile(t *testing.T, filename, content string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(filename), 0o755); err != nil {

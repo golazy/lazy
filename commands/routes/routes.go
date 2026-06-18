@@ -149,13 +149,23 @@ func writeTable(w io.Writer, routes []Route) error {
 }
 
 func routeTarget(route Route) string {
-	if route.Controller == "" {
+	controller := routeController(route)
+	if controller == "" {
 		return route.Action
 	}
 	if route.Action == "" {
-		return route.Controller
+		return controller
 	}
-	return route.Controller + "#" + route.Action
+	return controller + "#" + route.Action
+}
+
+func routeController(route Route) string {
+	controller := strings.Trim(route.Controller, "/")
+	namespace := strings.Trim(route.Namespace, "/")
+	if namespace == "" || controller == "" || strings.HasPrefix(controller, namespace+"/") {
+		return controller
+	}
+	return namespace + "/" + controller
 }
 
 func formatParams(params map[string]bool) string {
