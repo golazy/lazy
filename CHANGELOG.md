@@ -7,6 +7,13 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `lazy` now runs applications through a hot-reload development loop: it builds
+  a temporary binary, watches application files, restarts the app after
+  successful rebuilds, keeps the previous app process during failed rebuilds,
+  and injects a browser reload client into HTML responses.
+
 ## [0.1.7] - 2026-06-17
 
 ### Added

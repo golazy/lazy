@@ -14,6 +14,20 @@ The command reads the module path from `go.mod` and first looks for
 `./cmd/<module-name>`. If that directory does not exist, it falls back to
 `./cmd/app`.
 
+`lazy` is a development runner. It builds the app command into a temporary
+binary, serves the public `ADDR` or `PORT` through a local proxy, runs the app
+on an internal loopback port, watches application files, rebuilds and restarts
+on changes, and injects a small reload client into HTML responses. Build output
+is printed to stderr; if the app is not running, the proxy serves a status page
+with the latest build state.
+
+Use direct Go commands when you want to run without the development proxy or
+watcher:
+
+```sh
+go run ./cmd/app
+```
+
 ## Inspect routes
 
 From a GoLazy application module:
@@ -97,7 +111,7 @@ is embedded into the binary at build time.
 
 - `main.go`: command dispatch and version output.
 - `VERSION`: build version embedded into the binary.
-- `commands/run`: application discovery and execution.
+- `commands/run`: application discovery, hot reload, proxying, and execution.
 - `commands/routes`: route-table inspection.
 - `commands/js`: JavaScript library bundling and importmap generation.
 - `commands/tailwind`: Tailwind CLI setup and stylesheet compilation.

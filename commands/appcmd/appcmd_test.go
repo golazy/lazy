@@ -3,6 +3,7 @@ package appcmd
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -56,5 +57,22 @@ func writeFile(t *testing.T, filename string, content string) {
 	}
 	if err := os.WriteFile(filename, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestGoBuildArgs(t *testing.T) {
+	got := GoBuildArgs("lazydev", "cmd/app", "views", "/tmp/app")
+	want := []string{
+		"build",
+		"-tags",
+		"lazydev",
+		"-ldflags",
+		"-X golazy.dev/lazyviews.ViewsPath=views",
+		"-o",
+		"/tmp/app",
+		"./cmd/app",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("GoBuildArgs() = %#v, want %#v", got, want)
 	}
 }

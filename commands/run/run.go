@@ -1,11 +1,14 @@
 package run
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 
 	"github.com/golazy/lazy/commands"
 	"github.com/golazy/lazy/commands/appcmd"
@@ -19,6 +22,7 @@ type Command struct {
 	Stdout   io.Writer
 	Stderr   io.Writer
 	Runner   commands.Runner
+	Context  context.Context
 }
 
 func (c Command) Execute() (int, error) {
@@ -37,10 +41,28 @@ func (c Command) Execute() (int, error) {
 	}
 
 	runner := c.Runner
-	if runner == nil {
-		runner = commands.Exec
+	if runner != nil {
+		return c.executeDirect(dir, candidate, runner)
 	}
-	err = runner("go", appcmd.GoRunArgs("lazydev", filepath.ToSlash(candidate), c.ViewPath), commands.Options{
+
+	ctx := c.Context
+	var stop context.CancelFunc
+	if ctx == nil {
+		ctx, stop = signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+	}
+	return (&devRunner{
+		root:        dir,
+		commandPath: candidate,
+		viewPath:    c.ViewPath,
+		stdin:       c.Stdin,
+		stdout:      c.Stdout,
+		stderr:      c.Stderr,
+	}).run(ctx)
+}
+
+func (c Command) executeDirect(dir string, candidate string, runner commands.Runner) (int, error) {
+	err := runner("go", appcmd.GoRunArgs("lazydev", filepath.ToSlash(candidate), c.ViewPath), commands.Options{
 		Dir:    dir,
 		Stdin:  c.Stdin,
 		Stdout: c.Stdout,

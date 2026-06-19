@@ -80,6 +80,19 @@ func GoRunArgs(tags string, commandPath string, viewPath string) []string {
 	}
 }
 
+func GoBuildArgs(tags string, commandPath string, viewPath string, outputPath string) []string {
+	return []string{
+		"build",
+		"-tags",
+		tags,
+		"-ldflags",
+		ViewPathLDFlags(viewPath),
+		"-o",
+		outputPath,
+		goRunPath(commandPath),
+	}
+}
+
 func ViewPathLDFlags(viewPath string) string {
 	viewPath = strings.TrimSpace(viewPath)
 	if viewPath == "" {
