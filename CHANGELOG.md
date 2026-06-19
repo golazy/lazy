@@ -7,12 +7,25 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-06-19
+
 ### Added
 
+- `lazy tailwind` initializes Tailwind input stylesheets, installs Tailwind CLI
+  dependencies, and compiles CSS into embedded public stylesheets for
+  conventional and single-file GoLazy applications.
 - `lazy` now runs applications through a hot-reload development loop: it builds
   a temporary binary, watches application files, restarts the app after
   successful rebuilds, keeps the previous app process during failed rebuilds,
   and injects a browser reload client into HTML responses.
+
+### Changed
+
+- `lazy routes` shows namespaced route targets so route tables distinguish
+  controllers such as `admin/posts#index`.
+- Updated the CLI release version to `v0.1.8` so `lazy new` selects the
+  matching `golazy/sample_app` template tag with Tailwind, dark-mode sample
+  styles, action generators, route namespaces, and hot reload documentation.
 
 ## [0.1.7] - 2026-06-17
 
@@ -108,7 +121,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The CLI version now comes from the checked-in `VERSION` file embedded into
   the binary at build time.
 
-[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.7...HEAD
+[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.8...HEAD
+[0.1.8]: https://github.com/golazy/lazy/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/golazy/lazy/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/golazy/lazy/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/golazy/lazy/compare/v0.1.4...v0.1.5
