@@ -38,6 +38,18 @@ type buildGroup struct {
 	NormalOutputs map[string]int
 }
 
+type appController struct {
+	Path       string
+	ImportName string
+	Identifier string
+}
+
+const (
+	appSourceDir    = "app/js"
+	appImportPrefix = "/js"
+	appEntryFile    = "app.js"
+)
+
 func Bundle(manifest Manifest, root, packageDir string) (BuildResult, error) {
 	manifest = normalizeManifest(manifest)
 	if err := ValidateManifest(manifest); err != nil {
@@ -102,6 +114,16 @@ func Bundle(manifest Manifest, root, packageDir string) (BuildResult, error) {
 	imports, err := importmapImports(manifest, outputDir, paths)
 	if err != nil {
 		return BuildResult{}, err
+	}
+	appImports, err := bundleAppJavaScript(manifest, root, packageDir, outputDir, imports)
+	if err != nil {
+		return BuildResult{}, err
+	}
+	for specifier, output := range appImports {
+		if existing, ok := imports[specifier]; ok {
+			return BuildResult{}, fmt.Errorf("import %q is already mapped to %s", specifier, existing)
+		}
+		imports[specifier] = output
 	}
 	if err := writeImportmap(root, manifest.Output.Importmap, imports); err != nil {
 		return BuildResult{}, err
@@ -227,7 +249,22 @@ func resolveBuildOutputPath(outputDir, output string) string {
 	if filepath.IsAbs(outputPath) {
 		return outputPath
 	}
-	return filepath.Join(outputDir, filepath.Base(output))
+	candidates := []string{
+		filepath.Join(outputDir, outputPath),
+	}
+	if relative, ok := outputPathRelativeToDir(outputDir, outputPath); ok {
+		candidates = append(candidates, filepath.Join(outputDir, relative))
+	}
+	candidates = append(candidates, filepath.Join(outputDir, filepath.Base(outputPath)))
+	for _, candidate := range candidates {
+		if fileExists(candidate) {
+			return candidate
+		}
+	}
+	if relative, ok := outputPathRelativeToDir(outputDir, outputPath); ok {
+		return filepath.Join(outputDir, relative)
+	}
+	return filepath.Join(outputDir, filepath.Base(outputPath))
 }
 
 func publicAssetPath(publicPath, outputDir, output string) string {
@@ -237,6 +274,327 @@ func publicAssetPath(publicPath, outputDir, output string) string {
 		relative = filepath.Base(output)
 	}
 	return path.Join(publicPath, filepath.ToSlash(relative))
+}
+
+func outputPathRelativeToDir(outputDir string, outputPath string) (string, bool) {
+	output := filepath.ToSlash(filepath.Clean(outputPath))
+	dir := filepath.ToSlash(filepath.Clean(outputDir))
+	if strings.HasPrefix(output, dir+"/") {
+		return strings.TrimPrefix(output, dir+"/"), true
+	}
+
+	marker := filepath.ToSlash(filepath.Base(outputDir)) + "/"
+	if index := strings.LastIndex(output, marker); index >= 0 {
+		return output[index+len(marker):], true
+	}
+	return "", false
+}
+
+func bundleAppJavaScript(manifest Manifest, root, packageDir, outputDir string, vendorImports map[string]string) (map[string]string, error) {
+	appRoot := filepath.Join(root, filepath.FromSlash(appSourceDir))
+	info, err := os.Stat(appRoot)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("inspect app JavaScript: %w", err)
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("%s is not a directory", appSourceDir)
+	}
+
+	files, err := appJavaScriptFiles(appRoot)
+	if err != nil {
+		return nil, err
+	}
+	if len(files) == 0 {
+		return nil, nil
+	}
+
+	tempDir, err := os.MkdirTemp("", "lazy-js-app-*")
+	if err != nil {
+		return nil, fmt.Errorf("create app JavaScript work directory: %w", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	inputs := map[string]string{}
+	entrypoints := make([]string, 0, len(files))
+	for _, relative := range files {
+		source := filepath.Join(appRoot, filepath.FromSlash(relative))
+		data, err := os.ReadFile(source)
+		if err != nil {
+			return nil, fmt.Errorf("read %s: %w", filepath.ToSlash(filepath.Join(appSourceDir, relative)), err)
+		}
+		if relative == appEntryFile {
+			data, err = expandAppJavaScript(appRoot, data)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		target := filepath.Join(tempDir, filepath.FromSlash(relative))
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return nil, fmt.Errorf("create app JavaScript directory: %w", err)
+		}
+		if err := os.WriteFile(target, data, 0o644); err != nil {
+			return nil, fmt.Errorf("write generated app JavaScript: %w", err)
+		}
+
+		entry := filepath.ToSlash(relative)
+		entrypoints = append(entrypoints, entry)
+		inputs[entry] = path.Join(appImportPrefix, entry)
+	}
+
+	result := api.Build(api.BuildOptions{
+		AbsWorkingDir:     tempDir,
+		EntryPoints:       entrypoints,
+		Bundle:            true,
+		Format:            api.FormatESModule,
+		Platform:          api.PlatformBrowser,
+		Target:            targetFor(manifest.Bundle.Target),
+		Outdir:            outputDir,
+		Outbase:           tempDir,
+		EntryNames:        "app/[dir]/[name]-[hash]",
+		ChunkNames:        "app/shared-[hash]",
+		AssetNames:        "app/assets/[name]-[hash]",
+		Splitting:         manifest.Bundle.Shared,
+		MinifyWhitespace:  manifest.Bundle.Minify,
+		MinifyIdentifiers: manifest.Bundle.Minify,
+		MinifySyntax:      manifest.Bundle.Minify,
+		Sourcemap:         sourcemapFor(manifest.Bundle.Sourcemap),
+		Write:             true,
+		Metafile:          true,
+		LogLevel:          api.LogLevelSilent,
+		External:          appExternalSpecifiers(vendorImports, inputs),
+		NodePaths:         []string{filepath.Join(packageDir, "node_modules")},
+	})
+	if len(result.Errors) != 0 {
+		return nil, fmt.Errorf("bundle app JavaScript: %s", formatMessages(result.Errors))
+	}
+	if result.Metafile == "" {
+		return nil, fmt.Errorf("bundle app JavaScript: esbuild did not return a metafile")
+	}
+	return appImportmapImports(result.Metafile, outputDir, manifest.Output.PublicPath, inputs)
+}
+
+func appJavaScriptFiles(appRoot string) ([]string, error) {
+	var files []string
+	if err := filepath.WalkDir(appRoot, func(candidate string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		if filepath.Ext(candidate) != ".js" {
+			return nil
+		}
+		relative, err := filepath.Rel(appRoot, candidate)
+		if err != nil {
+			return err
+		}
+		files = append(files, filepath.ToSlash(relative))
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("walk app JavaScript: %w", err)
+	}
+	sort.Strings(files)
+	return files, nil
+}
+
+func expandAppJavaScript(appRoot string, data []byte) ([]byte, error) {
+	lines := strings.SplitAfter(string(data), "\n")
+	var builder strings.Builder
+	for _, line := range lines {
+		switch strings.TrimSpace(line) {
+		case "// golazy:turbo":
+			builder.WriteString("import \"@hotwired/turbo\"\n")
+		case "// golazy:stimulus":
+			boilerplate, err := stimulusBoilerplate(appRoot)
+			if err != nil {
+				return nil, err
+			}
+			builder.WriteString(boilerplate)
+		default:
+			builder.WriteString(line)
+		}
+	}
+	return []byte(builder.String()), nil
+}
+
+func stimulusBoilerplate(appRoot string) (string, error) {
+	controllers, err := discoverStimulusControllers(filepath.Join(appRoot, "controllers"))
+	if err != nil {
+		return "", err
+	}
+
+	var builder strings.Builder
+	builder.WriteString("import { Application } from \"@hotwired/stimulus\"\n")
+	for _, controller := range controllers {
+		fmt.Fprintf(&builder, "import %s from %q\n", controller.ImportName, path.Join(appImportPrefix, "controllers", controller.Path))
+	}
+	builder.WriteString("\nconst application = Application.start()\n")
+	for _, controller := range controllers {
+		fmt.Fprintf(&builder, "application.register(%q, %s)\n", controller.Identifier, controller.ImportName)
+	}
+	return builder.String(), nil
+}
+
+func discoverStimulusControllers(controllerRoot string) ([]appController, error) {
+	info, err := os.Stat(controllerRoot)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("inspect Stimulus controllers: %w", err)
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("app/js/controllers is not a directory")
+	}
+
+	var paths []string
+	if err := filepath.WalkDir(controllerRoot, func(candidate string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		if !strings.HasSuffix(entry.Name(), "_controller.js") {
+			return nil
+		}
+		relative, err := filepath.Rel(controllerRoot, candidate)
+		if err != nil {
+			return err
+		}
+		paths = append(paths, filepath.ToSlash(relative))
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("walk Stimulus controllers: %w", err)
+	}
+	sort.Strings(paths)
+
+	seenIdentifiers := map[string]string{}
+	usedImports := map[string]int{}
+	controllers := make([]appController, 0, len(paths))
+	for _, controllerPath := range paths {
+		identifier := stimulusIdentifier(controllerPath)
+		if previous, ok := seenIdentifiers[identifier]; ok {
+			return nil, fmt.Errorf("Stimulus controller %q is already registered by %s", identifier, previous)
+		}
+		seenIdentifiers[identifier] = controllerPath
+		importName := uniqueControllerImportName(usedImports, identifier)
+		controllers = append(controllers, appController{
+			Path:       controllerPath,
+			ImportName: importName,
+			Identifier: identifier,
+		})
+	}
+	return controllers, nil
+}
+
+func stimulusIdentifier(controllerPath string) string {
+	name := strings.TrimSuffix(controllerPath, ".js")
+	parts := strings.Split(name, "/")
+	for index, part := range parts {
+		parts[index] = strings.ReplaceAll(strings.TrimSuffix(part, "_controller"), "_", "-")
+	}
+	return strings.Join(parts, "--")
+}
+
+func uniqueControllerImportName(used map[string]int, identifier string) string {
+	base := exportedIdentifier(identifier) + "Controller"
+	count := used[base]
+	used[base] = count + 1
+	if count == 0 {
+		return base
+	}
+	return fmt.Sprintf("%s%d", base, count+1)
+}
+
+func exportedIdentifier(value string) string {
+	var builder strings.Builder
+	nextUpper := true
+	for _, char := range value {
+		if unicode.IsLetter(char) || unicode.IsDigit(char) {
+			if builder.Len() == 0 && unicode.IsDigit(char) {
+				builder.WriteString("App")
+			}
+			if nextUpper {
+				builder.WriteRune(unicode.ToUpper(char))
+			} else {
+				builder.WriteRune(char)
+			}
+			nextUpper = false
+			continue
+		}
+		nextUpper = true
+	}
+	if builder.Len() == 0 {
+		return "App"
+	}
+	return builder.String()
+}
+
+func appImportmapImports(metafileJSON, outputDir, publicPath string, inputs map[string]string) (map[string]string, error) {
+	var meta metafile
+	if err := json.Unmarshal([]byte(metafileJSON), &meta); err != nil {
+		return nil, fmt.Errorf("parse app JavaScript metafile: %w", err)
+	}
+
+	imports := map[string]string{}
+	for output, detail := range meta.Outputs {
+		if detail.EntryPoint == "" || strings.HasSuffix(output, ".map") {
+			continue
+		}
+		entrypoint := normalizeAppEntrypoint(detail.EntryPoint)
+		specifier, ok := inputs[entrypoint]
+		if !ok {
+			continue
+		}
+		outputPath := resolveBuildOutputPath(outputDir, output)
+		imports[specifier] = publicAssetPath(publicPath, outputDir, outputPath)
+	}
+
+	for _, specifier := range inputs {
+		if imports[specifier] == "" {
+			return nil, fmt.Errorf("bundle app JavaScript: output for %q not found", specifier)
+		}
+	}
+	return imports, nil
+}
+
+func normalizeAppEntrypoint(entrypoint string) string {
+	normalized := filepath.ToSlash(filepath.Clean(entrypoint))
+	normalized = strings.TrimPrefix(normalized, "./")
+	return normalized
+}
+
+func externalSpecifiers(imports map[string]string) []string {
+	values := make([]string, 0, len(imports))
+	for specifier := range imports {
+		values = append(values, specifier)
+	}
+	sort.Strings(values)
+	return values
+}
+
+func appExternalSpecifiers(vendorImports map[string]string, appInputs map[string]string) []string {
+	seen := map[string]bool{}
+	var values []string
+	for _, specifier := range externalSpecifiers(vendorImports) {
+		seen[specifier] = true
+		values = append(values, specifier)
+	}
+	for _, specifier := range appInputs {
+		if seen[specifier] {
+			continue
+		}
+		seen[specifier] = true
+		values = append(values, specifier)
+	}
+	sort.Strings(values)
+	return values
 }
 
 func writeImportmap(root, importmapPath string, imports map[string]string) error {

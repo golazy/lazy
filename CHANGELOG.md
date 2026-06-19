@@ -7,6 +7,15 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `lazy js` now bundles application JavaScript from `app/js`, writes `/js/...`
+  importmap entries for every app JavaScript file, and expands
+  `// golazy:turbo` and `// golazy:stimulus` directives in `app/js/app.js`.
+- `lazy` hot reload now runs JavaScript asset generation for apps with
+  `js.toml` before the initial build and after changes to `app/js`,
+  `js.toml`, or JavaScript package metadata.
+
 ## [0.1.8] - 2026-06-19
 
 ### Added

@@ -40,7 +40,7 @@ The command runs the application with the `lazydev,printroutes` build tags,
 lets `lazyapp.New` initialize the app and call `Draw`, then prints the route
 table without starting the HTTP server.
 
-## Build JavaScript libraries
+## Build JavaScript
 
 From a GoLazy application module with `js.toml`:
 
@@ -49,9 +49,12 @@ lazy js
 ```
 
 The command installs the JavaScript packages named by `[entrypoint.<name>]`
-blocks, bundles those library entrypoints with esbuild, and writes an
-importmap for app-owned browser modules. Application JavaScript is not bundled
-by this command.
+blocks, bundles those library entrypoints with esbuild, bundles application
+modules from `app/js`, expands the `// golazy:turbo` and
+`// golazy:stimulus` directives in `app/js/app.js`, and writes the importmap.
+During `lazy` development, apps with `js.toml` run the JavaScript pipeline
+before the first build and after changes to `app/js`, `js.toml`, or package
+metadata.
 
 ## Build Tailwind styles
 
@@ -113,7 +116,8 @@ is embedded into the binary at build time.
 - `VERSION`: build version embedded into the binary.
 - `commands/run`: application discovery, hot reload, proxying, and execution.
 - `commands/routes`: route-table inspection.
-- `commands/js`: JavaScript library bundling and importmap generation.
+- `commands/js`: JavaScript library and app-module bundling, directive
+  expansion, and importmap generation.
 - `commands/tailwind`: Tailwind CLI setup and stylesheet compilation.
 - `commands/appcmd`: shared application command discovery.
 - `commands/new`: tagged template cloning, renaming, and validation.

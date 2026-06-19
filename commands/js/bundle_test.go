@@ -87,6 +87,59 @@ func TestBundleSharesChunksWithinEntrypointGroups(t *testing.T) {
 	}
 }
 
+func TestBundleBuildsAppJavaScriptAndExpandsDirectives(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "turbo.js"), "export const Turbo = {};\n")
+	writeFile(t, filepath.Join(dir, "stimulus.js"), "export const Application = { start() { return { register() {} } } };\n")
+	writeFile(t, filepath.Join(dir, "app", "js", "app.js"), "// golazy:turbo\n// golazy:stimulus\nconsole.log('ready');\n")
+	writeFile(t, filepath.Join(dir, "app", "js", "controllers", "hello_controller.js"), "export default class HelloController {}\n")
+
+	manifest := defaultManifest()
+	manifest.Bundle.Minify = false
+	manifest.Entrypoints = []Entrypoint{
+		{Name: "turbo", Module: "./turbo.js", Imports: []string{"@hotwired/turbo"}},
+		{Name: "stimulus", Module: "./stimulus.js", Imports: []string{"@hotwired/stimulus"}},
+	}
+
+	result, err := Bundle(manifest, dir, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	appPath := result.Imports["/js/app.js"]
+	if !strings.HasPrefix(appPath, "/assets/lazyshaft/app/app-") {
+		t.Fatalf("/js/app.js import = %q", appPath)
+	}
+	controllerPath := result.Imports["/js/controllers/hello_controller.js"]
+	if !strings.HasPrefix(controllerPath, "/assets/lazyshaft/app/controllers/hello_controller-") {
+		t.Fatalf("controller import = %q", controllerPath)
+	}
+
+	importmap := readImportmap(t, filepath.Join(dir, "app", "public", "assets", "importmap.json"))
+	if importmap.Imports["/js/app.js"] != appPath {
+		t.Fatalf("importmap app import = %q, want %q", importmap.Imports["/js/app.js"], appPath)
+	}
+	if importmap.Imports["/js/controllers/hello_controller.js"] != controllerPath {
+		t.Fatalf("importmap controller import = %q, want %q", importmap.Imports["/js/controllers/hello_controller.js"], controllerPath)
+	}
+
+	appBundle, err := os.ReadFile(publicAssetFile(dir, appPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`import "@hotwired/turbo";`,
+		`import { Application } from "@hotwired/stimulus";`,
+		`import HelloController from "/js/controllers/hello_controller.js";`,
+		`application = Application.start();`,
+		`application.register("hello", HelloController);`,
+	} {
+		if !strings.Contains(string(appBundle), want) {
+			t.Fatalf("app bundle does not contain %q:\n%s", want, appBundle)
+		}
+	}
+}
+
 func readImportmap(t *testing.T, path string) importMap {
 	t.Helper()
 	data, err := os.ReadFile(path)
@@ -129,4 +182,8 @@ func containsPrefix(values []string, prefix string) bool {
 		}
 	}
 	return false
+}
+
+func publicAssetFile(root, publicPath string) string {
+	return filepath.Join(root, "app", "public", filepath.FromSlash(strings.TrimPrefix(publicPath, "/")))
 }

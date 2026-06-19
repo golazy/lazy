@@ -1,14 +1,17 @@
 package run
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
+	jscommand "github.com/golazy/lazy/commands/js"
 	"github.com/golazy/lazy/commands/run/devapp"
 	"github.com/golazy/lazy/commands/run/reloadproxy"
 	"github.com/golazy/lazy/commands/run/watcher"
@@ -20,6 +23,20 @@ const (
 	defaultStartupTimeout = 10 * time.Second
 	stopTimeout           = 2 * time.Second
 )
+
+type javaScriptAssetMode int
+
+const (
+	javaScriptAssetNone javaScriptAssetMode = iota
+	javaScriptAssetBundle
+	javaScriptAssetFull
+)
+
+type generatedAssetResult struct {
+	Output   string
+	Err      error
+	Duration time.Duration
+}
 
 type devRunner struct {
 	root        string
@@ -100,6 +117,7 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 	buildNumber := 0
 	rebuild := func(reason string, changed []string) {
 		buildNumber++
+		started := time.Now()
 		proxy.UpdateStatus(reloadproxy.Status{
 			State:       reloadproxy.StateBuilding,
 			Message:     reason,
@@ -107,24 +125,41 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 			WatchedRoot: d.root,
 			BuildCount:  buildNumber,
 		})
-		result := app.Build(ctx, tmpDir, buildNumber)
-		if result.Output != "" {
-			fmt.Fprint(d.stderr, result.Output)
-			if !strings.HasSuffix(result.Output, "\n") {
-				fmt.Fprintln(d.stderr)
-			}
+		assets := d.generateAssets(changed)
+		if assets.Output != "" {
+			printOutput(d.stderr, assets.Output)
 		}
-		if result.Err != nil {
+		if assets.Err != nil {
 			proxy.UpdateStatus(reloadproxy.Status{
 				State:       reloadproxy.StateBuildFailed,
-				Message:     fmt.Sprintf("Build failed after %s.", result.Duration.Round(time.Millisecond)),
+				Message:     fmt.Sprintf("JavaScript generation failed after %s.", assets.Duration.Round(time.Millisecond)),
 				CommandPath: d.commandPath,
 				WatchedRoot: d.root,
 				BuildCount:  buildNumber,
-				Duration:    result.Duration,
-				Output:      result.Output,
+				Duration:    assets.Duration,
+				Output:      assets.Output,
 			})
-			fmt.Fprintf(d.stderr, "lazy: build failed after %s\n", result.Duration.Round(time.Millisecond))
+			fmt.Fprintf(d.stderr, "lazy: JavaScript generation failed after %s: %v\n", assets.Duration.Round(time.Millisecond), assets.Err)
+			return
+		}
+
+		result := app.Build(ctx, tmpDir, buildNumber)
+		if result.Output != "" {
+			printOutput(d.stderr, result.Output)
+		}
+		output := combineOutput(assets.Output, result.Output)
+		duration := time.Since(started)
+		if result.Err != nil {
+			proxy.UpdateStatus(reloadproxy.Status{
+				State:       reloadproxy.StateBuildFailed,
+				Message:     fmt.Sprintf("Build failed after %s.", duration.Round(time.Millisecond)),
+				CommandPath: d.commandPath,
+				WatchedRoot: d.root,
+				BuildCount:  buildNumber,
+				Duration:    duration,
+				Output:      output,
+			})
+			fmt.Fprintf(d.stderr, "lazy: build failed after %s\n", duration.Round(time.Millisecond))
 			return
 		}
 
@@ -136,12 +171,13 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 				CommandPath: d.commandPath,
 				WatchedRoot: d.root,
 				BuildCount:  buildNumber,
-				Duration:    result.Duration,
-				Output:      result.Output,
+				Duration:    time.Since(started),
+				Output:      output,
 			})
 			fmt.Fprintf(d.stderr, "lazy: application failed to start: %v\n", err)
 			return
 		}
+		duration = time.Since(started)
 
 		old := current
 		current = next
@@ -153,7 +189,7 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 			CommandPath: d.commandPath,
 			WatchedRoot: d.root,
 			BuildCount:  buildNumber,
-			Duration:    result.Duration,
+			Duration:    duration,
 			StartedAt:   time.Now(),
 			Changed:     changed,
 		})
@@ -163,7 +199,7 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 		if buildNumber > 1 {
 			proxy.BroadcastReload()
 		}
-		fmt.Fprintf(d.stderr, "lazy: application running after %s\n", result.Duration.Round(time.Millisecond))
+		fmt.Fprintf(d.stderr, "lazy: application running after %s\n", duration.Round(time.Millisecond))
 	}
 
 	rebuild("Starting initial build.", nil)
@@ -189,6 +225,9 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 				continue
 			}
 			changed = drainChanges(changeCh, changed)
+			if onlyGeneratedJavaScriptOutputs(changed) {
+				continue
+			}
 			rebuild(fmt.Sprintf("Rebuilding after %d changed file(s).", len(changed)), changed)
 		case err := <-appDone:
 			appDone = nil
@@ -208,6 +247,139 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 			fmt.Fprintf(d.stderr, "lazy: %s\n", message)
 		}
 	}
+}
+
+func (d *devRunner) generateAssets(changed []string) generatedAssetResult {
+	mode := javaScriptAssetGenerationMode(d.root, changed)
+	if mode == javaScriptAssetNone {
+		return generatedAssetResult{}
+	}
+
+	started := time.Now()
+	switch mode {
+	case javaScriptAssetFull:
+		var output bytes.Buffer
+		code, err := (jscommand.Command{
+			Dir:    d.root,
+			Stdout: &output,
+			Stderr: &output,
+		}).Execute()
+		if err == nil && code != 0 {
+			err = fmt.Errorf("lazy js failed with exit code %d", code)
+		}
+		return generatedAssetResult{
+			Output:   output.String(),
+			Err:      err,
+			Duration: time.Since(started),
+		}
+	case javaScriptAssetBundle:
+		return bundleJavaScriptAssets(d.root, started)
+	default:
+		return generatedAssetResult{}
+	}
+}
+
+func bundleJavaScriptAssets(root string, started time.Time) generatedAssetResult {
+	const output = "* Bundling JavaScript\n"
+
+	manifest, err := jscommand.LoadManifest(root)
+	if err != nil {
+		return generatedAssetResult{Output: output, Err: err, Duration: time.Since(started)}
+	}
+	packageDir := filepath.Dir(resolveRootPath(root, manifest.Package))
+	if _, err := jscommand.Bundle(manifest, root, packageDir); err != nil {
+		return generatedAssetResult{Output: output, Err: err, Duration: time.Since(started)}
+	}
+	return generatedAssetResult{Output: output, Duration: time.Since(started)}
+}
+
+func javaScriptAssetGenerationMode(root string, changed []string) javaScriptAssetMode {
+	if !fileExists(filepath.Join(root, "js.toml")) {
+		return javaScriptAssetNone
+	}
+	if changed == nil {
+		return javaScriptAssetFull
+	}
+
+	mode := javaScriptAssetNone
+	for _, path := range changed {
+		if isJavaScriptPackageInput(path) {
+			return javaScriptAssetFull
+		}
+		if isAppJavaScriptInput(path) {
+			mode = javaScriptAssetBundle
+		}
+	}
+	return mode
+}
+
+func isJavaScriptPackageInput(path string) bool {
+	path = cleanWatchPath(path)
+	switch path {
+	case "js.toml", "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock", "bun.lockb":
+		return true
+	default:
+		return false
+	}
+}
+
+func isAppJavaScriptInput(path string) bool {
+	return strings.HasPrefix(cleanWatchPath(path), "app/js/")
+}
+
+func onlyGeneratedJavaScriptOutputs(changed []string) bool {
+	if len(changed) == 0 {
+		return false
+	}
+	for _, path := range changed {
+		if !isGeneratedJavaScriptOutput(path) {
+			return false
+		}
+	}
+	return true
+}
+
+func isGeneratedJavaScriptOutput(path string) bool {
+	path = cleanWatchPath(path)
+	return path == "app/public/assets/importmap.json" || strings.HasPrefix(path, "app/public/assets/lazyshaft/")
+}
+
+func cleanWatchPath(path string) string {
+	return filepath.ToSlash(filepath.Clean(path))
+}
+
+func resolveRootPath(root, path string) string {
+	candidate := filepath.FromSlash(path)
+	if filepath.IsAbs(candidate) {
+		return candidate
+	}
+	return filepath.Join(root, candidate)
+}
+
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
+}
+
+func printOutput(w io.Writer, output string) {
+	fmt.Fprint(w, output)
+	if !strings.HasSuffix(output, "\n") {
+		fmt.Fprintln(w)
+	}
+}
+
+func combineOutput(parts ...string) string {
+	var builder strings.Builder
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		if builder.Len() > 0 && !strings.HasSuffix(builder.String(), "\n") {
+			builder.WriteByte('\n')
+		}
+		builder.WriteString(part)
+	}
+	return builder.String()
 }
 
 func drainChanges(changeCh <-chan []string, changed []string) []string {

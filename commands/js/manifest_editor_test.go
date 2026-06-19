@@ -136,7 +136,7 @@ module = "@hotwired/turbo"
 		t.Fatalf("diff = %s, want added stimulus entrypoint", closeErr.Diff)
 	}
 	if !strings.Contains(closeErr.Output, "* Preparing JavaScript dependencies") ||
-		!strings.Contains(closeErr.Output, "* Bundling JavaScript libraries") ||
+		!strings.Contains(closeErr.Output, "* Bundling JavaScript") ||
 		!strings.Contains(closeErr.Output, "install output") {
 		t.Fatalf("output = %s, want complete command output", closeErr.Output)
 	}

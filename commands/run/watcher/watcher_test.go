@@ -10,18 +10,20 @@ import (
 
 func TestWatchPathIncludesRuntimeInputs(t *testing.T) {
 	tests := map[string]bool{
-		"app/controllers/home.go":         true,
-		"app/services/posts/content/a.md": true,
-		"app/views/home/index.html.tpl":   true,
-		"cmd/app/main.go":                 true,
-		"go.mod":                          true,
-		"js.toml":                         true,
-		"public/styles.css":               true,
-		"views/pages/index.html.tpl":      true,
-		"README.md":                       false,
-		"app/controllers/home_test.go":    false,
-		"node_modules/pkg/index.js":       false,
-		"app/views/home/index.html.tpl~":  false,
+		"app/controllers/home.go":                true,
+		"app/js/app.js":                          true,
+		"app/js/controllers/hello_controller.js": true,
+		"app/services/posts/content/a.md":        true,
+		"app/views/home/index.html.tpl":          true,
+		"cmd/app/main.go":                        true,
+		"go.mod":                                 true,
+		"js.toml":                                true,
+		"public/styles.css":                      true,
+		"views/pages/index.html.tpl":             true,
+		"README.md":                              false,
+		"app/controllers/home_test.go":           false,
+		"node_modules/pkg/index.js":              false,
+		"app/views/home/index.html.tpl~":         false,
 	}
 	for path, want := range tests {
 		if got := watchPath(path); got != want {
