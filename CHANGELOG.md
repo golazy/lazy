@@ -7,6 +7,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-06-19
+
 ### Added
 
 - `lazy js` now bundles application JavaScript from `app/js`, writes `/js/...`
@@ -15,6 +17,12 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `lazy` hot reload now runs JavaScript asset generation for apps with
   `js.toml` before the initial build and after changes to `app/js`,
   `js.toml`, or JavaScript package metadata.
+
+### Changed
+
+- Updated the CLI release version to `v0.1.9` so `lazy new` selects the
+  matching `golazy/sample_app` template tag with app-owned JavaScript modules,
+  controller formats, redirects, response metadata helpers, and SSE examples.
 
 ## [0.1.8] - 2026-06-19
 
@@ -130,7 +138,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The CLI version now comes from the checked-in `VERSION` file embedded into
   the binary at build time.
 
-[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.8...HEAD
+[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.9...HEAD
+[0.1.9]: https://github.com/golazy/lazy/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/golazy/lazy/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/golazy/lazy/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/golazy/lazy/compare/v0.1.5...v0.1.6
