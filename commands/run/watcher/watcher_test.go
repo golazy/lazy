@@ -53,6 +53,50 @@ func TestDiffSnapshotsReportsCreatesWritesAndRemoves(t *testing.T) {
 	}
 }
 
+func TestDiffSnapshotsIgnoresMTimeOnlyPackageInputChanges(t *testing.T) {
+	dir := t.TempDir()
+	lockfile := filepath.Join(dir, "package-lock.json")
+	writeFile(t, lockfile, "{\"lockfileVersion\":3}\n")
+
+	previous, err := scanWatchedFiles(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(lockfile, time.Now().Add(time.Second), time.Now().Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	next, err := scanWatchedFiles(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := diffSnapshots(previous, next); len(got) != 0 {
+		t.Fatalf("diffSnapshots() = %#v, want no package-lock mtime-only change", got)
+	}
+}
+
+func TestDiffSnapshotsReportsSameSizePackageInputContentChanges(t *testing.T) {
+	dir := t.TempDir()
+	lockfile := filepath.Join(dir, "package-lock.json")
+	writeFile(t, lockfile, "aaaa\n")
+
+	previous, err := scanWatchedFiles(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, lockfile, "bbbb\n")
+	next, err := scanWatchedFiles(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := diffSnapshots(previous, next)
+	want := []string{"package-lock.json"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("diffSnapshots() = %#v, want %#v", got, want)
+	}
+}
+
 func TestScanWatchedFilesSkipsIgnoredDirectories(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "app", "controllers", "home.go"), "package controllers\n")

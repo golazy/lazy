@@ -2,7 +2,10 @@ package watcher
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -18,6 +21,8 @@ type Watcher struct {
 type watchedFile struct {
 	modTime time.Time
 	size    int64
+	hash    string
+	hasHash bool
 }
 
 func (w Watcher) Watch(ctx context.Context) <-chan []string {
@@ -102,10 +107,18 @@ func scanWatchedFiles(root string) (map[string]watchedFile, error) {
 		if err != nil {
 			return nil
 		}
-		files[rel] = watchedFile{
+		file := watchedFile{
 			modTime: info.ModTime(),
 			size:    info.Size(),
 		}
+		if shouldHashWatchedFile(rel) {
+			hash, err := fileHash(path)
+			if err == nil {
+				file.hash = hash
+				file.hasHash = true
+			}
+		}
+		files[rel] = file
 		return nil
 	})
 	return files, err
@@ -115,7 +128,7 @@ func diffSnapshots(previous map[string]watchedFile, next map[string]watchedFile)
 	changed := map[string]bool{}
 	for path, nextInfo := range next {
 		previousInfo, ok := previous[path]
-		if !ok || !previousInfo.modTime.Equal(nextInfo.modTime) || previousInfo.size != nextInfo.size {
+		if !ok || !sameWatchedFile(previousInfo, nextInfo) {
 			changed[path] = true
 		}
 	}
@@ -125,6 +138,16 @@ func diffSnapshots(previous map[string]watchedFile, next map[string]watchedFile)
 		}
 	}
 	return sortedPending(changed)
+}
+
+func sameWatchedFile(previous, next watchedFile) bool {
+	if previous.size != next.size {
+		return false
+	}
+	if previous.hasHash || next.hasHash {
+		return previous.hasHash && next.hasHash && previous.hash == next.hash
+	}
+	return previous.modTime.Equal(next.modTime)
 }
 
 func watchPath(path string) bool {
@@ -158,6 +181,31 @@ func isTopLevelWatchedFile(path string) bool {
 	default:
 		return false
 	}
+}
+
+func shouldHashWatchedFile(path string) bool {
+	return isTopLevelJavaScriptPackageInput(path)
+}
+
+func isTopLevelJavaScriptPackageInput(path string) bool {
+	if strings.Contains(path, "/") {
+		return false
+	}
+	switch path {
+	case "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock", "bun.lockb":
+		return true
+	default:
+		return false
+	}
+}
+
+func fileHash(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:]), nil
 }
 
 func skipWatchDir(name string) bool {
