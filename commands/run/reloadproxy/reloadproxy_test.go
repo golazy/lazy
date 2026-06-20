@@ -23,10 +23,26 @@ func TestInjectScriptAddsReloadClientBeforeBodyClose(t *testing.T) {
 	}
 }
 
-func TestInjectScriptAppendsWhenBodyCloseIsMissing(t *testing.T) {
-	got := injectScript([]byte("<main>Hello</main>"))
-	if !bytes.HasSuffix(got, reloadScript) {
-		t.Fatalf("injectScript() = %s, want reload script appended", got)
+func TestInjectScriptLeavesFragmentsAlone(t *testing.T) {
+	body := []byte("<main>Hello</main>")
+	got := injectScript(body)
+	if string(got) != string(body) {
+		t.Fatalf("injectScript() = %s, want original fragment", got)
+	}
+}
+
+func TestShouldInjectReloadClientSkipsTurboFrameRequests(t *testing.T) {
+	request, err := http.NewRequest(http.MethodGet, "/polls/1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Turbo-Frame", "poll_vote")
+	response := &http.Response{
+		Request: request,
+		Header:  http.Header{"Content-Type": []string{"text/html; charset=utf-8"}},
+	}
+	if shouldInjectReloadClient(response) {
+		t.Fatal("shouldInjectReloadClient() = true, want false for Turbo frame request")
 	}
 }
 

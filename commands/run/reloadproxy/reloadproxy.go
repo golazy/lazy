@@ -155,7 +155,7 @@ func (p *Proxy) serveStatusPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func injectReloadClient(response *http.Response) error {
-	if !isHTMLResponse(response) {
+	if !shouldInjectReloadClient(response) {
 		return nil
 	}
 	body, err := io.ReadAll(response.Body)
@@ -170,6 +170,16 @@ func injectReloadClient(response *http.Response) error {
 	response.Header.Set("Content-Length", strconv.Itoa(len(body)))
 	response.Header.Del("ETag")
 	return nil
+}
+
+func shouldInjectReloadClient(response *http.Response) bool {
+	if !isHTMLResponse(response) {
+		return false
+	}
+	if response.Request != nil && strings.TrimSpace(response.Request.Header.Get("Turbo-Frame")) != "" {
+		return false
+	}
+	return true
 }
 
 func isHTMLResponse(response *http.Response) bool {
@@ -188,7 +198,7 @@ func injectScript(body []byte) []byte {
 	lower := bytes.ToLower(body)
 	index := bytes.LastIndex(lower, []byte("</body>"))
 	if index < 0 {
-		return append(append([]byte{}, body...), reloadScript...)
+		return body
 	}
 	out := make([]byte, 0, len(body)+len(reloadScript))
 	out = append(out, body[:index]...)
