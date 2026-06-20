@@ -7,6 +7,21 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-06-20
+
+### Changed
+
+- Updated the CLI release version to `v0.1.10` so `lazy new` selects the
+  matching `golazy/sample_app` template tag with `lazytest` integration,
+  secure-cookie environment setup, Docker packaging, and the latest controller
+  route/form helpers.
+
+### Fixed
+
+- `lazy` hot reload now fingerprints JavaScript package metadata before
+  rebuilding, avoiding restart loops when package managers rewrite lockfile
+  timestamps without changing file content.
+
 ## [0.1.9] - 2026-06-19
 
 ### Added
@@ -138,7 +153,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The CLI version now comes from the checked-in `VERSION` file embedded into
   the binary at build time.
 
-[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.9...HEAD
+[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.10...HEAD
+[0.1.10]: https://github.com/golazy/lazy/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/golazy/lazy/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/golazy/lazy/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/golazy/lazy/compare/v0.1.6...v0.1.7
