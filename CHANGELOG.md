@@ -7,6 +7,19 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.11] - 2026-06-21
+
+### Changed
+
+- Updated the CLI release version to `v0.1.11` so `lazy new` selects the
+  matching `golazy/sample_app` template tag with SEO metadata setup and
+  standalone mise task scripts.
+
+### Fixed
+
+- `lazy` hot reload no longer injects the reload client into Turbo Frame
+  requests or HTML fragments that do not include a document body.
+
 ## [0.1.10] - 2026-06-20
 
 ### Changed
@@ -153,7 +166,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The CLI version now comes from the checked-in `VERSION` file embedded into
   the binary at build time.
 
-[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.10...HEAD
+[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.11...HEAD
+[0.1.11]: https://github.com/golazy/lazy/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/golazy/lazy/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/golazy/lazy/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/golazy/lazy/compare/v0.1.7...v0.1.8
