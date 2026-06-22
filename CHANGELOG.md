@@ -7,6 +7,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.12] - 2026-06-22
+
 ### Added
 
 - `lazy` now reads optional `lazy.toml` workspace configuration. When present,
@@ -21,12 +23,18 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `lazy --skip-version-check` lets CLI development and test runs keep using the
   directly invoked binary even when the app requires a different framework
   version.
+- `lazy docs` can inspect local Go package documentation and print package
+  summaries, search results, or JSON using the shared `golazy.dev/lazydoc`
+  model.
+- `lazy command-center` provides the first interactive pane for tmux workspaces.
 
 ### Changed
 
 - `lazy` now resolves local development view paths itself and passes the
   concrete path to `lazydev` application processes through `GOLAZY_VIEW_PATH`,
   instead of configuring framework view lookup through linker flags.
+- Updated the CLI release version to `v0.1.12` so `lazy new` selects the
+  matching `golazy/sample_app` template tag with top-level application services.
 
 ## [0.1.11] - 2026-06-21
 
@@ -187,7 +195,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The CLI version now comes from the checked-in `VERSION` file embedded into
   the binary at build time.
 
-[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.11...HEAD
+[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.12...HEAD
+[0.1.12]: https://github.com/golazy/lazy/compare/v0.1.11...v0.1.12
 [0.1.11]: https://github.com/golazy/lazy/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/golazy/lazy/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/golazy/lazy/compare/v0.1.8...v0.1.9
