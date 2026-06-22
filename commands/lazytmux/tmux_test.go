@@ -6,8 +6,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/golazy/lazy/commands"
-	"github.com/golazy/lazy/commands/lazyconfig"
+	"golazy.dev/lazy/commands"
+	"golazy.dev/lazy/commands/lazyconfig"
 )
 
 func TestCommandBuildsTmuxSession(t *testing.T) {

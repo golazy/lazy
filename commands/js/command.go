@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/golazy/lazy/commands"
+	"golazy.dev/lazy/commands"
 )
 
 type Bundler func(manifest Manifest, root, packageDir string) (BuildResult, error)

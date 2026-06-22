@@ -12,8 +12,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/golazy/lazy/commands"
-	"github.com/golazy/lazy/commands/appcmd"
+	"golazy.dev/lazy/commands"
+	"golazy.dev/lazy/commands/appcmd"
 )
 
 type Command struct {

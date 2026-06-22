@@ -92,6 +92,17 @@ func TestBastardRejectsArguments(t *testing.T) {
 	}
 }
 
+func TestUpgradeRejectsExtraArguments(t *testing.T) {
+	var stderr bytes.Buffer
+
+	if code := execute([]string{"upgrade", "extra"}, nil, &bytes.Buffer{}, &stderr); code != 1 {
+		t.Fatalf("exit code = %d, want 1", code)
+	}
+	if !strings.Contains(stderr.String(), "usage: lazy upgrade") {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+}
+
 func TestProjectVersionMatchDoesNotHandoff(t *testing.T) {
 	t.Chdir(t.TempDir())
 	writeGoMod(t, currentVersion())
@@ -191,7 +202,7 @@ func TestProjectVersionMismatchInstallsMissingLazy(t *testing.T) {
 	if calls[0].command != "go" {
 		t.Fatalf("install command = %q, want go", calls[0].command)
 	}
-	if got, want := calls[0].args, []string{"install", "github.com/golazy/lazy@v0.1.7"}; !slices.Equal(got, want) {
+	if got, want := calls[0].args, []string{"install", "golazy.dev/lazy@v0.1.7"}; !slices.Equal(got, want) {
 		t.Fatalf("install args = %#v, want %#v", got, want)
 	}
 	if got, want := calls[0].env, []string{"GOBIN=" + filepath.Dir(binary)}; !slices.Equal(got, want) {
@@ -229,7 +240,7 @@ func TestProjectVersionMismatchReportsInstallFailure(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("code = %d, want 1", code)
 	}
-	if !strings.Contains(stderr.String(), "install github.com/golazy/lazy@v0.1.7: network unavailable") {
+	if !strings.Contains(stderr.String(), "install golazy.dev/lazy@v0.1.7: network unavailable") {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
 }
@@ -289,6 +300,22 @@ func TestProjectVersionCheckSkipsBastard(t *testing.T) {
 	}
 
 	handled, code := maybeExecuteProjectVersion([]string{"bastard"}, nil, &bytes.Buffer{}, &bytes.Buffer{})
+	if handled {
+		t.Fatalf("handled = true, code = %d", code)
+	}
+}
+
+func TestProjectVersionCheckSkipsUpgrade(t *testing.T) {
+	t.Chdir(t.TempDir())
+	writeGoMod(t, "v0.1.7")
+	restoreVersionHandoffTestHooks(t)
+
+	runCommand = func(string, []string, commandOptions) (int, error) {
+		t.Fatalf("runCommand should not be called")
+		return 1, nil
+	}
+
+	handled, code := maybeExecuteProjectVersion([]string{"upgrade"}, nil, &bytes.Buffer{}, &bytes.Buffer{})
 	if handled {
 		t.Fatalf("handled = true, code = %d", code)
 	}

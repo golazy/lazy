@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	jscommand "github.com/golazy/lazy/commands/js"
-	"github.com/golazy/lazy/commands/run/devapp"
-	"github.com/golazy/lazy/commands/run/reloadproxy"
-	"github.com/golazy/lazy/commands/run/watcher"
+	jscommand "golazy.dev/lazy/commands/js"
+	"golazy.dev/lazy/commands/run/devapp"
+	"golazy.dev/lazy/commands/run/reloadproxy"
+	"golazy.dev/lazy/commands/run/watcher"
 )
 
 const (
@@ -207,9 +207,6 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 	for {
 		select {
 		case <-ctx.Done():
-			if current != nil {
-				current.Stop()
-			}
 			proxy.ClearTarget()
 			proxy.UpdateStatus(reloadproxy.Status{
 				State:       reloadproxy.StateStopped,
@@ -218,6 +215,9 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 				WatchedRoot: d.root,
 				BuildCount:  buildNumber,
 			})
+			if current != nil {
+				current.Stop()
+			}
 			return 0, nil
 		case changed, ok := <-changeCh:
 			if !ok {
@@ -245,8 +245,15 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 				BuildCount:  buildNumber,
 			})
 			fmt.Fprintf(d.stderr, "lazy: %s\n", message)
+			if shouldExitAfterApplicationDone(ctx, err) {
+				return 0, nil
+			}
 		}
 	}
+}
+
+func shouldExitAfterApplicationDone(ctx context.Context, err error) bool {
+	return ctx.Err() != nil || err == nil || devapp.Interrupted(err)
 }
 
 func (d *devRunner) generateAssets(changed []string) generatedAssetResult {

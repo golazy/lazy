@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/golazy/lazy/commands"
+	"golazy.dev/lazy/commands"
 )
 
 type invocation struct {

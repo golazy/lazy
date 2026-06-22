@@ -121,7 +121,8 @@ lazy new github.com/guillermo/my_app
 
 The command creates `./my_app` from the `golazy/sample_app` tag matching the
 CLI version, removes the template Git history, changes the module and imports,
-then runs `go mod tidy` and `go test ./...`.
+trusts the generated `mise.toml`, runs `mise install`, then validates through
+the current `go` on `PATH` with `go mod tidy` and `go test ./...`.
 
 For local validation against the checked-out sample application, point `lazy
 new` at a directory:
@@ -129,6 +130,50 @@ new` at a directory:
 ```sh
 lazy new --source-dir ../sample_app github.com/guillermo/my_app
 ```
+
+## Upgrade an application
+
+From a GoLazy application module:
+
+```sh
+lazy upgrade
+lazy upgrade --target v0.1.12
+lazy upgrade --force v0.1.10
+```
+
+The command reads the current `golazy.dev` requirement from `go.mod`.
+Without `--target`, it applies the next supported one-step migration. With
+`--target`, it runs each supported step in order until the target version.
+Apps that predate `lazy upgrade` start at the first automated migration the
+current binary knows about, currently `v0.1.10 -> v0.1.11`, instead of trying
+to run older `lazy` binaries that did not have an upgrade command.
+Use `--force <version>` to run the one-step migration that starts at that
+version even when `go.mod` currently records another version; for example,
+`--force v0.1.10` runs the `v0.1.10 -> v0.1.11` migration.
+
+This first implementation carries backfilled migrations for:
+
+- `v0.1.10 -> v0.1.11`: moves sample-app mise tasks from inline
+  `mise.toml` entries to `.mise/tasks/dev` and `.mise/tasks/test`, adds
+  Node.js to the tool list, and removes Go from app-level mise tools.
+- `v0.1.11 -> v0.1.12`: moves generated-app services from `app/services` to
+  top-level `services` and rewrites matching Go imports.
+
+Template-owned files are hash-gated. If a file looks customized, `lazy upgrade`
+prints a diff, writes the proposed file under `.golazy/upgrade/conflicts`, and
+stops so the application code can be edited deliberately.
+
+After each successful step, `lazy upgrade` runs:
+
+```sh
+go mod tidy
+go test ./...
+go vet ./...
+```
+
+Use `--dry-run` to inspect planned writes and `--skip-commands` when you need
+to run verification manually. `--force` does not overwrite customized
+template-owned files; conflicts still stop with a diff and proposed file.
 
 ## Version
 
@@ -150,7 +195,7 @@ CLI version, `lazy` uses the matching CLI binary from:
 When the cached binary is missing, `lazy` installs it with:
 
 ```sh
-GOBIN=<user-cache-dir>/golazy/lazy/builds/<version> go install github.com/golazy/lazy@<version>
+GOBIN=<user-cache-dir>/golazy/lazy/builds/<version> go install golazy.dev/lazy@<version>
 ```
 
 The matching binary receives the same command-line arguments with
@@ -176,6 +221,7 @@ lazy --skip-version-check js
 - `commands/lazytmux`: tmux session construction for configured workspaces.
 - `commands/commandcenter`: interactive tmux command-center pane.
 - `commands/routes`: route-table inspection.
+- `commands/upgrade`: one-step application upgrades and migration helpers.
 - `commands/js`: JavaScript library and app-module bundling, directive
   expansion, and importmap generation.
 - `commands/tailwind`: Tailwind CLI setup and stylesheet compilation.

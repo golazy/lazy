@@ -8,7 +8,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/golazy/lazy/commands"
+	"golazy.dev/lazy/commands"
 )
 
 const Prompt = `Analyze this GoLazy codebase and choose exactly three improvements to implement.

@@ -1,6 +1,8 @@
 package run
 
 import (
+	"context"
+	"errors"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -93,5 +95,21 @@ func TestOnlyGeneratedJavaScriptOutputs(t *testing.T) {
 	}
 	if onlyGeneratedJavaScriptOutputs(nil) {
 		t.Fatal("empty changes should not be ignored")
+	}
+}
+
+func TestShouldExitAfterApplicationDone(t *testing.T) {
+	if !shouldExitAfterApplicationDone(context.Background(), nil) {
+		t.Fatal("clean application exit should stop lazy")
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if !shouldExitAfterApplicationDone(ctx, errors.New("application still shutting down")) {
+		t.Fatal("canceled lazy context should stop lazy after application exit")
+	}
+
+	if shouldExitAfterApplicationDone(context.Background(), errors.New("application crashed")) {
+		t.Fatal("unexpected application crash should leave lazy running")
 	}
 }

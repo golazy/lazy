@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/golazy/lazy/commands"
+	"golazy.dev/lazy/commands"
 )
 
 func readVersion(t *testing.T) string {
@@ -93,6 +93,7 @@ func TestClonesRenamesAndValidates(t *testing.T) {
 	wantOutput := strings.Join([]string{
 		"* Initializing the core app",
 		"* Naming the app",
+		"* Preparing the mise development environment",
 		"* Validating",
 		"Congrats !",
 		"",
@@ -101,8 +102,8 @@ func TestClonesRenamesAndValidates(t *testing.T) {
 		t.Fatalf("stdout = %q, want %q", stdout.String(), wantOutput)
 	}
 
-	if len(calls) != 3 {
-		t.Fatalf("calls = %d, want 3", len(calls))
+	if len(calls) != 5 {
+		t.Fatalf("calls = %d, want 5", len(calls))
 	}
 	wantClone := []string{
 		"clone",
@@ -115,13 +116,25 @@ func TestClonesRenamesAndValidates(t *testing.T) {
 	if calls[0].command != "git" || !reflect.DeepEqual(calls[0].args, wantClone) {
 		t.Fatalf("clone = %s %#v, want git %#v", calls[0].command, calls[0].args, wantClone)
 	}
-	if got, want := calls[1].args, []string{"mod", "tidy"}; !reflect.DeepEqual(got, want) {
+	if calls[1].command != "mise" || !reflect.DeepEqual(calls[1].args, []string{"trust", "--yes", "mise.toml"}) {
+		t.Fatalf("mise trust = %s %#v", calls[1].command, calls[1].args)
+	}
+	if calls[2].command != "mise" || !reflect.DeepEqual(calls[2].args, []string{"install", "--yes"}) {
+		t.Fatalf("mise install = %s %#v", calls[2].command, calls[2].args)
+	}
+	if calls[3].command != "go" {
+		t.Fatalf("tidy command = %s, want go", calls[3].command)
+	}
+	if got, want := calls[3].args, []string{"mod", "tidy"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("tidy args = %#v, want %#v", got, want)
 	}
-	if got, want := calls[2].args, []string{"test", "./..."}; !reflect.DeepEqual(got, want) {
+	if calls[4].command != "go" {
+		t.Fatalf("test command = %s, want go", calls[4].command)
+	}
+	if got, want := calls[4].args, []string{"test", "./..."}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("test args = %#v, want %#v", got, want)
 	}
-	for _, call := range calls {
+	for _, call := range []invocation{calls[0], calls[3], calls[4]} {
 		if !call.options.Capture {
 			t.Fatalf("%s was not captured", call.command)
 		}
@@ -221,13 +234,25 @@ func TestCopiesSourceDirectoryRenamesAndValidates(t *testing.T) {
 	assertFileContains(t, filepath.Join(destination, "go.mod"), "module github.com/guillermo/my_app")
 	assertFileContains(t, filepath.Join(destination, "main.go"), `"github.com/guillermo/my_app/app"`)
 
-	if len(calls) != 2 {
-		t.Fatalf("calls = %d, want 2", len(calls))
+	if len(calls) != 4 {
+		t.Fatalf("calls = %d, want 4", len(calls))
 	}
-	if got, want := calls[0].args, []string{"mod", "tidy"}; !reflect.DeepEqual(got, want) {
+	if calls[0].command != "mise" || !reflect.DeepEqual(calls[0].args, []string{"trust", "--yes", "mise.toml"}) {
+		t.Fatalf("mise trust = %s %#v", calls[0].command, calls[0].args)
+	}
+	if calls[1].command != "mise" || !reflect.DeepEqual(calls[1].args, []string{"install", "--yes"}) {
+		t.Fatalf("mise install = %s %#v", calls[1].command, calls[1].args)
+	}
+	if calls[2].command != "go" {
+		t.Fatalf("tidy command = %s, want go", calls[2].command)
+	}
+	if got, want := calls[2].args, []string{"mod", "tidy"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("tidy args = %#v, want %#v", got, want)
 	}
-	if got, want := calls[1].args, []string{"test", "./..."}; !reflect.DeepEqual(got, want) {
+	if calls[3].command != "go" {
+		t.Fatalf("test command = %s, want go", calls[3].command)
+	}
+	if got, want := calls[3].args, []string{"test", "./..."}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("test args = %#v, want %#v", got, want)
 	}
 }
@@ -275,16 +300,28 @@ func TestCopiesSourceDirectoryValidatesWithWorkspaceReplaces(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(calls) != 2 {
-		t.Fatalf("calls = %d, want 2", len(calls))
+	if len(calls) != 4 {
+		t.Fatalf("calls = %d, want 4", len(calls))
 	}
-	if got, want := calls[0].args, []string{"mod", "tidy", "-modfile=.lazy-go.mod"}; !reflect.DeepEqual(got, want) {
+	if calls[0].command != "mise" || !reflect.DeepEqual(calls[0].args, []string{"trust", "--yes", "mise.toml"}) {
+		t.Fatalf("mise trust = %s %#v", calls[0].command, calls[0].args)
+	}
+	if calls[1].command != "mise" || !reflect.DeepEqual(calls[1].args, []string{"install", "--yes"}) {
+		t.Fatalf("mise install = %s %#v", calls[1].command, calls[1].args)
+	}
+	if calls[2].command != "go" {
+		t.Fatalf("tidy command = %s, want go", calls[2].command)
+	}
+	if got, want := calls[2].args, []string{"mod", "tidy", "-modfile=.lazy-go.mod"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("tidy args = %#v, want %#v", got, want)
 	}
-	if got, want := calls[1].args, []string{"test", "-modfile=.lazy-go.mod", "./..."}; !reflect.DeepEqual(got, want) {
+	if calls[3].command != "go" {
+		t.Fatalf("test command = %s, want go", calls[3].command)
+	}
+	if got, want := calls[3].args, []string{"test", "-modfile=.lazy-go.mod", "./..."}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("test args = %#v, want %#v", got, want)
 	}
-	for _, call := range calls {
+	for _, call := range []invocation{calls[2], calls[3]} {
 		if !contains(call.options.Env, "GOWORK=off") {
 			t.Fatalf("%s env = %#v, does not contain GOWORK=off", call.command, call.options.Env)
 		}

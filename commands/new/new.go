@@ -16,9 +16,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/golazy/lazy/commands"
 	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/module"
+	"golazy.dev/lazy/commands"
 )
 
 const sampleRepository = "https://github.com/golazy/sample_app"
@@ -28,6 +28,7 @@ type Command struct {
 	SourceDir string
 	Dir       string
 	Stdout    io.Writer
+	Stderr    io.Writer
 	Runner    commands.Runner
 }
 
@@ -100,6 +101,22 @@ func (c Command) Execute(modulePath string) error {
 		return err
 	}
 	defer cleanupWorkfile()
+
+	fmt.Fprintln(c.Stdout, "* Preparing the mise development environment")
+	if err := runner("mise", []string{"trust", "--yes", "mise.toml"}, commands.Options{
+		Dir:    destination,
+		Stdout: c.Stdout,
+		Stderr: c.Stderr,
+	}); err != nil {
+		return fmt.Errorf("mise trust: %w", err)
+	}
+	if err := runner("mise", []string{"install", "--yes"}, commands.Options{
+		Dir:    destination,
+		Stdout: c.Stdout,
+		Stderr: c.Stderr,
+	}); err != nil {
+		return fmt.Errorf("mise install: %w", err)
+	}
 
 	fmt.Fprintln(c.Stdout, "* Validating")
 	tidyArgs := append([]string{"mod", "tidy"}, goArgs...)

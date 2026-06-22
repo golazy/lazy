@@ -7,6 +7,38 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.13] - 2026-06-22
+
+### Added
+
+- `lazy native` opens the current application through the external native
+  desktop helper while keeping the normal development loop in charge of
+  rebuilds and reloads.
+- `lazy native build` builds the current application for the host platform and
+  passes the server binary to the native helper for packaging.
+- `lazy upgrade` starts the application-upgrade workflow. It reads the current
+  app's `golazy.dev` requirement, can advance one release or a `--target`
+  range, applies the backfilled `v0.1.10 -> v0.1.11` and `v0.1.11 -> v0.1.12`
+  migrations, advances `v0.1.12 -> v0.1.13` by updating `go.mod`, supports
+  `--force <version>` for rerunning a specific one-step migration, reports
+  customized-file conflicts with diffs, and runs `go mod tidy`, `go test
+  ./...`, and `go vet ./...` after each step.
+
+### Changed
+
+- The CLI module path moved to `golazy.dev/lazy`; version handoff and install
+  documentation now use the vanity import path while the repository remains
+  `github.com/golazy/lazy`.
+- `lazy new` now trusts the generated app's `mise.toml`, runs `mise install`,
+  and validates with the current `go` on `PATH` so apps can omit Go from
+  `mise.toml` while still using mise for project tools.
+- Generated app `mise.toml` files no longer list Go as a mise tool. Go already
+  bundles multi-version support through the module `go` directive and
+  toolchain selection, and `lazy` prompts to remove stale app-level Go entries.
+- Updated the CLI release version to `v0.1.13` so `lazy new` selects the
+  matching sample application template once the coordinated release is
+  published.
+
 ## [0.1.12] - 2026-06-22
 
 ### Added
@@ -195,7 +227,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The CLI version now comes from the checked-in `VERSION` file embedded into
   the binary at build time.
 
-[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.12...HEAD
+[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.13...HEAD
+[0.1.13]: https://github.com/golazy/lazy/compare/v0.1.12...v0.1.13
 [0.1.12]: https://github.com/golazy/lazy/compare/v0.1.11...v0.1.12
 [0.1.11]: https://github.com/golazy/lazy/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/golazy/lazy/compare/v0.1.9...v0.1.10

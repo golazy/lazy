@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/golazy/lazy/commands"
+	"golazy.dev/lazy/commands"
 )
 
 func TestCommandShowsHelpWhenNoAssistantIsAvailable(t *testing.T) {

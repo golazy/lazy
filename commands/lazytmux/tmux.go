@@ -8,9 +8,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/golazy/lazy/commands"
-	"github.com/golazy/lazy/commands/appcmd"
-	"github.com/golazy/lazy/commands/lazyconfig"
+	"golazy.dev/lazy/commands"
+	"golazy.dev/lazy/commands/appcmd"
+	"golazy.dev/lazy/commands/lazyconfig"
 )
 
 const (

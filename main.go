@@ -7,17 +7,20 @@ import (
 	"os"
 	"strings"
 
-	"github.com/golazy/lazy/commands/appcmd"
-	bastardcommand "github.com/golazy/lazy/commands/bastard"
-	commandcenter "github.com/golazy/lazy/commands/commandcenter"
-	docscommand "github.com/golazy/lazy/commands/docs"
-	jscommand "github.com/golazy/lazy/commands/js"
-	"github.com/golazy/lazy/commands/lazyconfig"
-	"github.com/golazy/lazy/commands/lazytmux"
-	newcommand "github.com/golazy/lazy/commands/new"
-	routescommand "github.com/golazy/lazy/commands/routes"
-	runcommand "github.com/golazy/lazy/commands/run"
-	tailwindcommand "github.com/golazy/lazy/commands/tailwind"
+	"golazy.dev/lazy/commands/appcmd"
+	bastardcommand "golazy.dev/lazy/commands/bastard"
+	commandcenter "golazy.dev/lazy/commands/commandcenter"
+	docscommand "golazy.dev/lazy/commands/docs"
+	jscommand "golazy.dev/lazy/commands/js"
+	"golazy.dev/lazy/commands/lazyconfig"
+	"golazy.dev/lazy/commands/lazytmux"
+	"golazy.dev/lazy/commands/miseconfig"
+	nativecommand "golazy.dev/lazy/commands/native"
+	newcommand "golazy.dev/lazy/commands/new"
+	routescommand "golazy.dev/lazy/commands/routes"
+	runcommand "golazy.dev/lazy/commands/run"
+	tailwindcommand "golazy.dev/lazy/commands/tailwind"
+	upgradecommand "golazy.dev/lazy/commands/upgrade"
 )
 
 func main() {
@@ -74,6 +77,7 @@ func execute(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer)
 			Version:   currentVersion(),
 			SourceDir: *sourceDir,
 			Stdout:    stdout,
+			Stderr:    stderr,
 		}).Execute(flags.Arg(0))
 		if err != nil {
 			fmt.Fprintf(stderr, "lazy: %v\n", err)
@@ -82,6 +86,10 @@ func execute(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer)
 		return 0
 	case "routes":
 		return executeRoutes(args[1:], stdout, stderr)
+	case "upgrade":
+		return executeUpgrade(args[1:], stdin, stdout, stderr)
+	case "native":
+		return executeNative(args[1:], stdin, stdout, stderr)
 	case "docs":
 		return executeDocs(args[1:], stdout, stderr)
 	case "command-center":
@@ -119,6 +127,9 @@ func printUsage(stdout io.Writer) {
 	fmt.Fprintln(stdout, "  lazy")
 	fmt.Fprintln(stdout, "  lazy new <module>")
 	fmt.Fprintln(stdout, "  lazy routes")
+	fmt.Fprintln(stdout, "  lazy upgrade")
+	fmt.Fprintln(stdout, "  lazy native")
+	fmt.Fprintln(stdout, "  lazy native build")
 	fmt.Fprintln(stdout, "  lazy docs")
 	fmt.Fprintln(stdout, "  lazy js")
 	fmt.Fprintln(stdout, "  lazy tailwind")
@@ -140,6 +151,105 @@ func removeSkipVersionCheckFlag(args []string) ([]string, bool) {
 		return filtered, true
 	}
 	return args, false
+}
+
+func executeUpgrade(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
+	flags := flag.NewFlagSet("upgrade", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	target := flags.String("target", "", "target GoLazy version")
+	force := flags.String("force", "", "force a one-step upgrade from this GoLazy version")
+	dryRun := flags.Bool("dry-run", false, "print the upgrade plan without writing files")
+	skipCommands := flags.Bool("skip-commands", false, "skip follow-up commands such as go test and go vet")
+	internalStep := flags.Bool("internal-step", false, "run one internal upgrade step")
+	from := flags.String("from", "", "source GoLazy version for internal upgrade steps")
+	to := flags.String("to", "", "target GoLazy version for internal upgrade steps")
+	if err := flags.Parse(args); err != nil {
+		return 1
+	}
+	if flags.NArg() != 0 {
+		fmt.Fprintln(stderr, "lazy: usage: lazy upgrade [--target <version>] [--dry-run] [--skip-commands]")
+		return 1
+	}
+
+	code, err := (upgradecommand.Command{
+		Target:       *target,
+		Force:        *force,
+		From:         *from,
+		To:           *to,
+		InternalStep: *internalStep,
+		DryRun:       *dryRun,
+		SkipCommands: *skipCommands,
+		Stdin:        stdin,
+		Stdout:       stdout,
+		Stderr:       stderr,
+	}).Execute()
+	if err != nil {
+		fmt.Fprintf(stderr, "lazy: %v\n", err)
+	}
+	return code
+}
+
+func executeNative(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "build" {
+		return executeNativeBuild(args[1:], stdout, stderr)
+	}
+
+	flags := flag.NewFlagSet("native", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	cmdPath := flags.String("cmdpath", "", "application command path")
+	viewPath := flags.String("viewpath", appcmd.DefaultViewPath, "local view path for lazydev builds")
+	title := flags.String("title", "", "native window title")
+	width := flags.Int("width", 0, "native window width")
+	height := flags.Int("height", 0, "native window height")
+	if err := flags.Parse(args); err != nil {
+		return 1
+	}
+	if flags.NArg() != 0 {
+		fmt.Fprintln(stderr, "lazy: usage: lazy native [--cmdpath <path>] [--viewpath <path>] [--title <title>] [--width <px>] [--height <px>]")
+		return 1
+	}
+
+	code, err := (nativecommand.Command{
+		CmdPath:  *cmdPath,
+		ViewPath: *viewPath,
+		Title:    *title,
+		Width:    *width,
+		Height:   *height,
+		Stdin:    stdin,
+		Stdout:   stdout,
+		Stderr:   stderr,
+	}).ExecuteDev()
+	if err != nil {
+		fmt.Fprintf(stderr, "lazy: %v\n", err)
+	}
+	return code
+}
+
+func executeNativeBuild(args []string, stdout io.Writer, stderr io.Writer) int {
+	flags := flag.NewFlagSet("native build", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	cmdPath := flags.String("cmdpath", "", "application command path")
+	out := flags.String("out", "", "native build output directory")
+	target := flags.String("target", "", "native build target; only the current platform is supported")
+	if err := flags.Parse(args); err != nil {
+		return 1
+	}
+	if flags.NArg() != 0 {
+		fmt.Fprintln(stderr, "lazy: usage: lazy native build [--target <current>] [--cmdpath <path>] [--out <dir>]")
+		return 1
+	}
+
+	code, err := (nativecommand.Command{
+		CmdPath: *cmdPath,
+		Out:     *out,
+		Target:  *target,
+		Stdout:  stdout,
+		Stderr:  stderr,
+	}).ExecuteBuild()
+	if err != nil {
+		fmt.Fprintf(stderr, "lazy: %v\n", err)
+	}
+	return code
 }
 
 func executeDocs(args []string, stdout io.Writer, stderr io.Writer) int {
@@ -197,6 +307,16 @@ func executeRun(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writ
 	}
 	if flags.NArg() != 0 {
 		fmt.Fprintln(stderr, "lazy: usage: lazy [--skip-version-check] [--cmdpath <path>] [--viewpath <path>]")
+		return 1
+	}
+
+	if err := (miseconfig.GoToolCheck{
+		Dir:    ".",
+		Stdin:  stdin,
+		Stdout: stdout,
+		Stderr: stderr,
+	}).Execute(); err != nil {
+		fmt.Fprintf(stderr, "lazy: %v\n", err)
 		return 1
 	}
 

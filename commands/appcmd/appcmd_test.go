@@ -75,6 +75,19 @@ func TestGoBuildArgs(t *testing.T) {
 	}
 }
 
+func TestGoBuildArgsOmitsEmptyTags(t *testing.T) {
+	got := GoBuildArgs("", "cmd/app", "/tmp/app")
+	want := []string{
+		"build",
+		"-o",
+		"/tmp/app",
+		"./cmd/app",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("GoBuildArgs() = %#v, want %#v", got, want)
+	}
+}
+
 func TestResolveViewPathUsesDefaultAppViews(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "app", "views", "layouts", "app.html.tpl"), "layout")

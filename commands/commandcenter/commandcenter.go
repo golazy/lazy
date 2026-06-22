@@ -7,9 +7,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/golazy/lazy/commands"
-	"github.com/golazy/lazy/commands/lazyconfig"
-	"github.com/golazy/lazy/commands/lazytmux"
+	"golazy.dev/lazy/commands"
+	"golazy.dev/lazy/commands/lazyconfig"
+	"golazy.dev/lazy/commands/lazytmux"
 )
 
 type Command struct {

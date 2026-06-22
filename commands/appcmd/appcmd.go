@@ -80,14 +80,11 @@ func GoRunArgs(tags string, commandPath string) []string {
 }
 
 func GoBuildArgs(tags string, commandPath string, outputPath string) []string {
-	return []string{
-		"build",
-		"-tags",
-		tags,
-		"-o",
-		outputPath,
-		goRunPath(commandPath),
+	args := []string{"build"}
+	if strings.TrimSpace(tags) != "" {
+		args = append(args, "-tags", tags)
 	}
+	return append(args, "-o", outputPath, goRunPath(commandPath))
 }
 
 func ViewPathEnv(root string, viewPath string) ([]string, error) {

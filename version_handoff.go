@@ -50,7 +50,7 @@ func maybeExecuteProjectVersion(args []string, stdin io.Reader, stdout io.Writer
 			return true, 1
 		}
 		if err := installLazyVersion(version, filepath.Dir(binary), stdout, stderr); err != nil {
-			fmt.Fprintf(stderr, "lazy: install github.com/golazy/lazy@%s: %v\n", version, err)
+			fmt.Fprintf(stderr, "lazy: install golazy.dev/lazy@%s: %v\n", version, err)
 			return true, 1
 		}
 	}
@@ -76,7 +76,7 @@ func skipProjectVersionCheck(args []string) bool {
 		return false
 	}
 	switch args[0] {
-	case "--version", "new", "command-center", "bastard":
+	case "--version", "new", "upgrade", "command-center", "bastard":
 		return true
 	default:
 		return false
@@ -120,7 +120,7 @@ func installLazyVersion(version string, binDir string, stdout io.Writer, stderr 
 	if err := mkdirAll(binDir, 0o755); err != nil {
 		return fmt.Errorf("create %s: %w", binDir, err)
 	}
-	code, err := runCommand("go", []string{"install", "github.com/golazy/lazy@" + version}, commandOptions{
+	code, err := runCommand("go", []string{"install", "golazy.dev/lazy@" + version}, commandOptions{
 		Stdout: stdout,
 		Stderr: stderr,
 		Env:    []string{"GOBIN=" + binDir},

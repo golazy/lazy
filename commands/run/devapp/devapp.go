@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/golazy/lazy/commands/appcmd"
+	"golazy.dev/lazy/commands/appcmd"
 )
 
 const defaultStopTimeout = 2 * time.Second
@@ -74,7 +74,19 @@ func (c Config) Start(ctx context.Context, binary string) (*Process, error) {
 		return nil, err
 	}
 
+	stopTimeout := stopTimeoutOrDefault(c.StopTimeout)
 	cmd := exec.CommandContext(ctx, binary)
+	cmd.Cancel = func() error {
+		if cmd.Process == nil {
+			return os.ErrProcessDone
+		}
+		err := cmd.Process.Signal(os.Interrupt)
+		if errors.Is(err, os.ErrProcessDone) {
+			return os.ErrProcessDone
+		}
+		return err
+	}
+	cmd.WaitDelay = stopTimeout
 	cmd.Dir = c.Root
 	cmd.Stdin = c.Stdin
 	cmd.Stdout = c.Stdout
@@ -86,7 +98,7 @@ func (c Config) Start(ctx context.Context, binary string) (*Process, error) {
 		command:     cmd,
 		addr:        addr,
 		done:        done,
-		stopTimeout: stopTimeoutOrDefault(c.StopTimeout),
+		stopTimeout: stopTimeout,
 	}
 	if err := cmd.Start(); err != nil {
 		return nil, err
