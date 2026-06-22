@@ -20,6 +20,7 @@ type invocation struct {
 func TestCommandRunsApplicationWithPrintRoutesTag(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "go.mod"), "module example.com/team/my_app\n")
+	writeFile(t, filepath.Join(dir, "app", "views", "layouts", "app.html.tpl"), "layout")
 	writeCommand(t, filepath.Join(dir, "cmd", "app"))
 
 	var calls []invocation
@@ -51,11 +52,12 @@ func TestCommandRunsApplicationWithPrintRoutesTag(t *testing.T) {
 		"run",
 		"-tags",
 		"lazydev,printroutes",
-		"-ldflags",
-		"-X golazy.dev/lazyviews.ViewsPath=app/views",
 		"./cmd/app",
 	}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("args = %#v, want %#v", got, want)
+	}
+	if got, want := calls[0].options.Env, []string{"GOLAZY_VIEW_PATH=" + filepath.Join(dir, "app", "views")}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("env = %#v, want %#v", got, want)
 	}
 	if !strings.Contains(stdout.String(), "root") || !strings.Contains(stdout.String(), "home#Index") {
 		t.Fatalf("stdout = %q, want route table", stdout.String())
@@ -65,6 +67,7 @@ func TestCommandRunsApplicationWithPrintRoutesTag(t *testing.T) {
 func TestCommandUsesExplicitCommandAndViewPath(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "go.mod"), "module example.com/team/blog\n")
+	writeFile(t, filepath.Join(dir, "views", "layouts", "app.html.tpl"), "layout")
 	writeCommand(t, filepath.Join(dir, "cmd", "blog"))
 	writeCommand(t, filepath.Join(dir, "cmd", "app"))
 
@@ -92,11 +95,12 @@ func TestCommandUsesExplicitCommandAndViewPath(t *testing.T) {
 		"run",
 		"-tags",
 		"lazydev,printroutes",
-		"-ldflags",
-		"-X golazy.dev/lazyviews.ViewsPath=views",
 		"./cmd/blog",
 	}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("args = %#v, want %#v", got, want)
+	}
+	if got, want := calls[0].options.Env, []string{"GOLAZY_VIEW_PATH=" + filepath.Join(dir, "views")}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("env = %#v, want %#v", got, want)
 	}
 }
 

@@ -7,6 +7,27 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `lazy` now reads optional `lazy.toml` workspace configuration. When present,
+  the default `lazy` command opens a tmux development session through mise with
+  service panes, runner panes, the app development loop, and `lazy
+  command-center`.
+- `lazy` now checks the current app module's `golazy.dev` requirement before
+  app-bound commands. When the framework version differs from the running CLI
+  version, it runs or installs the matching `github.com/golazy/lazy` version
+  under the user cache and re-executes the command with version checking
+  disabled.
+- `lazy --skip-version-check` lets CLI development and test runs keep using the
+  directly invoked binary even when the app requires a different framework
+  version.
+
+### Changed
+
+- `lazy` now resolves local development view paths itself and passes the
+  concrete path to `lazydev` application processes through `GOLAZY_VIEW_PATH`,
+  instead of configuring framework view lookup through linker flags.
+
 ## [0.1.11] - 2026-06-21
 
 ### Changed

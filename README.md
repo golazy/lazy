@@ -21,6 +21,35 @@ on changes, and injects a small reload client into HTML responses. Build output
 is printed to stderr; if the app is not running, the proxy serves a status page
 with the latest build state.
 
+When an application has `lazy.toml`, `lazy` opens the configured development
+workspace in tmux through mise. Service panes run `mise run <service>:start`,
+runner panes run their configured commands, the app pane runs the normal
+development loop, and a `lazy command-center` pane stays open for local
+inspection. The app pane receives `LAZY_TMUX=1` so it runs the development loop
+instead of opening another tmux session.
+
+Example `lazy.toml`:
+
+```toml
+services = ["postgres", "s3"]
+
+[tmux]
+session = "my-app"
+
+[[runners]]
+name = "tailwind"
+command = "lazy tailwind --watch"
+
+[[programs]]
+name = "editor"
+command = "nvim"
+window = "workspace"
+```
+
+Each service is implemented as mise tasks such as `postgres:start`,
+`postgres:kill`, `postgres:dump`, `postgres:load`, `postgres:create`, and
+`postgres:migrate`. Only `<service>:start` is required by the tmux launcher.
+
 Use direct Go commands when you want to run without the development proxy or
 watcher:
 
@@ -110,11 +139,42 @@ lazy --version
 The current development version comes from the checked-in `VERSION` file, which
 is embedded into the binary at build time.
 
+For app-bound commands, `lazy` reads the current module's `golazy.dev`
+requirement from `go.mod`. If that framework version differs from the running
+CLI version, `lazy` uses the matching CLI binary from:
+
+```text
+<user-cache-dir>/golazy/lazy/builds/<version>/lazy
+```
+
+When the cached binary is missing, `lazy` installs it with:
+
+```sh
+GOBIN=<user-cache-dir>/golazy/lazy/builds/<version> go install github.com/golazy/lazy@<version>
+```
+
+The matching binary receives the same command-line arguments with
+`NO_VERSION_CHECK=true` in its environment, which prevents recursive version
+handoffs. `lazy --version` and `lazy new` always use the binary that was
+directly invoked.
+
+Use `--skip-version-check` when you intentionally need the directly invoked
+binary to run app-bound commands against a mismatched local application, for
+example during CLI development and tests:
+
+```sh
+lazy --skip-version-check js
+```
+
 ## Structure
 
 - `main.go`: command dispatch and version output.
 - `VERSION`: build version embedded into the binary.
+- `version_handoff.go`: app framework version detection and CLI re-exec.
 - `commands/run`: application discovery, hot reload, proxying, and execution.
+- `commands/lazyconfig`: `lazy.toml` parsing.
+- `commands/lazytmux`: tmux session construction for configured workspaces.
+- `commands/commandcenter`: interactive tmux command-center pane.
 - `commands/routes`: route-table inspection.
 - `commands/js`: JavaScript library and app-module bundling, directive
   expansion, and importmap generation.

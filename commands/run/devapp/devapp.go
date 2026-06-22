@@ -47,7 +47,7 @@ type Process struct {
 func (c Config) Build(ctx context.Context, tmpDir string, buildNumber int) BuildResult {
 	started := time.Now()
 	binary := filepath.Join(tmpDir, "app-"+strconv.Itoa(buildNumber)+exeSuffix())
-	args := appcmd.GoBuildArgs("lazydev", filepath.ToSlash(c.CommandPath), c.ViewPath, binary)
+	args := appcmd.GoBuildArgs("lazydev", filepath.ToSlash(c.CommandPath), binary)
 
 	var output bytes.Buffer
 	cmd := exec.CommandContext(ctx, "go", args...)
@@ -69,13 +69,17 @@ func (c Config) Start(ctx context.Context, binary string) (*Process, error) {
 	if err != nil {
 		return nil, err
 	}
+	viewPathEnv, err := appcmd.ViewPathEnv(c.Root, c.ViewPath)
+	if err != nil {
+		return nil, err
+	}
 
 	cmd := exec.CommandContext(ctx, binary)
 	cmd.Dir = c.Root
 	cmd.Stdin = c.Stdin
 	cmd.Stdout = c.Stdout
 	cmd.Stderr = c.Stderr
-	cmd.Env = append(os.Environ(), "ADDR="+addr)
+	cmd.Env = append(os.Environ(), append(viewPathEnv, "ADDR="+addr)...)
 
 	done := make(chan error, 1)
 	process := &Process{

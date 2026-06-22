@@ -62,11 +62,16 @@ func (c Command) Execute() (int, error) {
 }
 
 func (c Command) executeDirect(dir string, candidate string, runner commands.Runner) (int, error) {
-	err := runner("go", appcmd.GoRunArgs("lazydev", filepath.ToSlash(candidate), c.ViewPath), commands.Options{
+	env, err := appcmd.ViewPathEnv(dir, c.ViewPath)
+	if err != nil {
+		return 1, err
+	}
+	err = runner("go", appcmd.GoRunArgs("lazydev", filepath.ToSlash(candidate)), commands.Options{
 		Dir:    dir,
 		Stdin:  c.Stdin,
 		Stdout: c.Stdout,
 		Stderr: c.Stderr,
+		Env:    env,
 	})
 	if err == nil {
 		return 0, nil

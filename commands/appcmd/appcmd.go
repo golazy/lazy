@@ -15,6 +15,7 @@ import (
 )
 
 const DefaultViewPath = "app/views"
+const ViewPathEnvKey = "GOLAZY_VIEW_PATH"
 
 func Find(dir string, cmdPath string) (string, error) {
 	modulePath, err := ModuleName(filepath.Join(dir, "go.mod"))
@@ -69,36 +70,58 @@ func ModuleName(filename string) (string, error) {
 	return module, nil
 }
 
-func GoRunArgs(tags string, commandPath string, viewPath string) []string {
+func GoRunArgs(tags string, commandPath string) []string {
 	return []string{
 		"run",
 		"-tags",
 		tags,
-		"-ldflags",
-		ViewPathLDFlags(viewPath),
 		goRunPath(commandPath),
 	}
 }
 
-func GoBuildArgs(tags string, commandPath string, viewPath string, outputPath string) []string {
+func GoBuildArgs(tags string, commandPath string, outputPath string) []string {
 	return []string{
 		"build",
 		"-tags",
 		tags,
-		"-ldflags",
-		ViewPathLDFlags(viewPath),
 		"-o",
 		outputPath,
 		goRunPath(commandPath),
 	}
 }
 
-func ViewPathLDFlags(viewPath string) string {
+func ViewPathEnv(root string, viewPath string) ([]string, error) {
+	resolved, err := ResolveViewPath(root, viewPath)
+	if err != nil {
+		return nil, err
+	}
+	return []string{ViewPathEnvKey + "=" + resolved}, nil
+}
+
+func ResolveViewPath(root string, viewPath string) (string, error) {
 	viewPath = strings.TrimSpace(viewPath)
 	if viewPath == "" {
 		viewPath = DefaultViewPath
 	}
-	return "-X golazy.dev/lazyviews.ViewsPath=" + viewPath
+	if filepath.IsAbs(viewPath) {
+		return validateViewPath(viewPath)
+	}
+	return validateViewPath(filepath.Join(root, viewPath))
+}
+
+func validateViewPath(viewPath string) (string, error) {
+	abs, err := filepath.Abs(viewPath)
+	if err != nil {
+		return "", fmt.Errorf("resolve views path %q: %w", viewPath, err)
+	}
+	info, err := os.Stat(filepath.Join(abs, "layouts", "app.html.tpl"))
+	if err != nil {
+		return "", fmt.Errorf("views path %q does not contain layouts/app.html.tpl: %w", viewPath, err)
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("views path %q contains a directory at layouts/app.html.tpl", viewPath)
+	}
+	return abs, nil
 }
 
 func explicitCommandPath(dir string, cmdPath string, modulePath string) (string, error) {

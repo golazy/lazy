@@ -20,6 +20,7 @@ type invocation struct {
 func TestUsesFirstCommandUnderCmd(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "go.mod"), "module github.com/golazy/sample_app\n")
+	writeFile(t, filepath.Join(dir, "app", "views", "layouts", "app.html.tpl"), "layout")
 	writeCommand(t, filepath.Join(dir, "cmd", "sample_app"))
 	writeCommand(t, filepath.Join(dir, "cmd", "admin"))
 
@@ -49,17 +50,19 @@ func TestUsesFirstCommandUnderCmd(t *testing.T) {
 		"run",
 		"-tags",
 		"lazydev",
-		"-ldflags",
-		"-X golazy.dev/lazyviews.ViewsPath=app/views",
 		"./cmd/admin",
 	}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("args = %#v, want %#v", got, want)
+	}
+	if got, want := calls[0].options.Env, []string{"GOLAZY_VIEW_PATH=" + filepath.Join(dir, "app", "views")}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("env = %#v, want %#v", got, want)
 	}
 }
 
 func TestUsesExplicitCommandPathAndViewPath(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "go.mod"), "module example.com/team/my_app\n")
+	writeFile(t, filepath.Join(dir, "views", "layouts", "app.html.tpl"), "layout")
 	writeCommand(t, filepath.Join(dir, "cmd", "app"))
 	writeCommand(t, dir)
 
@@ -85,11 +88,12 @@ func TestUsesExplicitCommandPathAndViewPath(t *testing.T) {
 		"run",
 		"-tags",
 		"lazydev",
-		"-ldflags",
-		"-X golazy.dev/lazyviews.ViewsPath=views",
 		".",
 	}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("args = %#v, want %#v", got, want)
+	}
+	if got, want := calls[0].options.Env, []string{"GOLAZY_VIEW_PATH=" + filepath.Join(dir, "views")}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("env = %#v, want %#v", got, want)
 	}
 }
 

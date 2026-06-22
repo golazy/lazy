@@ -13,7 +13,7 @@ func TestWatchPathIncludesRuntimeInputs(t *testing.T) {
 		"app/controllers/home.go":                true,
 		"app/js/app.js":                          true,
 		"app/js/controllers/hello_controller.js": true,
-		"app/services/posts/content/a.md":        true,
+		"services/posts/content/a.md":            true,
 		"app/views/home/index.html.tpl":          true,
 		"cmd/app/main.go":                        true,
 		"go.mod":                                 true,

@@ -61,18 +61,36 @@ func writeFile(t *testing.T, filename string, content string) {
 }
 
 func TestGoBuildArgs(t *testing.T) {
-	got := GoBuildArgs("lazydev", "cmd/app", "views", "/tmp/app")
+	got := GoBuildArgs("lazydev", "cmd/app", "/tmp/app")
 	want := []string{
 		"build",
 		"-tags",
 		"lazydev",
-		"-ldflags",
-		"-X golazy.dev/lazyviews.ViewsPath=views",
 		"-o",
 		"/tmp/app",
 		"./cmd/app",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("GoBuildArgs() = %#v, want %#v", got, want)
+	}
+}
+
+func TestResolveViewPathUsesDefaultAppViews(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "app", "views", "layouts", "app.html.tpl"), "layout")
+
+	got, err := ResolveViewPath(dir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(dir, "app", "views"); got != want {
+		t.Fatalf("ResolveViewPath() = %q, want %q", got, want)
+	}
+}
+
+func TestResolveViewPathRejectsMissingLayout(t *testing.T) {
+	_, err := ResolveViewPath(t.TempDir(), "views")
+	if err == nil {
+		t.Fatal("ResolveViewPath() error is nil")
 	}
 }

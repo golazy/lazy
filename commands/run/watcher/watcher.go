@@ -164,7 +164,7 @@ func watchPath(path string) bool {
 	}
 	first := firstPathPart(path)
 	switch first {
-	case "app", "cmd", "init", "internal", "lib", "pkg", "public", "styles", "views":
+	case "app", "cmd", "init", "internal", "lib", "pkg", "public", "services", "styles", "views":
 		return true
 	default:
 		return false

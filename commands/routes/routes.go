@@ -55,10 +55,15 @@ func (c Command) Execute() (int, error) {
 		runner = commands.ExecOutput
 	}
 
-	output, err := runner("go", appcmd.GoRunArgs("lazydev,printroutes", filepath.ToSlash(candidate), c.ViewPath), commands.Options{
+	env, err := appcmd.ViewPathEnv(dir, c.ViewPath)
+	if err != nil {
+		return 1, err
+	}
+	output, err := runner("go", appcmd.GoRunArgs("lazydev,printroutes", filepath.ToSlash(candidate)), commands.Options{
 		Dir:    dir,
 		Stdout: c.Stdout,
 		Stderr: c.Stderr,
+		Env:    env,
 	})
 	if err != nil {
 		var processExit *commands.ExitError
