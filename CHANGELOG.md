@@ -24,7 +24,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   when `mise` was installed but the current shell has not loaded the updated
   `PATH` yet.
 - `lazy new` now initializes a fresh Git repository and commits the generated
-  checkout after validation succeeds.
+  checkout after validation succeeds, using a command-local GoLazy identity so
+  fresh systems without global Git author config still work.
 - `lazy new` now prints concrete next steps with the generated app directory
   and `lazy` command.
 - `lazy new`, `lazy`, `lazy routes`, `lazy upgrade`, and the app build step of

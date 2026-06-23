@@ -614,7 +614,11 @@ func assertInitialGitCommitCalls(t *testing.T, calls []invocation, destination s
 	want := [][]string{
 		{"init"},
 		{"add", "."},
-		{"commit", "-m", "Initial GoLazy application"},
+		{
+			"-c", "user.name=GoLazy",
+			"-c", "user.email=noreply@golazy.dev",
+			"commit", "-m", "Initial GoLazy application",
+		},
 	}
 	if len(calls) != len(want) {
 		t.Fatalf("git calls = %d, want %d", len(calls), len(want))

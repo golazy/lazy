@@ -131,8 +131,8 @@ app tag instead. The command removes the template Git history, changes the
 module and imports, trusts the generated `mise.toml`, runs `mise install`, then
 validates with the current `go` on `PATH` by running `go mod tidy` and
 `go test ./...`. After validation it initializes a fresh Git repository,
-commits the generated checkout, and prints the generated app directory and the
-`lazy` command to run next.
+commits the generated checkout with a command-local GoLazy identity, and
+prints the generated app directory and the `lazy` command to run next.
 
 If `mise` was just installed by the public installer and the current shell has
 not picked up the new `PATH`, `lazy new` can still run setup through

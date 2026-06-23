@@ -200,7 +200,14 @@ func initializeGitRepository(runner commands.Runner, destination string) error {
 	}{
 		{args: []string{"init"}, name: "git init"},
 		{args: []string{"add", "."}, name: "git add"},
-		{args: []string{"commit", "-m", "Initial GoLazy application"}, name: "git commit"},
+		{
+			args: []string{
+				"-c", "user.name=GoLazy",
+				"-c", "user.email=noreply@golazy.dev",
+				"commit", "-m", "Initial GoLazy application",
+			},
+			name: "git commit",
+		},
 	}
 
 	for _, step := range steps {
