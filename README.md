@@ -174,6 +174,10 @@ This first implementation carries backfilled migrations for:
   Node.js to the tool list, and removes Go from app-level mise tools.
 - `v0.1.11 -> v0.1.12`: moves generated-app services from `app/services` to
   top-level `services` and rewrites matching Go imports.
+- `v0.1.14 -> v0.1.15`: renames `init/context.go` to
+  `init/dependencies.go`, rewrites `lazyapp.Config.Context` to
+  `lazyapp.Config.Dependencies`, and updates simple initializer returns to the
+  new `func(*lazydeps.Scope) error` shape.
 
 Template-owned files are hash-gated. If a file looks customized, `lazy upgrade`
 prints a diff, writes the proposed file under `.golazy/upgrade/conflicts`, and
@@ -238,6 +242,7 @@ lazy --skip-version-check js
 - `commands/commandcenter`: interactive tmux command-center pane.
 - `commands/routes`: route-table inspection.
 - `commands/upgrade`: one-step application upgrades and migration helpers.
+- `commands/lazycode`: Go source rewrite helpers used by upgrade migrations.
 - `commands/js`: JavaScript library and app-module bundling, directive
   expansion, and importmap generation.
 - `commands/tailwind`: Tailwind CLI setup and stylesheet compilation.

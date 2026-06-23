@@ -94,6 +94,62 @@ var _ = timeservice.Service{}
 	assertUpgradeFileContains(t, filepath.Join(dir, "go.mod"), "golazy.dev v0.1.12")
 }
 
+func TestUpgradeTo015MigratesContextInitializerToDependencies(t *testing.T) {
+	dir := t.TempDir()
+	writeUpgradeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n\ngo 1.26.0\n\nrequire golazy.dev v0.1.14\n")
+	writeUpgradeFile(t, filepath.Join(dir, "init", "app.go"), `package appinit
+
+import "golazy.dev/lazyapp"
+
+func App() *lazyapp.App {
+	return lazyapp.New(lazyapp.Config{
+		Name:    "example",
+		Context: Context,
+	})
+}
+`)
+	writeUpgradeFile(t, filepath.Join(dir, "init", "context.go"), `package appinit
+
+import (
+	"context"
+	"fmt"
+)
+
+func Context(ctx context.Context) (context.Context, error) {
+	ctx = context.WithValue(ctx, "ready", true)
+	if false {
+		return ctx, fmt.Errorf("not ready")
+	}
+	return ctx, nil
+}
+`)
+
+	var stdout bytes.Buffer
+	code, err := (Command{
+		Dir:          dir,
+		Target:       "v0.1.15",
+		SkipCommands: true,
+		Stdout:       &stdout,
+	}).Execute()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != 0 {
+		t.Fatalf("code = %d, want 0", code)
+	}
+
+	if _, err := os.Stat(filepath.Join(dir, "init", "context.go")); !os.IsNotExist(err) {
+		t.Fatalf("init/context.go still exists: %v", err)
+	}
+	assertUpgradeFileContains(t, filepath.Join(dir, "init", "app.go"), "Dependencies: Dependencies,")
+	assertUpgradeFileContains(t, filepath.Join(dir, "init", "dependencies.go"), `"golazy.dev/lazydeps"`)
+	assertUpgradeFileContains(t, filepath.Join(dir, "init", "dependencies.go"), "func Dependencies(deps *lazydeps.Scope) error")
+	assertUpgradeFileContains(t, filepath.Join(dir, "init", "dependencies.go"), "ctx := deps.Context()")
+	assertUpgradeFileContains(t, filepath.Join(dir, "init", "dependencies.go"), "return fmt.Errorf(\"not ready\")")
+	assertUpgradeFileContains(t, filepath.Join(dir, "init", "dependencies.go"), "deps.SetContext(ctx)")
+	assertUpgradeFileContains(t, filepath.Join(dir, "go.mod"), "golazy.dev v0.1.15")
+}
+
 func TestUpgradeTargetRunsEachStepInOrder(t *testing.T) {
 	dir := t.TempDir()
 	writeUpgradeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n\ngo 1.26.0\n\nrequire golazy.dev v0.1.10\n")
@@ -190,11 +246,11 @@ func TestUpgradeForceRejectsTarget(t *testing.T) {
 
 func TestUpgradeForceRejectsLatestVersion(t *testing.T) {
 	dir := t.TempDir()
-	writeUpgradeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n\ngo 1.26.0\n\nrequire golazy.dev v0.1.14\n")
+	writeUpgradeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n\ngo 1.26.0\n\nrequire golazy.dev v0.1.15\n")
 
 	code, err := (Command{
 		Dir:   dir,
-		Force: "v0.1.14",
+		Force: "v0.1.15",
 	}).Execute()
 	if err == nil {
 		t.Fatal("err = nil, want no next step error")
@@ -202,7 +258,7 @@ func TestUpgradeForceRejectsLatestVersion(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("code = %d, want 1", code)
 	}
-	if !strings.Contains(err.Error(), "v0.1.14 has no later upgrade step") {
+	if !strings.Contains(err.Error(), "v0.1.15 has no later upgrade step") {
 		t.Fatalf("err = %v", err)
 	}
 }
@@ -225,7 +281,7 @@ func TestUpgradeRejectsUnimplementedNextVersion(t *testing.T) {
 
 func TestUpgradeAlreadyCurrentPromptsToRemoveMiseGoTool(t *testing.T) {
 	dir := t.TempDir()
-	writeUpgradeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n\ngo 1.26.0\n\nrequire golazy.dev v0.1.14\n")
+	writeUpgradeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n\ngo 1.26.0\n\nrequire golazy.dev v0.1.15\n")
 	writeUpgradeFile(t, filepath.Join(dir, "mise.toml"), "[tools]\ngo = \"1.26.0\"\nnode = \"24\"\n")
 
 	var stdout bytes.Buffer
@@ -246,7 +302,7 @@ func TestUpgradeAlreadyCurrentPromptsToRemoveMiseGoTool(t *testing.T) {
 	if !strings.Contains(stderr.String(), "Go already bundles multi-version support") {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
-	if !strings.Contains(stdout.String(), "already at v0.1.14") {
+	if !strings.Contains(stdout.String(), "already at v0.1.15") {
 		t.Fatalf("stdout = %q", stdout.String())
 	}
 }

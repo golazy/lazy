@@ -4,8 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"go/format"
-	"go/parser"
+	"go/ast"
 	"go/token"
 	"io"
 	"os"
@@ -16,6 +15,7 @@ import (
 
 	"golang.org/x/mod/modfile"
 	"golazy.dev/lazy/commands"
+	"golazy.dev/lazy/commands/lazycode"
 	"golazy.dev/lazy/commands/miseconfig"
 	"golazy.dev/lazytui/progress"
 )
@@ -36,6 +36,7 @@ var releaseVersions = []string{
 	"v0.1.12",
 	"v0.1.13",
 	"v0.1.14",
+	"v0.1.15",
 }
 
 const firstUpgradeAwareVersion = "v0.1.10"
@@ -273,6 +274,8 @@ func (c Command) runStepWithStreams(dir string, from string, to string, force bo
 		err = executor.upgradeTo012()
 	case from == "v0.1.12" && to == "v0.1.13":
 		err = executor.upgradeTo013()
+	case from == "v0.1.14" && to == "v0.1.15":
+		err = executor.upgradeTo015()
 	default:
 		err = fmt.Errorf("upgrade from %s to %s is not implemented; use the versioned upgrade guide", from, to)
 	}
@@ -399,6 +402,8 @@ func hasBuiltInStep(from string, to string) bool {
 		return true
 	case from == "v0.1.12" && to == "v0.1.13":
 		return true
+	case from == "v0.1.14" && to == "v0.1.15":
+		return true
 	default:
 		return false
 	}
@@ -438,6 +443,10 @@ func (e stepExecutor) upgradeTo012() error {
 
 func (e stepExecutor) upgradeTo013() error {
 	return nil
+}
+
+func (e stepExecutor) upgradeTo015() error {
+	return e.migrateContextToDependencies()
 }
 
 func (e stepExecutor) updateGoMod() error {
@@ -610,6 +619,255 @@ func (e stepExecutor) moveServices() error {
 	return nil
 }
 
+func (e stepExecutor) migrateContextToDependencies() error {
+	if err := e.rewriteAppConfigDependencies(); err != nil {
+		return err
+	}
+	return e.rewriteContextInitializer()
+}
+
+func (e stepExecutor) rewriteAppConfigDependencies() error {
+	path := filepath.Join(e.dir, "init", "app.go")
+	changed, err := lazycode.RewriteFile(path, e.dryRun, func(_ *token.FileSet, file *ast.File) (bool, error) {
+		changed := false
+		ast.Inspect(file, func(node ast.Node) bool {
+			literal, ok := node.(*ast.CompositeLit)
+			if !ok || !isLazyappConfig(literal.Type) {
+				return true
+			}
+			for _, element := range literal.Elts {
+				keyValue, ok := element.(*ast.KeyValueExpr)
+				if !ok {
+					continue
+				}
+				key, ok := keyValue.Key.(*ast.Ident)
+				if ok && key.Name == "Context" {
+					key.Name = "Dependencies"
+					keyValue.Value = renameContextInitializerValue(keyValue.Value)
+					changed = true
+				}
+			}
+			return true
+		})
+		return changed, nil
+	})
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			fmt.Fprintln(e.stdout, "  init/app.go not present; skipping lazyapp.Config dependency field rewrite")
+			return nil
+		}
+		return err
+	}
+	switch {
+	case changed && e.dryRun:
+		fmt.Fprintln(e.stdout, "  would rewrite lazyapp.Config Context field to Dependencies")
+	case changed:
+		fmt.Fprintln(e.stdout, "  rewrote lazyapp.Config Context field to Dependencies")
+	default:
+		fmt.Fprintln(e.stdout, "  lazyapp.Config already uses Dependencies")
+	}
+	return nil
+}
+
+func renameContextInitializerValue(expr ast.Expr) ast.Expr {
+	switch value := expr.(type) {
+	case *ast.Ident:
+		if value.Name == "Context" {
+			value.Name = "Dependencies"
+		}
+	case *ast.CallExpr:
+		if ident, ok := value.Fun.(*ast.Ident); ok && ident.Name == "Context" {
+			ident.Name = "Dependencies"
+		}
+	}
+	return expr
+}
+
+func isLazyappConfig(expr ast.Expr) bool {
+	selector, ok := expr.(*ast.SelectorExpr)
+	if !ok || selector.Sel.Name != "Config" {
+		return false
+	}
+	ident, ok := selector.X.(*ast.Ident)
+	return ok && ident.Name == "lazyapp"
+}
+
+func (e stepExecutor) rewriteContextInitializer() error {
+	source := filepath.Join(e.dir, "init", "context.go")
+	target := filepath.Join(e.dir, "init", "dependencies.go")
+	if _, err := os.Stat(source); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			fmt.Fprintln(e.stdout, "  init/context.go not present; skipping dependency initializer rename")
+			return nil
+		}
+		return fmt.Errorf("inspect init/context.go: %w", err)
+	}
+	if _, err := os.Stat(target); err == nil {
+		return fmt.Errorf("cannot migrate init/context.go because init/dependencies.go already exists")
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("inspect init/dependencies.go: %w", err)
+	}
+
+	rewritePath := source
+	if !e.dryRun {
+		if err := os.Rename(source, target); err != nil {
+			return fmt.Errorf("rename init/context.go to init/dependencies.go: %w", err)
+		}
+		rewritePath = target
+	}
+	changed, err := lazycode.RewriteFile(rewritePath, e.dryRun, rewriteContextInitializerFile)
+	if err != nil {
+		return err
+	}
+	switch {
+	case e.dryRun:
+		if changed {
+			fmt.Fprintln(e.stdout, "  would rename init/context.go to init/dependencies.go and rewrite Context as Dependencies")
+		} else {
+			fmt.Fprintln(e.stdout, "  would rename init/context.go to init/dependencies.go")
+		}
+	case changed:
+		fmt.Fprintln(e.stdout, "  renamed init/context.go to init/dependencies.go and rewrote Context as Dependencies")
+	default:
+		fmt.Fprintln(e.stdout, "  renamed init/context.go to init/dependencies.go")
+	}
+	return nil
+}
+
+func rewriteContextInitializerFile(_ *token.FileSet, file *ast.File) (bool, error) {
+	changed := false
+	for _, decl := range file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Name.Name != "Context" || fn.Body == nil {
+			continue
+		}
+		contextName := contextParameterName(fn)
+		if contextName == "" || contextName == "_" {
+			contextName = "ctx"
+		}
+		fn.Name.Name = "Dependencies"
+		fn.Type.Params = &ast.FieldList{List: []*ast.Field{{
+			Names: []*ast.Ident{ast.NewIdent("deps")},
+			Type: &ast.StarExpr{X: &ast.SelectorExpr{
+				X:   ast.NewIdent("lazydeps"),
+				Sel: ast.NewIdent("Scope"),
+			}},
+		}}}
+		fn.Type.Results = &ast.FieldList{List: []*ast.Field{{
+			Type: ast.NewIdent("error"),
+		}}}
+		fn.Body.List = append([]ast.Stmt{contextAssignStmt(contextName)}, fn.Body.List...)
+		rewriteReturnsInBlock(fn.Body)
+		changed = true
+		break
+	}
+	if changed {
+		if lazycode.EnsureImport(file, "golazy.dev/lazydeps") {
+			changed = true
+		}
+		if !lazycode.UsesSelector(file, "context") {
+			lazycode.RemoveImport(file, "context")
+		}
+	}
+	return changed, nil
+}
+
+func contextParameterName(fn *ast.FuncDecl) string {
+	if fn.Type.Params == nil || len(fn.Type.Params.List) == 0 || len(fn.Type.Params.List[0].Names) == 0 {
+		return ""
+	}
+	return fn.Type.Params.List[0].Names[0].Name
+}
+
+func contextAssignStmt(name string) ast.Stmt {
+	return &ast.AssignStmt{
+		Lhs: []ast.Expr{ast.NewIdent(name)},
+		Tok: token.DEFINE,
+		Rhs: []ast.Expr{&ast.CallExpr{Fun: &ast.SelectorExpr{
+			X:   ast.NewIdent("deps"),
+			Sel: ast.NewIdent("Context"),
+		}}},
+	}
+}
+
+func rewriteReturnsInBlock(block *ast.BlockStmt) {
+	var statements []ast.Stmt
+	for _, statement := range block.List {
+		switch stmt := statement.(type) {
+		case *ast.ReturnStmt:
+			statements = append(statements, dependencyReturnStatements(stmt)...)
+		case *ast.IfStmt:
+			rewriteReturnsInBlock(stmt.Body)
+			rewriteReturnsInElse(stmt.Else)
+			statements = append(statements, stmt)
+		case *ast.ForStmt:
+			rewriteReturnsInBlock(stmt.Body)
+			statements = append(statements, stmt)
+		case *ast.RangeStmt:
+			rewriteReturnsInBlock(stmt.Body)
+			statements = append(statements, stmt)
+		case *ast.SwitchStmt:
+			rewriteReturnsInBlock(stmt.Body)
+			statements = append(statements, stmt)
+		case *ast.TypeSwitchStmt:
+			rewriteReturnsInBlock(stmt.Body)
+			statements = append(statements, stmt)
+		case *ast.SelectStmt:
+			rewriteReturnsInBlock(stmt.Body)
+			statements = append(statements, stmt)
+		default:
+			statements = append(statements, statement)
+		}
+	}
+	block.List = statements
+}
+
+func rewriteReturnsInElse(statement ast.Stmt) {
+	switch stmt := statement.(type) {
+	case *ast.BlockStmt:
+		rewriteReturnsInBlock(stmt)
+	case *ast.IfStmt:
+		rewriteReturnsInBlock(stmt.Body)
+		rewriteReturnsInElse(stmt.Else)
+	}
+}
+
+func dependencyReturnStatements(stmt *ast.ReturnStmt) []ast.Stmt {
+	switch len(stmt.Results) {
+	case 0:
+		return []ast.Stmt{returnNilStmt()}
+	case 1:
+		if isNilIdent(stmt.Results[0]) {
+			return []ast.Stmt{returnNilStmt()}
+		}
+		return []ast.Stmt{setContextStmt(stmt.Results[0]), returnNilStmt()}
+	default:
+		if isNilIdent(stmt.Results[1]) {
+			return []ast.Stmt{setContextStmt(stmt.Results[0]), returnNilStmt()}
+		}
+		return []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{stmt.Results[1]}}}
+	}
+}
+
+func setContextStmt(expr ast.Expr) ast.Stmt {
+	return &ast.ExprStmt{X: &ast.CallExpr{
+		Fun: &ast.SelectorExpr{
+			X:   ast.NewIdent("deps"),
+			Sel: ast.NewIdent("SetContext"),
+		},
+		Args: []ast.Expr{expr},
+	}}
+}
+
+func returnNilStmt() ast.Stmt {
+	return &ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent("nil")}}
+}
+
+func isNilIdent(expr ast.Expr) bool {
+	ident, ok := expr.(*ast.Ident)
+	return ok && ident.Name == "nil"
+}
+
 func (e stepExecutor) rewriteServiceImports() error {
 	oldPrefix := e.modulePath + "/app/services"
 	newPrefix := e.modulePath + "/services"
@@ -660,37 +918,20 @@ func (e stepExecutor) rewriteServiceImports() error {
 }
 
 func (e stepExecutor) rewriteServiceImportsInFile(path string, oldPrefix string, newPrefix string) (bool, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return false, fmt.Errorf("read %s: %w", path, err)
-	}
-	files := token.NewFileSet()
-	file, err := parser.ParseFile(files, path, data, 0)
-	if err != nil {
-		return false, fmt.Errorf("parse %s: %w", path, err)
-	}
-	changed := false
-	for _, imported := range file.Imports {
-		importPath, err := strconv.Unquote(imported.Path.Value)
-		if err != nil {
-			continue
+	return lazycode.RewriteFile(path, e.dryRun, func(_ *token.FileSet, file *ast.File) (bool, error) {
+		changed := false
+		for _, imported := range file.Imports {
+			importPath, err := strconv.Unquote(imported.Path.Value)
+			if err != nil {
+				continue
+			}
+			if importPath == oldPrefix || strings.HasPrefix(importPath, oldPrefix+"/") {
+				imported.Path.Value = strconv.Quote(newPrefix + strings.TrimPrefix(importPath, oldPrefix))
+				changed = true
+			}
 		}
-		if importPath == oldPrefix || strings.HasPrefix(importPath, oldPrefix+"/") {
-			imported.Path.Value = strconv.Quote(newPrefix + strings.TrimPrefix(importPath, oldPrefix))
-			changed = true
-		}
-	}
-	if !changed || e.dryRun {
 		return changed, nil
-	}
-	var formatted bytes.Buffer
-	if err := format.Node(&formatted, files, file); err != nil {
-		return false, fmt.Errorf("format %s: %w", path, err)
-	}
-	if err := os.WriteFile(path, formatted.Bytes(), 0o644); err != nil {
-		return false, fmt.Errorf("write %s: %w", path, err)
-	}
-	return true, nil
+	})
 }
 
 func (e stepExecutor) runFollowups() error {
