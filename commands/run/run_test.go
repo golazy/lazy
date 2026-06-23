@@ -43,10 +43,22 @@ func TestUsesFirstCommandUnderCmd(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit code = %d", code)
 	}
-	if len(calls) != 1 {
-		t.Fatalf("calls = %d, want 1", len(calls))
+	if len(calls) != 2 {
+		t.Fatalf("calls = %d, want 2", len(calls))
 	}
-	if got, want := calls[0].args, []string{
+	if calls[0].command != "mise" {
+		t.Fatalf("tidy command = %s, want mise", calls[0].command)
+	}
+	if got, want := calls[0].args, []string{"exec", "--", "go", "mod", "tidy"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("tidy args = %#v, want %#v", got, want)
+	}
+	if !calls[0].options.Capture {
+		t.Fatalf("go mod tidy was not captured")
+	}
+	if got, want := calls[1].args, []string{
+		"exec",
+		"--",
+		"go",
 		"run",
 		"-tags",
 		"lazydev",
@@ -54,7 +66,7 @@ func TestUsesFirstCommandUnderCmd(t *testing.T) {
 	}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("args = %#v, want %#v", got, want)
 	}
-	if got, want := calls[0].options.Env, []string{"GOLAZY_VIEW_PATH=" + filepath.Join(dir, "app", "views")}; !reflect.DeepEqual(got, want) {
+	if got, want := calls[1].options.Env, []string{"GOLAZY_VIEW_PATH=" + filepath.Join(dir, "app", "views")}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("env = %#v, want %#v", got, want)
 	}
 }
@@ -84,7 +96,13 @@ func TestUsesExplicitCommandPathAndViewPath(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit code = %d", code)
 	}
-	if got, want := calls[0].args, []string{
+	if got, want := calls[0].args, []string{"exec", "--", "go", "mod", "tidy"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("tidy args = %#v, want %#v", got, want)
+	}
+	if got, want := calls[1].args, []string{
+		"exec",
+		"--",
+		"go",
 		"run",
 		"-tags",
 		"lazydev",
@@ -92,7 +110,7 @@ func TestUsesExplicitCommandPathAndViewPath(t *testing.T) {
 	}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("args = %#v, want %#v", got, want)
 	}
-	if got, want := calls[0].options.Env, []string{"GOLAZY_VIEW_PATH=" + filepath.Join(dir, "views")}; !reflect.DeepEqual(got, want) {
+	if got, want := calls[1].options.Env, []string{"GOLAZY_VIEW_PATH=" + filepath.Join(dir, "views")}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("env = %#v, want %#v", got, want)
 	}
 }

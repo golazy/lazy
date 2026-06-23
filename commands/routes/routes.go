@@ -59,11 +59,12 @@ func (c Command) Execute() (int, error) {
 	if err != nil {
 		return 1, err
 	}
-	output, err := runner("go", appcmd.GoRunArgs("lazydev,printroutes", filepath.ToSlash(candidate)), commands.Options{
+	runCommand, runArgs, runEnv := commands.MiseExecOutputRunnerCommand(c.Runner, "go", appcmd.GoRunArgs("lazydev,printroutes", filepath.ToSlash(candidate)))
+	output, err := runner(runCommand, runArgs, commands.Options{
 		Dir:    dir,
 		Stdout: c.Stdout,
 		Stderr: c.Stderr,
-		Env:    env,
+		Env:    append(runEnv, env...),
 	})
 	if err != nil {
 		var processExit *commands.ExitError

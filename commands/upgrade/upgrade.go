@@ -292,6 +292,7 @@ func (c Command) runStep(dir string, from string, to string, force bool) (int, e
 		stdout:             c.stdout(),
 		stderr:             c.stderr(),
 		runner:             c.runner(),
+		customRunner:       c.Runner != nil,
 	}
 
 	fmt.Fprintf(c.stdout(), "* Upgrading %s -> %s\n", from, to)
@@ -328,6 +329,7 @@ type stepExecutor struct {
 	stdout             io.Writer
 	stderr             io.Writer
 	runner             commands.Runner
+	customRunner       bool
 }
 
 func (e stepExecutor) upgradeTo011() error {
@@ -605,17 +607,24 @@ func (e stepExecutor) runFollowups() error {
 		{command: "go", args: []string{"vet", "./..."}},
 	}
 	for _, call := range calls {
+		displayCommand := "mise"
+		displayArgs := append([]string{"exec", "--", call.command}, call.args...)
 		if e.dryRun || e.skipCommands {
-			fmt.Fprintf(e.stdout, "  would run %s %s\n", call.command, strings.Join(call.args, " "))
+			fmt.Fprintf(e.stdout, "  would run %s %s\n", displayCommand, strings.Join(displayArgs, " "))
 			continue
 		}
-		fmt.Fprintf(e.stdout, "  running %s %s\n", call.command, strings.Join(call.args, " "))
-		if err := e.runner(call.command, call.args, commands.Options{
+		fmt.Fprintf(e.stdout, "  running %s %s\n", displayCommand, strings.Join(displayArgs, " "))
+		runCommand, runArgs, runEnv := commands.MiseExecCommand(call.command, call.args)
+		if e.customRunner {
+			runCommand, runArgs, runEnv = commands.MiseExecRunnerCommand(e.runner, call.command, call.args)
+		}
+		if err := e.runner(runCommand, runArgs, commands.Options{
 			Dir:    e.dir,
+			Env:    runEnv,
 			Stdout: e.stdout,
 			Stderr: e.stderr,
 		}); err != nil {
-			return fmt.Errorf("%s %s: %w", call.command, strings.Join(call.args, " "), err)
+			return fmt.Errorf("%s %s: %w", displayCommand, strings.Join(displayArgs, " "), err)
 		}
 	}
 	return nil

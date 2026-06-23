@@ -2,6 +2,7 @@ package newcommand
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -10,26 +11,38 @@ import (
 	"go/parser"
 	"go/token"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/module"
+	"golang.org/x/mod/semver"
 	"golazy.dev/lazy/commands"
 )
 
 const sampleRepository = "https://github.com/golazy/sample_app"
+const defaultLatestVersionURL = "https://golazy.dev/lazy.version"
+const latestVersionTimeout = time.Second
+
+type LatestVersionFetcher func(ctx context.Context, url string) (string, error)
 
 type Command struct {
-	Version   string
-	SourceDir string
-	Dir       string
-	Stdout    io.Writer
-	Stderr    io.Writer
-	Runner    commands.Runner
+	Version              string
+	CurrentVersion       string
+	SourceDir            string
+	Dir                  string
+	SkipUpdateCheck      bool
+	LatestVersionURL     string
+	LatestVersionFetcher LatestVersionFetcher
+	Stdout               io.Writer
+	Stderr               io.Writer
+	Runner               commands.Runner
 }
 
 func (c Command) Execute(modulePath string) error {
@@ -52,9 +65,24 @@ func (c Command) Execute(modulePath string) error {
 		return fmt.Errorf("inspect destination %q: %w", appName, err)
 	}
 
+	templateVersion := strings.TrimSpace(c.Version)
+	if c.SourceDir == "" && !semver.IsValid(templateVersion) {
+		return fmt.Errorf("version %q is not a valid semantic version", c.Version)
+	}
+	if c.SourceDir == "" && !c.SkipUpdateCheck {
+		if err := c.checkLatestVersion(); err != nil {
+			return err
+		}
+	}
+
 	runner := c.Runner
 	if runner == nil {
 		runner = commands.Exec
+	}
+	miseCommand := "mise"
+	var miseEnv []string
+	if c.Runner == nil {
+		miseCommand, miseEnv = commands.ResolveMiseCommand()
 	}
 
 	fmt.Fprintln(c.Stdout, "* Initializing the core app")
@@ -65,13 +93,13 @@ func (c Command) Execute(modulePath string) error {
 	} else {
 		if err := runner("git", []string{
 			"clone",
-			"--branch", c.Version,
+			"--branch", templateVersion,
 			"--depth", "1",
 			"--single-branch",
 			sampleRepository,
 			destination,
 		}, commands.Options{Dir: dir, Capture: true}); err != nil {
-			return fmt.Errorf("clone sample app at %s: %w", c.Version, err)
+			return fmt.Errorf("clone sample app at %s: %w", templateVersion, err)
 		}
 	}
 
@@ -103,15 +131,17 @@ func (c Command) Execute(modulePath string) error {
 	defer cleanupWorkfile()
 
 	fmt.Fprintln(c.Stdout, "* Preparing the mise development environment")
-	if err := runner("mise", []string{"trust", "--yes", "mise.toml"}, commands.Options{
+	if err := runner(miseCommand, []string{"trust", "--yes", "mise.toml"}, commands.Options{
 		Dir:    destination,
+		Env:    miseEnv,
 		Stdout: c.Stdout,
 		Stderr: c.Stderr,
 	}); err != nil {
 		return fmt.Errorf("mise trust: %w", err)
 	}
-	if err := runner("mise", []string{"install", "--yes"}, commands.Options{
+	if err := runner(miseCommand, []string{"install", "--yes"}, commands.Options{
 		Dir:    destination,
+		Env:    miseEnv,
 		Stdout: c.Stdout,
 		Stderr: c.Stderr,
 	}); err != nil {
@@ -120,18 +150,20 @@ func (c Command) Execute(modulePath string) error {
 
 	fmt.Fprintln(c.Stdout, "* Validating")
 	tidyArgs := append([]string{"mod", "tidy"}, goArgs...)
-	if err := runner("go", tidyArgs, commands.Options{
+	tidyCommand, tidyExecArgs, tidyExecEnv := commands.MiseExecRunnerCommand(c.Runner, "go", tidyArgs)
+	if err := runner(tidyCommand, tidyExecArgs, commands.Options{
 		Dir:     destination,
-		Env:     commandEnv,
+		Env:     appendEnv(commandEnv, tidyExecEnv),
 		Capture: true,
 	}); err != nil {
 		return fmt.Errorf("go mod tidy: %w", err)
 	}
 	testArgs := append([]string{"test"}, goArgs...)
 	testArgs = append(testArgs, "./...")
-	if err := runner("go", testArgs, commands.Options{
+	testCommand, testExecArgs, testExecEnv := commands.MiseExecRunnerCommand(c.Runner, "go", testArgs)
+	if err := runner(testCommand, testExecArgs, commands.Options{
 		Dir:     destination,
-		Env:     commandEnv,
+		Env:     appendEnv(commandEnv, testExecEnv),
 		Capture: true,
 	}); err != nil {
 		return fmt.Errorf("go test ./...: %w", err)
@@ -146,8 +178,32 @@ func (c Command) Execute(modulePath string) error {
 	}
 
 	cleanup = false
-	fmt.Fprintln(c.Stdout, "Congrats !")
+	fmt.Fprintln(c.Stdout, "Next steps:")
+	fmt.Fprintf(c.Stdout, "  cd %s\n", appName)
+	fmt.Fprintln(c.Stdout, "  lazy")
 	return nil
+}
+
+func executableName(name string) string {
+	if runtime.GOOS == "windows" {
+		return name + ".exe"
+	}
+	return name
+}
+
+func resolveMiseCommand() (string, []string) {
+	return commands.ResolveMiseCommand()
+}
+
+func appendEnv(first []string, second []string) []string {
+	if len(first) == 0 {
+		return second
+	}
+	if len(second) == 0 {
+		return first
+	}
+	env := append([]string{}, first...)
+	return append(env, second...)
 }
 
 func initializeGitRepository(runner commands.Runner, destination string) error {
@@ -166,6 +222,58 @@ func initializeGitRepository(runner commands.Runner, destination string) error {
 		}
 	}
 	return nil
+}
+
+func (c Command) checkLatestVersion() error {
+	current := strings.TrimSpace(c.CurrentVersion)
+	if current == "" {
+		current = strings.TrimSpace(c.Version)
+	}
+	if !semver.IsValid(current) {
+		return nil
+	}
+
+	url := strings.TrimSpace(c.LatestVersionURL)
+	if url == "" {
+		url = defaultLatestVersionURL
+	}
+	fetcher := c.LatestVersionFetcher
+	if fetcher == nil {
+		fetcher = fetchLatestVersion
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), latestVersionTimeout)
+	defer cancel()
+	latest, err := fetcher(ctx, url)
+	if err != nil {
+		return nil
+	}
+	latest = strings.TrimSpace(latest)
+	if !semver.IsValid(latest) || semver.Compare(latest, current) <= 0 {
+		return nil
+	}
+
+	return fmt.Errorf("lazy %s is available; this binary is %s. lazy new uses the CLI version to choose the app template. Update lazy and rerun, or pass --skip-update-check to create from %s", latest, current, strings.TrimSpace(c.Version))
+}
+
+func fetchLatestVersion(ctx context.Context, url string) (string, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return "", err
+	}
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		return "", err
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return "", fmt.Errorf("latest version endpoint returned %s", response.Status)
+	}
+	data, err := io.ReadAll(io.LimitReader(response.Body, 128))
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }
 
 func applicationName(modulePath string) (string, error) {

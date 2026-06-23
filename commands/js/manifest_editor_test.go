@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -26,8 +27,11 @@ module = "@hotwired/turbo"
 
 	var installDir string
 	editor.Runner = func(name string, args []string, options commands.Options) error {
-		if name != "npm" {
-			t.Fatalf("install command = %q, want npm", name)
+		if name != "mise" {
+			t.Fatalf("install command = %q, want mise", name)
+		}
+		if got, want := args, []string{"exec", "--", "npm", "install"}; !reflect.DeepEqual(got, want) {
+			t.Fatalf("install args = %#v, want %#v", got, want)
 		}
 		installDir = options.Dir
 		fmt.Fprintln(options.Stdout, "install output")

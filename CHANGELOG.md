@@ -7,10 +7,31 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `lazy new --version <version>` can generate an app from a specific
+  `golazy/sample_app` tag.
+
 ### Changed
 
+- `lazy new` now checks `https://golazy.dev/lazy.version` before cloning a
+  remote template and stops when a newer CLI is available. The check has a
+  one-second timeout, ignores network failures, and can be skipped with
+  `--skip-update-check`.
+- `lazy new` now falls back to `$HOME/.local/bin/mise` for generated-app setup
+  when `mise` was installed but the current shell has not loaded the updated
+  `PATH` yet.
 - `lazy new` now initializes a fresh Git repository and commits the generated
   checkout after validation succeeds.
+- `lazy new` now prints concrete next steps with the generated app directory
+  and `lazy` command.
+- App-bound subprocesses in `lazy new`, `lazy`, `lazy js`, `lazy tailwind`,
+  `lazy routes`, `lazy upgrade`, and the app build step of `lazy native build`
+  now run through `mise exec`, so tools installed by the app's `mise.toml` are
+  available in the current shell session.
+- The default `lazy` development command now runs `go mod tidy` before building
+  or running the app, so module files are checked and repaired as part of the
+  dev loop.
 
 ## [0.1.13] - 2026-06-22
 

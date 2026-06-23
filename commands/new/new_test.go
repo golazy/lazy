@@ -2,6 +2,8 @@ package newcommand
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -41,9 +43,10 @@ func TestClonesRenamesAndValidates(t *testing.T) {
 	var calls []invocation
 
 	command := Command{
-		Version: readVersion(t),
-		Dir:     dir,
-		Stdout:  &stdout,
+		Version:         readVersion(t),
+		Dir:             dir,
+		SkipUpdateCheck: true,
+		Stdout:          &stdout,
 		Runner: func(name string, args []string, options commands.Options) error {
 			calls = append(calls, invocation{command: name, args: args, options: options})
 			if name != "git" || len(args) == 0 {
@@ -103,7 +106,9 @@ func TestClonesRenamesAndValidates(t *testing.T) {
 		"* Preparing the mise development environment",
 		"* Validating",
 		"* Saving the initial Git commit",
-		"Congrats !",
+		"Next steps:",
+		"  cd my_app",
+		"  lazy",
 		"",
 	}, "\n")
 	if stdout.String() != wantOutput {
@@ -130,16 +135,16 @@ func TestClonesRenamesAndValidates(t *testing.T) {
 	if calls[2].command != "mise" || !reflect.DeepEqual(calls[2].args, []string{"install", "--yes"}) {
 		t.Fatalf("mise install = %s %#v", calls[2].command, calls[2].args)
 	}
-	if calls[3].command != "go" {
-		t.Fatalf("tidy command = %s, want go", calls[3].command)
+	if calls[3].command != "mise" {
+		t.Fatalf("tidy command = %s, want mise", calls[3].command)
 	}
-	if got, want := calls[3].args, []string{"mod", "tidy"}; !reflect.DeepEqual(got, want) {
+	if got, want := calls[3].args, []string{"exec", "--", "go", "mod", "tidy"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("tidy args = %#v, want %#v", got, want)
 	}
-	if calls[4].command != "go" {
-		t.Fatalf("test command = %s, want go", calls[4].command)
+	if calls[4].command != "mise" {
+		t.Fatalf("test command = %s, want mise", calls[4].command)
 	}
-	if got, want := calls[4].args, []string{"test", "./..."}; !reflect.DeepEqual(got, want) {
+	if got, want := calls[4].args, []string{"exec", "--", "go", "test", "./..."}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("test args = %#v, want %#v", got, want)
 	}
 	assertInitialGitCommitCalls(t, calls[5:], destination)
@@ -147,6 +152,161 @@ func TestClonesRenamesAndValidates(t *testing.T) {
 		if !call.options.Capture {
 			t.Fatalf("%s was not captured", call.command)
 		}
+	}
+}
+
+func TestClonesSpecificVersion(t *testing.T) {
+	dir := t.TempDir()
+	var calls []invocation
+
+	command := Command{
+		Version:         "v0.1.10",
+		CurrentVersion:  readVersion(t),
+		Dir:             dir,
+		SkipUpdateCheck: true,
+		Stdout:          &bytes.Buffer{},
+		Runner: func(name string, args []string, options commands.Options) error {
+			calls = append(calls, invocation{command: name, args: args, options: options})
+			if name == "git" && len(args) > 0 && args[0] == "clone" {
+				destination := args[len(args)-1]
+				writeFile(t, filepath.Join(destination, "go.mod"), "module sample_app\n")
+				writeFile(t, filepath.Join(destination, "main.go"), "package main\n")
+			}
+			return nil
+		},
+	}
+
+	if err := command.Execute("github.com/guillermo/my_app"); err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) == 0 || calls[0].command != "git" {
+		t.Fatalf("calls = %#v, want first git clone", calls)
+	}
+	wantClone := []string{
+		"clone",
+		"--branch", "v0.1.10",
+		"--depth", "1",
+		"--single-branch",
+		sampleRepository,
+		filepath.Join(dir, "my_app"),
+	}
+	if !reflect.DeepEqual(calls[0].args, wantClone) {
+		t.Fatalf("clone args = %#v, want %#v", calls[0].args, wantClone)
+	}
+}
+
+func TestNewStopsWhenNewerVersionIsAvailable(t *testing.T) {
+	dir := t.TempDir()
+	command := Command{
+		Version:        "v0.1.10",
+		CurrentVersion: "v0.1.10",
+		Dir:            dir,
+		Stdout:         &bytes.Buffer{},
+		LatestVersionFetcher: func(ctx context.Context, url string) (string, error) {
+			if url != defaultLatestVersionURL {
+				t.Fatalf("url = %q, want %q", url, defaultLatestVersionURL)
+			}
+			return "v0.1.11\n", nil
+		},
+		Runner: func(string, []string, commands.Options) error {
+			t.Fatal("runner should not be called")
+			return nil
+		},
+	}
+
+	err := command.Execute("github.com/guillermo/my_app")
+	if err == nil {
+		t.Fatal("err = nil, want newer version error")
+	}
+	if !strings.Contains(err.Error(), "lazy v0.1.11 is available") {
+		t.Fatalf("err = %v", err)
+	}
+	if !strings.Contains(err.Error(), "--skip-update-check") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestNewContinuesWhenLatestVersionCheckFails(t *testing.T) {
+	dir := t.TempDir()
+	var calls []invocation
+	command := Command{
+		Version:        "v0.1.10",
+		CurrentVersion: "v0.1.10",
+		Dir:            dir,
+		Stdout:         &bytes.Buffer{},
+		LatestVersionFetcher: func(context.Context, string) (string, error) {
+			return "", errors.New("network unavailable")
+		},
+		Runner: func(name string, args []string, options commands.Options) error {
+			calls = append(calls, invocation{command: name, args: args, options: options})
+			if name == "git" && len(args) > 0 && args[0] == "clone" {
+				destination := args[len(args)-1]
+				writeFile(t, filepath.Join(destination, "go.mod"), "module sample_app\n")
+				writeFile(t, filepath.Join(destination, "main.go"), "package main\n")
+			}
+			return nil
+		},
+	}
+
+	if err := command.Execute("github.com/guillermo/my_app"); err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) == 0 || calls[0].command != "git" {
+		t.Fatalf("calls = %#v, want first git clone", calls)
+	}
+}
+
+func TestRejectsInvalidTemplateVersion(t *testing.T) {
+	dir := t.TempDir()
+	command := Command{
+		Version: "not-a-version",
+		Dir:     dir,
+		Stdout:  &bytes.Buffer{},
+		Runner: func(string, []string, commands.Options) error {
+			t.Fatal("runner should not be called")
+			return nil
+		},
+	}
+
+	err := command.Execute("github.com/guillermo/my_app")
+	if err == nil || !strings.Contains(err.Error(), `version "not-a-version" is not a valid semantic version`) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestResolveMiseCommandUsesPathWhenAvailable(t *testing.T) {
+	dir := t.TempDir()
+	writeExecutable(t, filepath.Join(dir, executableName("mise")))
+	t.Setenv("PATH", dir)
+
+	command, env := resolveMiseCommand()
+	if command != "mise" {
+		t.Fatalf("command = %q, want mise", command)
+	}
+	if len(env) != 0 {
+		t.Fatalf("env = %#v, want none", env)
+	}
+}
+
+func TestResolveMiseCommandFallsBackToHomeLocalBin(t *testing.T) {
+	dir := t.TempDir()
+	home := filepath.Join(dir, "home")
+	misePath := filepath.Join(home, ".local", "bin", executableName("mise"))
+	writeExecutable(t, misePath)
+	pathDir := filepath.Join(dir, "bin")
+	if err := os.MkdirAll(pathDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", pathDir)
+
+	command, env := resolveMiseCommand()
+	if command != misePath {
+		t.Fatalf("command = %q, want %q", command, misePath)
+	}
+	wantPath := filepath.Dir(misePath) + string(os.PathListSeparator) + pathDir
+	if got, want := env, []string{"PATH=" + wantPath}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("env = %#v, want %#v", got, want)
 	}
 }
 
@@ -255,16 +415,16 @@ func TestCopiesSourceDirectoryRenamesAndValidates(t *testing.T) {
 	if calls[1].command != "mise" || !reflect.DeepEqual(calls[1].args, []string{"install", "--yes"}) {
 		t.Fatalf("mise install = %s %#v", calls[1].command, calls[1].args)
 	}
-	if calls[2].command != "go" {
-		t.Fatalf("tidy command = %s, want go", calls[2].command)
+	if calls[2].command != "mise" {
+		t.Fatalf("tidy command = %s, want mise", calls[2].command)
 	}
-	if got, want := calls[2].args, []string{"mod", "tidy"}; !reflect.DeepEqual(got, want) {
+	if got, want := calls[2].args, []string{"exec", "--", "go", "mod", "tidy"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("tidy args = %#v, want %#v", got, want)
 	}
-	if calls[3].command != "go" {
-		t.Fatalf("test command = %s, want go", calls[3].command)
+	if calls[3].command != "mise" {
+		t.Fatalf("test command = %s, want mise", calls[3].command)
 	}
-	if got, want := calls[3].args, []string{"test", "./..."}; !reflect.DeepEqual(got, want) {
+	if got, want := calls[3].args, []string{"exec", "--", "go", "test", "./..."}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("test args = %#v, want %#v", got, want)
 	}
 	assertInitialGitCommitCalls(t, calls[4:], destination)
@@ -335,16 +495,16 @@ func TestCopiesSourceDirectoryValidatesWithWorkspaceReplaces(t *testing.T) {
 	if calls[1].command != "mise" || !reflect.DeepEqual(calls[1].args, []string{"install", "--yes"}) {
 		t.Fatalf("mise install = %s %#v", calls[1].command, calls[1].args)
 	}
-	if calls[2].command != "go" {
-		t.Fatalf("tidy command = %s, want go", calls[2].command)
+	if calls[2].command != "mise" {
+		t.Fatalf("tidy command = %s, want mise", calls[2].command)
 	}
-	if got, want := calls[2].args, []string{"mod", "tidy", "-modfile=.lazy-go.mod"}; !reflect.DeepEqual(got, want) {
+	if got, want := calls[2].args, []string{"exec", "--", "go", "mod", "tidy", "-modfile=.lazy-go.mod"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("tidy args = %#v, want %#v", got, want)
 	}
-	if calls[3].command != "go" {
-		t.Fatalf("test command = %s, want go", calls[3].command)
+	if calls[3].command != "mise" {
+		t.Fatalf("test command = %s, want mise", calls[3].command)
 	}
-	if got, want := calls[3].args, []string{"test", "-modfile=.lazy-go.mod", "./..."}; !reflect.DeepEqual(got, want) {
+	if got, want := calls[3].args, []string{"exec", "--", "go", "test", "-modfile=.lazy-go.mod", "./..."}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("test args = %#v, want %#v", got, want)
 	}
 	for _, call := range []invocation{calls[2], calls[3]} {
@@ -408,6 +568,14 @@ func writeFile(t *testing.T, filename, content string) {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filename, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func writeExecutable(t *testing.T, filename string) {
+	t.Helper()
+	writeFile(t, filename, "#!/bin/sh\nexit 0\n")
+	if err := os.Chmod(filename, 0o755); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -171,8 +171,8 @@ func main() {}
 	appBinary := filepath.Join(workDir, "app")
 	want := []nativeInvocation{
 		{
-			command: "go",
-			args:    []string{"build", "-o", appBinary, "./cmd/app"},
+			command: "mise",
+			args:    []string{"exec", "--", "go", "build", "-o", appBinary, "./cmd/app"},
 			dir:     dir,
 		},
 		{

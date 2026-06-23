@@ -137,8 +137,10 @@ func (c Command) ExecuteBuild() (int, error) {
 	defer c.removeAll()(workDir)
 
 	appBinary := filepath.Join(workDir, "app"+exeSuffix(c.goos()))
-	if err := c.runner()("go", appcmd.GoBuildArgs("", filepath.ToSlash(candidate), appBinary), commands.Options{
+	buildCommand, buildArgs, buildEnv := commands.MiseExecRunnerCommand(c.Runner, "go", appcmd.GoBuildArgs("", filepath.ToSlash(candidate), appBinary))
+	if err := c.runner()(buildCommand, buildArgs, commands.Options{
 		Dir:    dir,
+		Env:    buildEnv,
 		Stdout: c.Stdout,
 		Stderr: c.Stderr,
 	}); err != nil {

@@ -61,9 +61,11 @@ func (c Command) Execute() (int, error) {
 		runner = commands.Exec
 	}
 	installCommand, installArgs := detectPackageManager(packageDir)
+	runCommand, runArgs, runEnv := commands.MiseExecRunnerCommand(c.Runner, installCommand, installArgs)
 	fmt.Fprintln(stdout, "* Installing JavaScript dependencies")
-	if err := runner(installCommand, installArgs, commands.Options{
+	if err := runner(runCommand, runArgs, commands.Options{
 		Dir:    packageDir,
+		Env:    runEnv,
 		Stdout: stdout,
 		Stderr: stderr,
 	}); err != nil {
@@ -71,7 +73,7 @@ func (c Command) Execute() (int, error) {
 		if errors.As(err, &processExit) {
 			return processExit.Code, nil
 		}
-		return 1, fmt.Errorf("%s %v: %w", installCommand, installArgs, err)
+		return 1, fmt.Errorf("%s %v: %w", runCommand, runArgs, err)
 	}
 
 	bundler := c.Bundler

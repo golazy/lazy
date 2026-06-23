@@ -91,9 +91,11 @@ func (c Command) Execute() (int, error) {
 	}
 
 	packageManager, installArgs := detectPackageManager(root)
+	installCommand, installExecArgs, installEnv := commands.MiseExecRunnerCommand(c.Runner, packageManager, installArgs)
 	fmt.Fprintln(stdout, "* Installing Tailwind dependencies")
-	if err := runner(packageManager, installArgs, commands.Options{
+	if err := runner(installCommand, installExecArgs, commands.Options{
 		Dir:    root,
+		Env:    installEnv,
 		Stdout: stdout,
 		Stderr: stderr,
 	}); err != nil {
@@ -101,17 +103,19 @@ func (c Command) Execute() (int, error) {
 		if errors.As(err, &processExit) {
 			return processExit.Code, nil
 		}
-		return 1, fmt.Errorf("%s %v: %w", packageManager, installArgs, err)
+		return 1, fmt.Errorf("%s %v: %w", installCommand, installExecArgs, err)
 	}
 
 	runCommand, runArgs := tailwindRunCommand(packageManager, root, inputPath, outputPath, c.Watch)
+	tailwindCommand, tailwindArgs, tailwindEnv := commands.MiseExecRunnerCommand(c.Runner, runCommand, runArgs)
 	if c.Watch {
 		fmt.Fprintln(stdout, "* Watching Tailwind stylesheet")
 	} else {
 		fmt.Fprintln(stdout, "* Building Tailwind stylesheet")
 	}
-	if err := runner(runCommand, runArgs, commands.Options{
+	if err := runner(tailwindCommand, tailwindArgs, commands.Options{
 		Dir:    root,
+		Env:    tailwindEnv,
 		Stdout: stdout,
 		Stderr: stderr,
 	}); err != nil {
@@ -119,7 +123,7 @@ func (c Command) Execute() (int, error) {
 		if errors.As(err, &processExit) {
 			return processExit.Code, nil
 		}
-		return 1, fmt.Errorf("%s %v: %w", runCommand, runArgs, err)
+		return 1, fmt.Errorf("%s %v: %w", tailwindCommand, tailwindArgs, err)
 	}
 
 	return 0, nil

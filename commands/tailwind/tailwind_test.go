@@ -44,16 +44,16 @@ func TestCommandPreparesInstallsAndBuilds(t *testing.T) {
 	if len(calls) != 2 {
 		t.Fatalf("calls = %d, want 2", len(calls))
 	}
-	if calls[0].command != "npm" || !reflect.DeepEqual(calls[0].args, []string{"install"}) {
+	if calls[0].command != "mise" || !reflect.DeepEqual(calls[0].args, []string{"exec", "--", "npm", "install"}) {
 		t.Fatalf("install call = %s %#v", calls[0].command, calls[0].args)
 	}
 	if calls[0].options.Dir != dir {
 		t.Fatalf("install dir = %q, want %q", calls[0].options.Dir, dir)
 	}
-	if calls[1].command != "npx" {
-		t.Fatalf("tailwind command = %q, want npx", calls[1].command)
+	if calls[1].command != "mise" {
+		t.Fatalf("tailwind command = %q, want mise", calls[1].command)
 	}
-	wantArgs := []string{"@tailwindcss/cli", "-i", "app/styles/application.css", "-o", "app/public/styles.css"}
+	wantArgs := []string{"exec", "--", "npx", "@tailwindcss/cli", "-i", "app/styles/application.css", "-o", "app/public/styles.css"}
 	if !reflect.DeepEqual(calls[1].args, wantArgs) {
 		t.Fatalf("tailwind args = %#v, want %#v", calls[1].args, wantArgs)
 	}
@@ -103,7 +103,7 @@ func TestCommandUsesExplicitPathsAndWatch(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code = %d, want 0", code)
 	}
-	wantArgs := []string{"@tailwindcss/cli", "-i", "assets/tailwind.css", "-o", "public/tailwind.css", "--watch"}
+	wantArgs := []string{"exec", "--", "npx", "@tailwindcss/cli", "-i", "assets/tailwind.css", "-o", "public/tailwind.css", "--watch"}
 	if !reflect.DeepEqual(calls[1].args, wantArgs) {
 		t.Fatalf("tailwind args = %#v, want %#v", calls[1].args, wantArgs)
 	}
@@ -130,7 +130,7 @@ func TestCommandDefaultsToRootPublicWhenAppPublicIsMissing(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code = %d, want 0", code)
 	}
-	wantArgs := []string{"@tailwindcss/cli", "-i", "styles/application.css", "-o", "public/styles.css"}
+	wantArgs := []string{"exec", "--", "npx", "@tailwindcss/cli", "-i", "styles/application.css", "-o", "public/styles.css"}
 	if !reflect.DeepEqual(calls[1].args, wantArgs) {
 		t.Fatalf("tailwind args = %#v, want %#v", calls[1].args, wantArgs)
 	}
@@ -160,8 +160,11 @@ func TestCommandDetectsPnpm(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code = %d, want 0", code)
 	}
-	if calls[0].command != "pnpm" {
-		t.Fatalf("install command = %q, want pnpm", calls[0].command)
+	if calls[0].command != "mise" {
+		t.Fatalf("install command = %q, want mise", calls[0].command)
+	}
+	if got, want := calls[0].args, []string{"exec", "--", "pnpm", "install"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("install args = %#v, want %#v", got, want)
 	}
 }
 

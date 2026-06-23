@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"time"
 
+	"golazy.dev/lazy/commands"
 	"golazy.dev/lazy/commands/appcmd"
 )
 
@@ -47,15 +48,30 @@ type Process struct {
 func (c Config) Build(ctx context.Context, tmpDir string, buildNumber int) BuildResult {
 	started := time.Now()
 	binary := filepath.Join(tmpDir, "app-"+strconv.Itoa(buildNumber)+exeSuffix())
-	args := appcmd.GoBuildArgs("lazydev", filepath.ToSlash(c.CommandPath), binary)
 
 	var output bytes.Buffer
-	cmd := exec.CommandContext(ctx, "go", args...)
-	cmd.Dir = c.Root
-	cmd.Stdout = &output
-	cmd.Stderr = &output
+	tidyCommand, tidyArgs, tidyEnv := commands.MiseExecCommand("go", []string{"mod", "tidy"})
+	tidy := exec.CommandContext(ctx, tidyCommand, tidyArgs...)
+	tidy.Dir = c.Root
+	tidy.Stdout = &output
+	tidy.Stderr = &output
+	if len(tidyEnv) != 0 {
+		tidy.Env = append(os.Environ(), tidyEnv...)
+	}
 
-	err := cmd.Run()
+	err := tidy.Run()
+	if err == nil {
+		args := appcmd.GoBuildArgs("lazydev", filepath.ToSlash(c.CommandPath), binary)
+		buildCommand, buildArgs, buildEnv := commands.MiseExecCommand("go", args)
+		build := exec.CommandContext(ctx, buildCommand, buildArgs...)
+		build.Dir = c.Root
+		build.Stdout = &output
+		build.Stderr = &output
+		if len(buildEnv) != 0 {
+			build.Env = append(os.Environ(), buildEnv...)
+		}
+		err = build.Run()
+	}
 	return BuildResult{
 		Binary:   binary,
 		Output:   output.String(),

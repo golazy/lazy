@@ -53,7 +53,7 @@ module = "@hotwired/turbo"
 	if len(calls) != 1 {
 		t.Fatalf("calls = %d, want 1", len(calls))
 	}
-	if calls[0].command != "npm" || !reflect.DeepEqual(calls[0].args, []string{"install"}) {
+	if calls[0].command != "mise" || !reflect.DeepEqual(calls[0].args, []string{"exec", "--", "npm", "install"}) {
 		t.Fatalf("install call = %s %#v", calls[0].command, calls[0].args)
 	}
 	if calls[0].options.Dir != dir {
@@ -106,8 +106,11 @@ module = "@hotwired/turbo"
 	if code != 0 {
 		t.Fatalf("code = %d, want 0", code)
 	}
-	if calls[0].command != "pnpm" {
-		t.Fatalf("command = %q, want pnpm", calls[0].command)
+	if calls[0].command != "mise" {
+		t.Fatalf("command = %q, want mise", calls[0].command)
+	}
+	if got, want := calls[0].args, []string{"exec", "--", "pnpm", "install"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("args = %#v, want %#v", got, want)
 	}
 }
 

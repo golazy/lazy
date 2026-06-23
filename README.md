@@ -14,12 +14,12 @@ The command reads the module path from `go.mod` and first looks for
 `./cmd/<module-name>`. If that directory does not exist, it falls back to
 `./cmd/app`.
 
-`lazy` is a development runner. It builds the app command into a temporary
-binary, serves the public `ADDR` or `PORT` through a local proxy, runs the app
-on an internal loopback port, watches application files, rebuilds and restarts
-on changes, and injects a small reload client into HTML responses. Build output
-is printed to stderr; if the app is not running, the proxy serves a status page
-with the latest build state.
+`lazy` is a development runner. It runs `go mod tidy`, builds the app command
+into a temporary binary, serves the public `ADDR` or `PORT` through a local
+proxy, runs the app on an internal loopback port, watches application files,
+rebuilds and restarts on changes, and injects a small reload client into HTML
+responses. Build output is printed to stderr; if the app is not running, the
+proxy serves a status page with the latest build state.
 
 When an application has `lazy.toml`, `lazy` opens the configured development
 workspace in tmux through mise. Service panes run `mise run <service>:start`,
@@ -117,14 +117,28 @@ lazy tailwind --input app/styles/site.css --output app/public/site.css
 
 ```sh
 lazy new github.com/guillermo/my_app
+lazy new --version v0.1.10 github.com/guillermo/old_app
 ```
 
-The command creates `./my_app` from the `golazy/sample_app` tag matching the
-CLI version, removes the template Git history, changes the module and imports,
-trusts the generated `mise.toml`, runs `mise install`, then validates through
-the current `go` on `PATH` with `go mod tidy` and `go test ./...`. After
-validation it initializes a fresh Git repository and commits the generated
-checkout.
+The command checks `https://golazy.dev/lazy.version` with a one-second timeout
+before remote template generation. If a newer `lazy` is available, it stops so
+new apps start from the current template. Network failures and timeouts are
+ignored. Use `--skip-update-check` to bypass the online check.
+
+By default, `lazy new` creates `./my_app` from the `golazy/sample_app` tag
+matching the CLI version. Use `--version <version>` to clone a specific sample
+app tag instead. The command removes the template Git history, changes the
+module and imports, trusts the generated `mise.toml`, runs `mise install`, then
+validates through `mise exec -- go` with `go mod tidy` and
+`go test ./...`. After validation it initializes a fresh Git repository,
+commits the generated checkout, and prints the generated app directory and the
+`lazy` command to run next.
+
+If `mise` was just installed by the public installer and the current shell has
+not picked up the new `PATH`, `lazy new` can still run setup through
+`$HOME/.local/bin/mise`. Open a new shell before running app-level commands
+normally, or run the app in the current shell with `mise exec -- lazy` after
+copying any printed `export PATH=...` lines.
 
 For local validation against the checked-out sample application, point `lazy
 new` at a directory:
@@ -168,9 +182,9 @@ stops so the application code can be edited deliberately.
 After each successful step, `lazy upgrade` runs:
 
 ```sh
-go mod tidy
-go test ./...
-go vet ./...
+mise exec -- go mod tidy
+mise exec -- go test ./...
+mise exec -- go vet ./...
 ```
 
 Use `--dry-run` to inspect planned writes and `--skip-commands` when you need
