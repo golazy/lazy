@@ -46,34 +46,41 @@ func TestClonesRenamesAndValidates(t *testing.T) {
 		Stdout:  &stdout,
 		Runner: func(name string, args []string, options commands.Options) error {
 			calls = append(calls, invocation{command: name, args: args, options: options})
-			if name != "git" {
+			if name != "git" || len(args) == 0 {
 				return nil
 			}
 
-			destination := args[len(args)-1]
-			if err := os.MkdirAll(filepath.Join(destination, ".git"), 0o755); err != nil {
-				return err
+			switch args[0] {
+			case "clone":
+				destination := args[len(args)-1]
+				if err := os.MkdirAll(filepath.Join(destination, ".git"), 0o755); err != nil {
+					return err
+				}
+				writeFile(t, filepath.Join(destination, "go.mod"), "module sample_app\n")
+				writeFile(
+					t,
+					filepath.Join(destination, "main.go"),
+					"package main\nimport \"sample_app/app\"\n",
+				)
+				writeFile(
+					t,
+					filepath.Join(destination, "init", "app.go"),
+					strings.Join([]string{
+						"package appinit",
+						"",
+						"import \"golazy.dev/lazysession\"",
+						"",
+						"var _ = lazysession.Config{",
+						"    Key: \"template-secure-cookie-key\",",
+						"}",
+						"",
+					}, "\n"),
+				)
+			case "init":
+				if err := os.MkdirAll(filepath.Join(options.Dir, ".git"), 0o755); err != nil {
+					return err
+				}
 			}
-			writeFile(t, filepath.Join(destination, "go.mod"), "module sample_app\n")
-			writeFile(
-				t,
-				filepath.Join(destination, "main.go"),
-				"package main\nimport \"sample_app/app\"\n",
-			)
-			writeFile(
-				t,
-				filepath.Join(destination, "init", "app.go"),
-				strings.Join([]string{
-					"package appinit",
-					"",
-					"import \"golazy.dev/lazysession\"",
-					"",
-					"var _ = lazysession.Config{",
-					"    Key: \"template-secure-cookie-key\",",
-					"}",
-					"",
-				}, "\n"),
-			)
 			return nil
 		},
 	}
@@ -83,8 +90,8 @@ func TestClonesRenamesAndValidates(t *testing.T) {
 	}
 
 	destination := filepath.Join(dir, "my_app")
-	if _, err := os.Stat(filepath.Join(destination, ".git")); !os.IsNotExist(err) {
-		t.Fatalf(".git still exists: %v", err)
+	if _, err := os.Stat(filepath.Join(destination, ".git")); err != nil {
+		t.Fatalf(".git was not initialized: %v", err)
 	}
 	assertFileContains(t, filepath.Join(destination, "go.mod"), "module github.com/guillermo/my_app")
 	assertFileContains(t, filepath.Join(destination, "main.go"), `"github.com/guillermo/my_app/app"`)
@@ -95,6 +102,7 @@ func TestClonesRenamesAndValidates(t *testing.T) {
 		"* Naming the app",
 		"* Preparing the mise development environment",
 		"* Validating",
+		"* Saving the initial Git commit",
 		"Congrats !",
 		"",
 	}, "\n")
@@ -102,8 +110,8 @@ func TestClonesRenamesAndValidates(t *testing.T) {
 		t.Fatalf("stdout = %q, want %q", stdout.String(), wantOutput)
 	}
 
-	if len(calls) != 5 {
-		t.Fatalf("calls = %d, want 5", len(calls))
+	if len(calls) != 8 {
+		t.Fatalf("calls = %d, want 8", len(calls))
 	}
 	wantClone := []string{
 		"clone",
@@ -134,6 +142,7 @@ func TestClonesRenamesAndValidates(t *testing.T) {
 	if got, want := calls[4].args, []string{"test", "./..."}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("test args = %#v, want %#v", got, want)
 	}
+	assertInitialGitCommitCalls(t, calls[5:], destination)
 	for _, call := range []invocation{calls[0], calls[3], calls[4]} {
 		if !call.options.Capture {
 			t.Fatalf("%s was not captured", call.command)
@@ -216,6 +225,9 @@ func TestCopiesSourceDirectoryRenamesAndValidates(t *testing.T) {
 		Stdout:    &stdout,
 		Runner: func(name string, args []string, options commands.Options) error {
 			calls = append(calls, invocation{command: name, args: args, options: options})
+			if name == "git" && len(args) > 0 && args[0] == "init" {
+				return os.MkdirAll(filepath.Join(options.Dir, ".git"), 0o755)
+			}
 			return nil
 		},
 	}
@@ -225,8 +237,8 @@ func TestCopiesSourceDirectoryRenamesAndValidates(t *testing.T) {
 	}
 
 	destination := filepath.Join(dir, "my_app")
-	if _, err := os.Stat(filepath.Join(destination, ".git")); !os.IsNotExist(err) {
-		t.Fatalf(".git still exists: %v", err)
+	if _, err := os.Stat(filepath.Join(destination, ".git")); err != nil {
+		t.Fatalf(".git was not initialized: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(destination, "node_modules")); !os.IsNotExist(err) {
 		t.Fatalf("node_modules was copied: %v", err)
@@ -234,8 +246,8 @@ func TestCopiesSourceDirectoryRenamesAndValidates(t *testing.T) {
 	assertFileContains(t, filepath.Join(destination, "go.mod"), "module github.com/guillermo/my_app")
 	assertFileContains(t, filepath.Join(destination, "main.go"), `"github.com/guillermo/my_app/app"`)
 
-	if len(calls) != 4 {
-		t.Fatalf("calls = %d, want 4", len(calls))
+	if len(calls) != 7 {
+		t.Fatalf("calls = %d, want 7", len(calls))
 	}
 	if calls[0].command != "mise" || !reflect.DeepEqual(calls[0].args, []string{"trust", "--yes", "mise.toml"}) {
 		t.Fatalf("mise trust = %s %#v", calls[0].command, calls[0].args)
@@ -255,6 +267,7 @@ func TestCopiesSourceDirectoryRenamesAndValidates(t *testing.T) {
 	if got, want := calls[3].args, []string{"test", "./..."}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("test args = %#v, want %#v", got, want)
 	}
+	assertInitialGitCommitCalls(t, calls[4:], destination)
 }
 
 func TestCopiesSourceDirectoryValidatesWithWorkspaceReplaces(t *testing.T) {
@@ -292,6 +305,19 @@ func TestCopiesSourceDirectoryValidatesWithWorkspaceReplaces(t *testing.T) {
 		Stdout:    &bytes.Buffer{},
 		Runner: func(name string, args []string, options commands.Options) error {
 			calls = append(calls, invocation{command: name, args: args, options: options})
+			if name == "git" && len(args) > 0 {
+				switch args[0] {
+				case "init":
+					return os.MkdirAll(filepath.Join(options.Dir, ".git"), 0o755)
+				case "add":
+					if _, err := os.Stat(filepath.Join(options.Dir, ".lazy-go.mod")); !os.IsNotExist(err) {
+						t.Fatalf(".lazy-go.mod exists before git add: %v", err)
+					}
+					if _, err := os.Stat(filepath.Join(options.Dir, ".lazy-go.sum")); !os.IsNotExist(err) {
+						t.Fatalf(".lazy-go.sum exists before git add: %v", err)
+					}
+				}
+			}
 			return nil
 		},
 	}
@@ -300,8 +326,8 @@ func TestCopiesSourceDirectoryValidatesWithWorkspaceReplaces(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(calls) != 4 {
-		t.Fatalf("calls = %d, want 4", len(calls))
+	if len(calls) != 7 {
+		t.Fatalf("calls = %d, want 7", len(calls))
 	}
 	if calls[0].command != "mise" || !reflect.DeepEqual(calls[0].args, []string{"trust", "--yes", "mise.toml"}) {
 		t.Fatalf("mise trust = %s %#v", calls[0].command, calls[0].args)
@@ -328,6 +354,7 @@ func TestCopiesSourceDirectoryValidatesWithWorkspaceReplaces(t *testing.T) {
 	}
 
 	destination := filepath.Join(dir, "my_app")
+	assertInitialGitCommitCalls(t, calls[4:], destination)
 	if _, err := os.Stat(filepath.Join(destination, ".lazy-go.mod")); !os.IsNotExist(err) {
 		t.Fatalf(".lazy-go.mod still exists: %v", err)
 	}
@@ -410,6 +437,33 @@ func assertGeneratedSecureCookieKey(t *testing.T, filename string) {
 	}
 	if !regexp.MustCompile(`Key: "[a-f0-9]{16}"`).Match(data) {
 		t.Fatalf("%s does not contain a generated 16-character hex secure cookie key: %s", filename, data)
+	}
+}
+
+func assertInitialGitCommitCalls(t *testing.T, calls []invocation, destination string) {
+	t.Helper()
+
+	want := [][]string{
+		{"init"},
+		{"add", "."},
+		{"commit", "-m", "Initial GoLazy application"},
+	}
+	if len(calls) != len(want) {
+		t.Fatalf("git calls = %d, want %d", len(calls), len(want))
+	}
+	for index, call := range calls {
+		if call.command != "git" {
+			t.Fatalf("call %d command = %q, want git", index, call.command)
+		}
+		if !reflect.DeepEqual(call.args, want[index]) {
+			t.Fatalf("call %d args = %#v, want %#v", index, call.args, want[index])
+		}
+		if call.options.Dir != destination {
+			t.Fatalf("call %d dir = %q, want %q", index, call.options.Dir, destination)
+		}
+		if !call.options.Capture {
+			t.Fatalf("call %d was not captured", index)
+		}
 	}
 }
 

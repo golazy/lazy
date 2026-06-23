@@ -137,8 +137,34 @@ func (c Command) Execute(modulePath string) error {
 		return fmt.Errorf("go test ./...: %w", err)
 	}
 
+	cleanupWorkfile()
+	cleanupWorkfile = func() {}
+
+	fmt.Fprintln(c.Stdout, "* Saving the initial Git commit")
+	if err := initializeGitRepository(runner, destination); err != nil {
+		return err
+	}
+
 	cleanup = false
 	fmt.Fprintln(c.Stdout, "Congrats !")
+	return nil
+}
+
+func initializeGitRepository(runner commands.Runner, destination string) error {
+	steps := []struct {
+		args []string
+		name string
+	}{
+		{args: []string{"init"}, name: "git init"},
+		{args: []string{"add", "."}, name: "git add"},
+		{args: []string{"commit", "-m", "Initial GoLazy application"}, name: "git commit"},
+	}
+
+	for _, step := range steps {
+		if err := runner("git", step.args, commands.Options{Dir: destination, Capture: true}); err != nil {
+			return fmt.Errorf("%s: %w", step.name, err)
+		}
+	}
 	return nil
 }
 
@@ -360,7 +386,10 @@ func localWorkspaceEnv(destination string) ([]string, func(), error) {
 }
 
 func findWorkspace(start string) (string, string, bool) {
-	if current := os.Getenv("GOWORK"); current != "" && current != "off" {
+	if current := os.Getenv("GOWORK"); current != "" {
+		if current == "off" {
+			return "", "", false
+		}
 		if info, err := os.Stat(current); err == nil && !info.IsDir() {
 			return current, filepath.Dir(current), true
 		}

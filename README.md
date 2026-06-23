@@ -122,7 +122,9 @@ lazy new github.com/guillermo/my_app
 The command creates `./my_app` from the `golazy/sample_app` tag matching the
 CLI version, removes the template Git history, changes the module and imports,
 trusts the generated `mise.toml`, runs `mise install`, then validates through
-the current `go` on `PATH` with `go mod tidy` and `go test ./...`.
+the current `go` on `PATH` with `go mod tidy` and `go test ./...`. After
+validation it initializes a fresh Git repository and commits the generated
+checkout.
 
 For local validation against the checked-out sample application, point `lazy
 new` at a directory:

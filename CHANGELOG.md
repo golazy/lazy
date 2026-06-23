@@ -7,6 +7,11 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- `lazy new` now initializes a fresh Git repository and commits the generated
+  checkout after validation succeeds.
+
 ## [0.1.13] - 2026-06-22
 
 ### Added
