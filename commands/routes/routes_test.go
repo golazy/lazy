@@ -45,13 +45,10 @@ func TestCommandRunsApplicationWithPrintRoutesTag(t *testing.T) {
 	if len(calls) != 1 {
 		t.Fatalf("calls = %d, want 1", len(calls))
 	}
-	if got, want := calls[0].command, "mise"; got != want {
+	if got, want := calls[0].command, "go"; got != want {
 		t.Fatalf("command = %q, want %q", got, want)
 	}
 	if got, want := calls[0].args, []string{
-		"exec",
-		"--",
-		"go",
 		"run",
 		"-tags",
 		"lazydev,printroutes",
@@ -95,9 +92,6 @@ func TestCommandUsesExplicitCommandAndViewPath(t *testing.T) {
 		t.Fatalf("exit code = %d, want 0", code)
 	}
 	if got, want := calls[0].args, []string{
-		"exec",
-		"--",
-		"go",
 		"run",
 		"-tags",
 		"lazydev,printroutes",

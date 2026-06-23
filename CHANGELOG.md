@@ -27,10 +27,10 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   checkout after validation succeeds.
 - `lazy new` now prints concrete next steps with the generated app directory
   and `lazy` command.
-- App-bound subprocesses in `lazy new`, `lazy`, `lazy js`, `lazy tailwind`,
-  `lazy routes`, `lazy upgrade`, and the app build step of `lazy native build`
-  now run through `mise exec`, so tools installed by the app's `mise.toml` are
-  available in the current shell session.
+- `lazy new`, `lazy`, `lazy routes`, `lazy upgrade`, and the app build step of
+  `lazy native build` keep Go subprocesses on the current `go` from `PATH`,
+  while `lazy js` and `lazy tailwind` run app-managed package-manager tools
+  through `mise exec`.
 - The default `lazy` development command now runs `go mod tidy` before building
   or running the app, so module files are checked and repaired as part of the
   dev loop.

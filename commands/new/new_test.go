@@ -135,16 +135,16 @@ func TestClonesRenamesAndValidates(t *testing.T) {
 	if calls[2].command != "mise" || !reflect.DeepEqual(calls[2].args, []string{"install", "--yes"}) {
 		t.Fatalf("mise install = %s %#v", calls[2].command, calls[2].args)
 	}
-	if calls[3].command != "mise" {
-		t.Fatalf("tidy command = %s, want mise", calls[3].command)
+	if calls[3].command != "go" {
+		t.Fatalf("tidy command = %s, want go", calls[3].command)
 	}
-	if got, want := calls[3].args, []string{"exec", "--", "go", "mod", "tidy"}; !reflect.DeepEqual(got, want) {
+	if got, want := calls[3].args, []string{"mod", "tidy"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("tidy args = %#v, want %#v", got, want)
 	}
-	if calls[4].command != "mise" {
-		t.Fatalf("test command = %s, want mise", calls[4].command)
+	if calls[4].command != "go" {
+		t.Fatalf("test command = %s, want go", calls[4].command)
 	}
-	if got, want := calls[4].args, []string{"exec", "--", "go", "test", "./..."}; !reflect.DeepEqual(got, want) {
+	if got, want := calls[4].args, []string{"test", "./..."}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("test args = %#v, want %#v", got, want)
 	}
 	assertInitialGitCommitCalls(t, calls[5:], destination)
@@ -415,16 +415,16 @@ func TestCopiesSourceDirectoryRenamesAndValidates(t *testing.T) {
 	if calls[1].command != "mise" || !reflect.DeepEqual(calls[1].args, []string{"install", "--yes"}) {
 		t.Fatalf("mise install = %s %#v", calls[1].command, calls[1].args)
 	}
-	if calls[2].command != "mise" {
-		t.Fatalf("tidy command = %s, want mise", calls[2].command)
+	if calls[2].command != "go" {
+		t.Fatalf("tidy command = %s, want go", calls[2].command)
 	}
-	if got, want := calls[2].args, []string{"exec", "--", "go", "mod", "tidy"}; !reflect.DeepEqual(got, want) {
+	if got, want := calls[2].args, []string{"mod", "tidy"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("tidy args = %#v, want %#v", got, want)
 	}
-	if calls[3].command != "mise" {
-		t.Fatalf("test command = %s, want mise", calls[3].command)
+	if calls[3].command != "go" {
+		t.Fatalf("test command = %s, want go", calls[3].command)
 	}
-	if got, want := calls[3].args, []string{"exec", "--", "go", "test", "./..."}; !reflect.DeepEqual(got, want) {
+	if got, want := calls[3].args, []string{"test", "./..."}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("test args = %#v, want %#v", got, want)
 	}
 	assertInitialGitCommitCalls(t, calls[4:], destination)
@@ -495,16 +495,16 @@ func TestCopiesSourceDirectoryValidatesWithWorkspaceReplaces(t *testing.T) {
 	if calls[1].command != "mise" || !reflect.DeepEqual(calls[1].args, []string{"install", "--yes"}) {
 		t.Fatalf("mise install = %s %#v", calls[1].command, calls[1].args)
 	}
-	if calls[2].command != "mise" {
-		t.Fatalf("tidy command = %s, want mise", calls[2].command)
+	if calls[2].command != "go" {
+		t.Fatalf("tidy command = %s, want go", calls[2].command)
 	}
-	if got, want := calls[2].args, []string{"exec", "--", "go", "mod", "tidy", "-modfile=.lazy-go.mod"}; !reflect.DeepEqual(got, want) {
+	if got, want := calls[2].args, []string{"mod", "tidy", "-modfile=.lazy-go.mod"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("tidy args = %#v, want %#v", got, want)
 	}
-	if calls[3].command != "mise" {
-		t.Fatalf("test command = %s, want mise", calls[3].command)
+	if calls[3].command != "go" {
+		t.Fatalf("test command = %s, want go", calls[3].command)
 	}
-	if got, want := calls[3].args, []string{"exec", "--", "go", "test", "-modfile=.lazy-go.mod", "./..."}; !reflect.DeepEqual(got, want) {
+	if got, want := calls[3].args, []string{"test", "-modfile=.lazy-go.mod", "./..."}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("test args = %#v, want %#v", got, want)
 	}
 	for _, call := range []invocation{calls[2], calls[3]} {

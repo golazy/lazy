@@ -129,14 +129,14 @@ var _ = postservice.Service{}
 		t.Fatalf("calls = %#v, want six follow-up commands", calls)
 	}
 	for _, call := range calls {
-		if call.command != "mise" || call.dir != dir {
+		if call.command != "go" || call.dir != dir {
 			t.Fatalf("call = %#v", call)
 		}
 	}
 	wantCycle := [][]string{
-		{"exec", "--", "go", "mod", "tidy"},
-		{"exec", "--", "go", "test", "./..."},
-		{"exec", "--", "go", "vet", "./..."},
+		{"mod", "tidy"},
+		{"test", "./..."},
+		{"vet", "./..."},
 	}
 	for index, call := range calls {
 		if !slices.Equal(call.args, wantCycle[index%len(wantCycle)]) {

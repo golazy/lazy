@@ -66,21 +66,18 @@ func (c Command) executeDirect(dir string, candidate string, runner commands.Run
 	if err != nil {
 		return 1, err
 	}
-	tidyCommand, tidyArgs, tidyEnv := commands.MiseExecRunnerCommand(runner, "go", []string{"mod", "tidy"})
-	if err := runner(tidyCommand, tidyArgs, commands.Options{
+	if err := runner("go", []string{"mod", "tidy"}, commands.Options{
 		Dir:     dir,
-		Env:     tidyEnv,
 		Capture: true,
 	}); err != nil {
 		return 1, fmt.Errorf("go mod tidy: %w", err)
 	}
-	runCommand, runArgs, runEnv := commands.MiseExecRunnerCommand(runner, "go", appcmd.GoRunArgs("lazydev", filepath.ToSlash(candidate)))
-	err = runner(runCommand, runArgs, commands.Options{
+	err = runner("go", appcmd.GoRunArgs("lazydev", filepath.ToSlash(candidate)), commands.Options{
 		Dir:    dir,
 		Stdin:  c.Stdin,
 		Stdout: c.Stdout,
 		Stderr: c.Stderr,
-		Env:    append(runEnv, env...),
+		Env:    env,
 	})
 	if err == nil {
 		return 0, nil

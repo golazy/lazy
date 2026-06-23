@@ -129,7 +129,7 @@ By default, `lazy new` creates `./my_app` from the `golazy/sample_app` tag
 matching the CLI version. Use `--version <version>` to clone a specific sample
 app tag instead. The command removes the template Git history, changes the
 module and imports, trusts the generated `mise.toml`, runs `mise install`, then
-validates through `mise exec -- go` with `go mod tidy` and
+validates with the current `go` on `PATH` by running `go mod tidy` and
 `go test ./...`. After validation it initializes a fresh Git repository,
 commits the generated checkout, and prints the generated app directory and the
 `lazy` command to run next.
@@ -182,9 +182,9 @@ stops so the application code can be edited deliberately.
 After each successful step, `lazy upgrade` runs:
 
 ```sh
-mise exec -- go mod tidy
-mise exec -- go test ./...
-mise exec -- go vet ./...
+go mod tidy
+go test ./...
+go vet ./...
 ```
 
 Use `--dry-run` to inspect planned writes and `--skip-commands` when you need

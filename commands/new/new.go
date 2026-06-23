@@ -150,20 +150,18 @@ func (c Command) Execute(modulePath string) error {
 
 	fmt.Fprintln(c.Stdout, "* Validating")
 	tidyArgs := append([]string{"mod", "tidy"}, goArgs...)
-	tidyCommand, tidyExecArgs, tidyExecEnv := commands.MiseExecRunnerCommand(c.Runner, "go", tidyArgs)
-	if err := runner(tidyCommand, tidyExecArgs, commands.Options{
+	if err := runner("go", tidyArgs, commands.Options{
 		Dir:     destination,
-		Env:     appendEnv(commandEnv, tidyExecEnv),
+		Env:     commandEnv,
 		Capture: true,
 	}); err != nil {
 		return fmt.Errorf("go mod tidy: %w", err)
 	}
 	testArgs := append([]string{"test"}, goArgs...)
 	testArgs = append(testArgs, "./...")
-	testCommand, testExecArgs, testExecEnv := commands.MiseExecRunnerCommand(c.Runner, "go", testArgs)
-	if err := runner(testCommand, testExecArgs, commands.Options{
+	if err := runner("go", testArgs, commands.Options{
 		Dir:     destination,
-		Env:     appendEnv(commandEnv, testExecEnv),
+		Env:     commandEnv,
 		Capture: true,
 	}); err != nil {
 		return fmt.Errorf("go test ./...: %w", err)
@@ -193,17 +191,6 @@ func executableName(name string) string {
 
 func resolveMiseCommand() (string, []string) {
 	return commands.ResolveMiseCommand()
-}
-
-func appendEnv(first []string, second []string) []string {
-	if len(first) == 0 {
-		return second
-	}
-	if len(second) == 0 {
-		return first
-	}
-	env := append([]string{}, first...)
-	return append(env, second...)
 }
 
 func initializeGitRepository(runner commands.Runner, destination string) error {

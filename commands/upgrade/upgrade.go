@@ -703,20 +703,15 @@ func (e stepExecutor) runFollowups() error {
 		{command: "go", args: []string{"vet", "./..."}},
 	}
 	for _, call := range calls {
-		displayCommand := "mise"
-		displayArgs := append([]string{"exec", "--", call.command}, call.args...)
+		displayCommand := call.command
+		displayArgs := call.args
 		if e.dryRun || e.skipCommands {
 			fmt.Fprintf(e.stdout, "  would run %s %s\n", displayCommand, strings.Join(displayArgs, " "))
 			continue
 		}
 		fmt.Fprintf(e.stdout, "  running %s %s\n", displayCommand, strings.Join(displayArgs, " "))
-		runCommand, runArgs, runEnv := commands.MiseExecCommand(call.command, call.args)
-		if e.customRunner {
-			runCommand, runArgs, runEnv = commands.MiseExecRunnerCommand(e.runner, call.command, call.args)
-		}
-		if err := e.runner(runCommand, runArgs, commands.Options{
+		if err := e.runner(call.command, call.args, commands.Options{
 			Dir:    e.dir,
-			Env:    runEnv,
 			Stdout: e.stdout,
 			Stderr: e.stderr,
 		}); err != nil {

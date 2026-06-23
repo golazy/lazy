@@ -46,19 +46,16 @@ func TestUsesFirstCommandUnderCmd(t *testing.T) {
 	if len(calls) != 2 {
 		t.Fatalf("calls = %d, want 2", len(calls))
 	}
-	if calls[0].command != "mise" {
-		t.Fatalf("tidy command = %s, want mise", calls[0].command)
+	if calls[0].command != "go" {
+		t.Fatalf("tidy command = %s, want go", calls[0].command)
 	}
-	if got, want := calls[0].args, []string{"exec", "--", "go", "mod", "tidy"}; !reflect.DeepEqual(got, want) {
+	if got, want := calls[0].args, []string{"mod", "tidy"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("tidy args = %#v, want %#v", got, want)
 	}
 	if !calls[0].options.Capture {
 		t.Fatalf("go mod tidy was not captured")
 	}
 	if got, want := calls[1].args, []string{
-		"exec",
-		"--",
-		"go",
 		"run",
 		"-tags",
 		"lazydev",
@@ -96,13 +93,10 @@ func TestUsesExplicitCommandPathAndViewPath(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit code = %d", code)
 	}
-	if got, want := calls[0].args, []string{"exec", "--", "go", "mod", "tidy"}; !reflect.DeepEqual(got, want) {
+	if got, want := calls[0].args, []string{"mod", "tidy"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("tidy args = %#v, want %#v", got, want)
 	}
 	if got, want := calls[1].args, []string{
-		"exec",
-		"--",
-		"go",
 		"run",
 		"-tags",
 		"lazydev",
