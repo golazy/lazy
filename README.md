@@ -137,8 +137,8 @@ prints the generated app directory and the `lazy` command to run next.
 If `mise` was just installed by the public installer and the current shell has
 not picked up the new `PATH`, `lazy new` can still run setup through
 `$HOME/.local/bin/mise`. Open a new shell before running app-level commands
-normally, or run the app in the current shell with `mise exec -- lazy` after
-copying any printed `export PATH=...` lines.
+normally, or copy any printed `export PATH=...` lines before running `lazy` in
+the current shell.
 
 For local validation against the checked-out sample application, point `lazy
 new` at a directory:
