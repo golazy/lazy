@@ -2,8 +2,10 @@ package jscommand
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"testing"
 
 	"golazy.dev/lazy/commands"
@@ -115,7 +117,21 @@ module = "@hotwired/turbo"
 }
 
 func TestFindAppRootErrorsWhenGoModIsMissing(t *testing.T) {
-	dir := t.TempDir()
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	base := filepath.Join(filepath.Dir(filename), "..", "..", "..", ".tmp", "js-command-tests")
+	if err := os.MkdirAll(base, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = os.RemoveAll(base)
+	})
+	dir, err := os.MkdirTemp(base, "missing-go-mod-")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := findAppRoot(filepath.Join(dir, "nested")); err == nil {
 		t.Fatal("findAppRoot succeeded without go.mod")
 	}

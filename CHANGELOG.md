@@ -7,6 +7,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.14] - 2026-06-23
+
 ### Added
 
 - `lazy new --version <version>` can generate an app from a specific
@@ -32,6 +34,12 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The default `lazy` development command now runs `go mod tidy` before building
   or running the app, so module files are checked and repaired as part of the
   dev loop.
+- `lazy upgrade` now uses the framework progress UI for clearer task status
+  while still allowing interactive conflict and prompt output to take over the
+  terminal deliberately.
+- Updated the CLI release version to `v0.1.14` so `lazy new` selects the
+  matching sample application template once the coordinated release is
+  published.
 
 ## [0.1.13] - 2026-06-22
 
@@ -253,7 +261,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The CLI version now comes from the checked-in `VERSION` file embedded into
   the binary at build time.
 
-[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.13...HEAD
+[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.14...HEAD
+[0.1.14]: https://github.com/golazy/lazy/compare/v0.1.13...v0.1.14
 [0.1.13]: https://github.com/golazy/lazy/compare/v0.1.12...v0.1.13
 [0.1.12]: https://github.com/golazy/lazy/compare/v0.1.11...v0.1.12
 [0.1.11]: https://github.com/golazy/lazy/compare/v0.1.10...v0.1.11

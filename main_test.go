@@ -114,7 +114,7 @@ func TestNewRequiresModuleName(t *testing.T) {
 	if code := execute([]string{"new"}, nil, &bytes.Buffer{}, &stderr); code != 1 {
 		t.Fatalf("exit code = %d, want 1", code)
 	}
-	if !strings.Contains(stderr.String(), "usage: lazy new <module>") {
+	if !strings.Contains(stderr.String(), "usage: lazy new") {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
 }
@@ -126,6 +126,28 @@ func TestNewRejectsMissingSourceDirArgument(t *testing.T) {
 		t.Fatalf("exit code = %d, want 1", code)
 	}
 	if !strings.Contains(stderr.String(), "flag needs an argument") {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+}
+
+func TestNewRejectsMissingVersionArgument(t *testing.T) {
+	var stderr bytes.Buffer
+
+	if code := execute([]string{"new", "--version"}, nil, &bytes.Buffer{}, &stderr); code != 1 {
+		t.Fatalf("exit code = %d, want 1", code)
+	}
+	if !strings.Contains(stderr.String(), "flag needs an argument") {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+}
+
+func TestNewRejectsSourceDirWithVersion(t *testing.T) {
+	var stderr bytes.Buffer
+
+	if code := execute([]string{"new", "--source-dir", "../sample_app", "--version", "v0.1.10", "example.com/app"}, nil, &bytes.Buffer{}, &stderr); code != 1 {
+		t.Fatalf("exit code = %d, want 1", code)
+	}
+	if !strings.Contains(stderr.String(), "--source-dir and --version cannot be used together") {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
 }

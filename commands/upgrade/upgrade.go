@@ -35,6 +35,7 @@ var releaseVersions = []string{
 	"v0.1.11",
 	"v0.1.12",
 	"v0.1.13",
+	"v0.1.14",
 }
 
 const firstUpgradeAwareVersion = "v0.1.10"

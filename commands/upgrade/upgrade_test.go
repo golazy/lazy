@@ -190,11 +190,11 @@ func TestUpgradeForceRejectsTarget(t *testing.T) {
 
 func TestUpgradeForceRejectsLatestVersion(t *testing.T) {
 	dir := t.TempDir()
-	writeUpgradeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n\ngo 1.26.0\n\nrequire golazy.dev v0.1.13\n")
+	writeUpgradeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n\ngo 1.26.0\n\nrequire golazy.dev v0.1.14\n")
 
 	code, err := (Command{
 		Dir:   dir,
-		Force: "v0.1.13",
+		Force: "v0.1.14",
 	}).Execute()
 	if err == nil {
 		t.Fatal("err = nil, want no next step error")
@@ -202,14 +202,30 @@ func TestUpgradeForceRejectsLatestVersion(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("code = %d, want 1", code)
 	}
-	if !strings.Contains(err.Error(), "v0.1.13 has no later upgrade step") {
+	if !strings.Contains(err.Error(), "v0.1.14 has no later upgrade step") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestUpgradeRejectsUnimplementedNextVersion(t *testing.T) {
+	dir := t.TempDir()
+	writeUpgradeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n\ngo 1.26.0\n\nrequire golazy.dev v0.1.13\n")
+
+	code, err := (Command{Dir: dir}).Execute()
+	if err == nil {
+		t.Fatal("err = nil, want unimplemented upgrade error")
+	}
+	if code != 1 {
+		t.Fatalf("code = %d, want 1", code)
+	}
+	if !strings.Contains(err.Error(), "upgrade from v0.1.13 to v0.1.14 is not implemented") {
 		t.Fatalf("err = %v", err)
 	}
 }
 
 func TestUpgradeAlreadyCurrentPromptsToRemoveMiseGoTool(t *testing.T) {
 	dir := t.TempDir()
-	writeUpgradeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n\ngo 1.26.0\n\nrequire golazy.dev v0.1.13\n")
+	writeUpgradeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n\ngo 1.26.0\n\nrequire golazy.dev v0.1.14\n")
 	writeUpgradeFile(t, filepath.Join(dir, "mise.toml"), "[tools]\ngo = \"1.26.0\"\nnode = \"24\"\n")
 
 	var stdout bytes.Buffer
@@ -230,7 +246,7 @@ func TestUpgradeAlreadyCurrentPromptsToRemoveMiseGoTool(t *testing.T) {
 	if !strings.Contains(stderr.String(), "Go already bundles multi-version support") {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
-	if !strings.Contains(stdout.String(), "already at v0.1.13") {
+	if !strings.Contains(stdout.String(), "already at v0.1.14") {
 		t.Fatalf("stdout = %q", stdout.String())
 	}
 }

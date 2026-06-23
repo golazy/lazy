@@ -70,18 +70,30 @@ func execute(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer)
 		flags := flag.NewFlagSet("new", flag.ContinueOnError)
 		flags.SetOutput(stderr)
 		sourceDir := flags.String("source-dir", "", "copy the template from a local directory")
+		templateVersion := flags.String("version", "", "sample app version to clone")
+		skipUpdateCheck := flags.Bool("skip-update-check", false, "skip the online lazy version check")
 		if err := flags.Parse(args[1:]); err != nil {
 			return 1
 		}
 		if flags.NArg() != 1 {
-			fmt.Fprintln(stderr, "lazy: usage: lazy new <module>")
+			fmt.Fprintln(stderr, "lazy: usage: lazy new [--version <version>] [--skip-update-check] <module>")
 			return 1
 		}
+		if *sourceDir != "" && *templateVersion != "" {
+			fmt.Fprintln(stderr, "lazy: --source-dir and --version cannot be used together")
+			return 1
+		}
+		version := currentVersion()
+		if *templateVersion != "" {
+			version = *templateVersion
+		}
 		err := (newcommand.Command{
-			Version:   currentVersion(),
-			SourceDir: *sourceDir,
-			Stdout:    stdout,
-			Stderr:    stderr,
+			Version:         version,
+			CurrentVersion:  currentVersion(),
+			SourceDir:       *sourceDir,
+			SkipUpdateCheck: *skipUpdateCheck,
+			Stdout:          stdout,
+			Stderr:          stderr,
 		}).Execute(flags.Arg(0))
 		if err != nil {
 			fmt.Fprintf(stderr, "lazy: %v\n", err)
@@ -129,7 +141,7 @@ func printUsage(stdout io.Writer) {
 	fmt.Fprintln(stdout)
 	fmt.Fprintln(stdout, "commands:")
 	fmt.Fprintln(stdout, "  lazy")
-	fmt.Fprintln(stdout, "  lazy new <module>")
+	fmt.Fprintln(stdout, "  lazy new [--version <version>] [--skip-update-check] <module>")
 	fmt.Fprintln(stdout, "  lazy routes")
 	fmt.Fprintln(stdout, "  lazy upgrade")
 	fmt.Fprintln(stdout, "  lazy native")
