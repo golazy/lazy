@@ -28,6 +28,10 @@ func main() {
 }
 
 func execute(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
+	if handled, code := maybeExecuteLazyCmd(args, stdin, stdout, stderr); handled {
+		return code
+	}
+
 	args, skipVersionCheck := removeSkipVersionCheckFlag(args)
 	if !skipVersionCheck {
 		if handled, code := maybeExecuteProjectVersion(args, stdin, stdout, stderr); handled {

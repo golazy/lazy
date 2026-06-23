@@ -26,6 +26,88 @@ func TestVersion(t *testing.T) {
 	}
 }
 
+func TestLazyCmdHandoffRunsConfiguredBinary(t *testing.T) {
+	restoreVersionHandoffTestHooks(t)
+	dir := t.TempDir()
+	current := filepath.Join(dir, "current", lazyExecutableName())
+	target := filepath.Join(dir, "master", lazyExecutableName())
+	if err := os.MkdirAll(filepath.Dir(current), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(current, []byte("current"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte("target"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(lazyCmdEnv, target)
+	executable = func() (string, error) {
+		return current, nil
+	}
+
+	var calls []commandCall
+	runCommand = func(command string, args []string, options commandOptions) (int, error) {
+		calls = append(calls, commandCall{command: command, args: slices.Clone(args), env: slices.Clone(options.Env)})
+		return 37, nil
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if code := execute([]string{"--version"}, nil, &stdout, &stderr); code != 37 {
+		t.Fatalf("exit code = %d, want 37", code)
+	}
+	if len(calls) != 1 {
+		t.Fatalf("calls = %#v, want 1 call", calls)
+	}
+	if calls[0].command != target {
+		t.Fatalf("command = %q, want %q", calls[0].command, target)
+	}
+	if got, want := calls[0].args, []string{"--version"}; !slices.Equal(got, want) {
+		t.Fatalf("args = %#v, want %#v", got, want)
+	}
+	if got, want := calls[0].env, []string{noVersionCheckEnv + "=true"}; !slices.Equal(got, want) {
+		t.Fatalf("env = %#v, want %#v", got, want)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout = %q", stdout.String())
+	}
+	if got := stderr.String(); !strings.Contains(got, "Running "+target+" instead") {
+		t.Fatalf("stderr = %q, want handoff message", got)
+	}
+}
+
+func TestLazyCmdHandoffSkipsWhenAlreadyRunningConfiguredBinary(t *testing.T) {
+	restoreVersionHandoffTestHooks(t)
+	dir := t.TempDir()
+	target := filepath.Join(dir, lazyExecutableName())
+	if err := os.WriteFile(target, []byte("target"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(lazyCmdEnv, target)
+	executable = func() (string, error) {
+		return target, nil
+	}
+	runCommand = func(string, []string, commandOptions) (int, error) {
+		t.Fatalf("runCommand should not be called")
+		return 1, nil
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if code := execute([]string{"--version"}, nil, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+	if got, want := stdout.String(), "lazy "+currentVersion()+"\n"; got != want {
+		t.Fatalf("stdout = %q, want %q", got, want)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+}
+
 func TestNewRequiresModuleName(t *testing.T) {
 	var stderr bytes.Buffer
 
@@ -331,11 +413,13 @@ func restoreVersionHandoffTestHooks(t *testing.T) {
 	t.Helper()
 
 	originalUserCacheDir := userCacheDir
+	originalExecutable := executable
 	originalStatFile := statFile
 	originalMkdirAll := mkdirAll
 	originalRunCommand := runCommand
 	t.Cleanup(func() {
 		userCacheDir = originalUserCacheDir
+		executable = originalExecutable
 		statFile = originalStatFile
 		mkdirAll = originalMkdirAll
 		runCommand = originalRunCommand

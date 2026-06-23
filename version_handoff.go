@@ -8,21 +8,87 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"golang.org/x/mod/modfile"
 )
 
 const (
 	noVersionCheckEnv    = "NO_VERSION_CHECK"
+	lazyCmdEnv           = "LAZYCMD"
 	skipVersionCheckFlag = "--skip-version-check"
 )
 
 var (
 	userCacheDir = os.UserCacheDir
+	executable   = os.Executable
 	statFile     = os.Stat
 	mkdirAll     = os.MkdirAll
 	runCommand   = runExternalCommand
 )
+
+func maybeExecuteLazyCmd(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) (bool, int) {
+	target := strings.TrimSpace(os.Getenv(lazyCmdEnv))
+	if target == "" {
+		return false, 0
+	}
+
+	same, targetPath, err := lazyCmdMatchesCurrentExecutable(target)
+	if err != nil {
+		fmt.Fprintf(stderr, "lazy: inspect %s: %v\n", target, err)
+		return true, 1
+	}
+	if same {
+		return false, 0
+	}
+
+	fmt.Fprintf(stderr, "Running %s instead\n", targetPath)
+	code, err := runCommand(targetPath, args, commandOptions{
+		Stdin:  stdin,
+		Stdout: stdout,
+		Stderr: stderr,
+		Env:    []string{noVersionCheckEnv + "=true"},
+	})
+	if err != nil {
+		fmt.Fprintf(stderr, "lazy: run %s: %v\n", targetPath, err)
+		return true, 1
+	}
+	return true, code
+}
+
+func lazyCmdMatchesCurrentExecutable(target string) (bool, string, error) {
+	targetPath, err := canonicalExecutablePath(target)
+	if err != nil {
+		return false, "", err
+	}
+	current, err := executable()
+	if err != nil {
+		return false, targetPath, fmt.Errorf("current executable: %w", err)
+	}
+	currentPath, err := canonicalExecutablePath(current)
+	if err != nil {
+		return false, targetPath, fmt.Errorf("current executable: %w", err)
+	}
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(currentPath, targetPath), targetPath, nil
+	}
+	return currentPath == targetPath, targetPath, nil
+}
+
+func canonicalExecutablePath(path string) (string, error) {
+	if strings.TrimSpace(path) == "" {
+		return "", fmt.Errorf("path is empty")
+	}
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	resolved, err := filepath.EvalSymlinks(absolute)
+	if err == nil {
+		return resolved, nil
+	}
+	return absolute, nil
+}
 
 func maybeExecuteProjectVersion(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) (bool, int) {
 	if skipProjectVersionCheck(args) {
