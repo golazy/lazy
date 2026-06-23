@@ -17,6 +17,7 @@ import (
 	"golang.org/x/mod/modfile"
 	"golazy.dev/lazy/commands"
 	"golazy.dev/lazy/commands/miseconfig"
+	"golazy.dev/lazytui/progress"
 )
 
 var releaseVersions = []string{
@@ -62,7 +63,7 @@ func (c Command) Execute() (int, error) {
 		if strings.TrimSpace(c.From) == "" || strings.TrimSpace(c.To) == "" {
 			return 1, fmt.Errorf("internal upgrade step requires --from and --to")
 		}
-		return c.runStep(dir, c.From, c.To, false)
+		return c.runStepProgress(dir, c.From, c.To, false)
 	}
 
 	if strings.TrimSpace(c.Force) != "" {
@@ -76,7 +77,7 @@ func (c Command) Execute() (int, error) {
 		if !hasBuiltInStep(step.From, step.To) {
 			return 1, fmt.Errorf("upgrade from %s to %s is not implemented; use the versioned upgrade guide", step.From, step.To)
 		}
-		return c.runStep(dir, step.From, step.To, true)
+		return c.runStepProgress(dir, step.From, step.To, true)
 	}
 
 	module, err := readModule(filepath.Join(dir, "go.mod"))
@@ -88,7 +89,11 @@ func (c Command) Execute() (int, error) {
 		return 1, err
 	}
 	if len(steps) == 0 {
-		if err := c.checkMiseGoTool(dir); err != nil {
+		if err := c.runProgress(progress.Tasks{
+			progress.UITask("Check mise Go tool", func(ui *progress.UI) error {
+				return c.checkMiseGoTool(dir, ui)
+			}),
+		}); err != nil {
 			return 1, err
 		}
 		fmt.Fprintf(c.stdout(), "lazy: %s is already at %s\n", module.Path, module.GoLazyVersion)
@@ -100,16 +105,27 @@ func (c Command) Execute() (int, error) {
 		}
 	}
 
+	tasks := make(progress.Tasks, 0, len(steps)+1)
 	for _, step := range steps {
 		if step.BootstrapFromOlder {
 			fmt.Fprintf(c.stdout(), "lazy: app uses an older pre-upgrade version; starting automated migrations at %s -> %s\n", step.From, step.To)
 		}
-		code, err := c.runStep(dir, step.From, step.To, step.BootstrapFromOlder)
-		if err != nil || code != 0 {
-			return code, err
-		}
+		step := step
+		tasks = append(tasks, progress.UITask(upgradeTaskName(step.From, step.To), func(ui *progress.UI) error {
+			if c.DryRun {
+				return ui.Takeover(func(_ io.Reader, stdout io.Writer, stderr io.Writer) error {
+					_, err := c.runStepWithStreams(dir, step.From, step.To, step.BootstrapFromOlder, stdout, stderr, nil)
+					return err
+				})
+			}
+			_, err := c.runStep(dir, step.From, step.To, step.BootstrapFromOlder, ui)
+			return err
+		}))
 	}
-	if err := c.checkMiseGoTool(dir); err != nil {
+	tasks = append(tasks, progress.UITask("Check mise Go tool", func(ui *progress.UI) error {
+		return c.checkMiseGoTool(dir, ui)
+	}))
+	if err := c.runProgress(tasks); err != nil {
 		return 1, err
 	}
 	return 0, nil
@@ -140,6 +156,10 @@ func (c Command) stderr() io.Writer {
 	return c.Stderr
 }
 
+func (c Command) runProgress(tasks progress.Tasks) error {
+	return progress.Run(tasks, c.Stdin, c.stdout(), c.stderr())
+}
+
 func (c Command) runner() commands.Runner {
 	if c.Runner != nil {
 		return c.Runner
@@ -147,14 +167,124 @@ func (c Command) runner() commands.Runner {
 	return commands.Exec
 }
 
-func (c Command) checkMiseGoTool(dir string) error {
-	return (miseconfig.GoToolCheck{
-		Dir:    dir,
-		Stdin:  c.Stdin,
-		Stdout: c.stdout(),
-		Stderr: c.stderr(),
-		DryRun: c.DryRun,
-	}).Execute()
+func (c Command) checkMiseGoTool(dir string, ui *progress.UI) error {
+	run := func(stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
+		return (miseconfig.GoToolCheck{
+			Dir:    dir,
+			Stdin:  stdin,
+			Stdout: stdout,
+			Stderr: stderr,
+			DryRun: c.DryRun,
+		}).Execute()
+	}
+	if ui == nil {
+		return run(c.Stdin, c.stdout(), c.stderr())
+	}
+	found, err := miseGoToolFound(dir)
+	if err != nil {
+		return err
+	}
+	if found {
+		return ui.Takeover(run)
+	}
+	return ui.Run(run)
+}
+
+func miseGoToolFound(dir string) (bool, error) {
+	path := filepath.Join(dir, "mise.toml")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		return false, fmt.Errorf("read mise.toml: %w", err)
+	}
+	_, found := miseconfig.RemoveGoTool(data)
+	return found, nil
+}
+
+func upgradeTaskName(from string, to string) string {
+	return fmt.Sprintf("Upgrade %s -> %s", from, to)
+}
+
+func (c Command) runStepProgress(dir string, from string, to string, force bool) (int, error) {
+	err := c.runProgress(progress.Tasks{
+		progress.UITask(upgradeTaskName(from, to), func(ui *progress.UI) error {
+			if c.DryRun {
+				return ui.Takeover(func(_ io.Reader, stdout io.Writer, stderr io.Writer) error {
+					_, err := c.runStepWithStreams(dir, from, to, force, stdout, stderr, nil)
+					return err
+				})
+			}
+			_, err := c.runStep(dir, from, to, force, ui)
+			return err
+		}),
+	})
+	if err != nil {
+		return 1, err
+	}
+	return 0, nil
+}
+
+func (c Command) runStep(dir string, from string, to string, force bool, ui *progress.UI) (int, error) {
+	stdout := c.stdout()
+	stderr := c.stderr()
+	if ui != nil {
+		stdout = ui.Stdout()
+		stderr = ui.Stderr()
+	}
+	return c.runStepWithStreams(dir, from, to, force, stdout, stderr, ui)
+}
+
+func (c Command) runStepWithStreams(dir string, from string, to string, force bool, stdout io.Writer, stderr io.Writer, ui *progress.UI) (int, error) {
+	if stdout == nil {
+		stdout = io.Discard
+	}
+	if stderr == nil {
+		stderr = io.Discard
+	}
+	module, err := readModule(filepath.Join(dir, "go.mod"))
+	if err != nil {
+		return 1, err
+	}
+	if module.GoLazyVersion != from && !c.DryRun && !force {
+		return 1, fmt.Errorf("go.mod requires golazy.dev %s, want %s before upgrading to %s", module.GoLazyVersion, from, to)
+	}
+	executor := stepExecutor{
+		dir:                dir,
+		modulePath:         module.Path,
+		from:               from,
+		to:                 to,
+		bootstrapFromOlder: force,
+		dryRun:             c.DryRun,
+		skipCommands:       c.SkipCommands,
+		stdout:             stdout,
+		stderr:             stderr,
+		runner:             c.runner(),
+		customRunner:       c.Runner != nil,
+		ui:                 ui,
+	}
+
+	switch {
+	case from == "v0.1.10" && to == "v0.1.11":
+		err = executor.upgradeTo011()
+	case from == "v0.1.11" && to == "v0.1.12":
+		err = executor.upgradeTo012()
+	case from == "v0.1.12" && to == "v0.1.13":
+		err = executor.upgradeTo013()
+	default:
+		err = fmt.Errorf("upgrade from %s to %s is not implemented; use the versioned upgrade guide", from, to)
+	}
+	if err != nil {
+		return 1, err
+	}
+	if err := executor.updateGoMod(); err != nil {
+		return 1, err
+	}
+	if err := executor.runFollowups(); err != nil {
+		return 1, err
+	}
+	return 0, nil
 }
 
 type moduleInfo struct {
@@ -273,51 +403,6 @@ func hasBuiltInStep(from string, to string) bool {
 	}
 }
 
-func (c Command) runStep(dir string, from string, to string, force bool) (int, error) {
-	module, err := readModule(filepath.Join(dir, "go.mod"))
-	if err != nil {
-		return 1, err
-	}
-	if module.GoLazyVersion != from && !c.DryRun && !force {
-		return 1, fmt.Errorf("go.mod requires golazy.dev %s, want %s before upgrading to %s", module.GoLazyVersion, from, to)
-	}
-	executor := stepExecutor{
-		dir:                dir,
-		modulePath:         module.Path,
-		from:               from,
-		to:                 to,
-		bootstrapFromOlder: force,
-		dryRun:             c.DryRun,
-		skipCommands:       c.SkipCommands,
-		stdout:             c.stdout(),
-		stderr:             c.stderr(),
-		runner:             c.runner(),
-		customRunner:       c.Runner != nil,
-	}
-
-	fmt.Fprintf(c.stdout(), "* Upgrading %s -> %s\n", from, to)
-	switch {
-	case from == "v0.1.10" && to == "v0.1.11":
-		err = executor.upgradeTo011()
-	case from == "v0.1.11" && to == "v0.1.12":
-		err = executor.upgradeTo012()
-	case from == "v0.1.12" && to == "v0.1.13":
-		err = executor.upgradeTo013()
-	default:
-		err = fmt.Errorf("upgrade from %s to %s is not implemented; use the versioned upgrade guide", from, to)
-	}
-	if err != nil {
-		return 1, err
-	}
-	if err := executor.updateGoMod(); err != nil {
-		return 1, err
-	}
-	if err := executor.runFollowups(); err != nil {
-		return 1, err
-	}
-	return 0, nil
-}
-
 type stepExecutor struct {
 	dir                string
 	modulePath         string
@@ -330,6 +415,7 @@ type stepExecutor struct {
 	stderr             io.Writer
 	runner             commands.Runner
 	customRunner       bool
+	ui                 *progress.UI
 }
 
 func (e stepExecutor) upgradeTo011() error {
@@ -444,7 +530,16 @@ func (e stepExecutor) addFile(relative string, target string, mode os.FileMode) 
 
 func (e stepExecutor) fileConflict(relative string, current []byte, proposed []byte) error {
 	diff := fullFileDiff(relative, current, proposed)
-	fmt.Fprint(e.stderr, diff)
+	if e.ui != nil {
+		if err := e.ui.Takeover(func(_ io.Reader, _ io.Writer, stderr io.Writer) error {
+			fmt.Fprint(stderr, diff)
+			return nil
+		}); err != nil {
+			return err
+		}
+	} else {
+		fmt.Fprint(e.stderr, diff)
+	}
 	if !e.dryRun {
 		proposedPath := filepath.Join(e.dir, ".golazy", "upgrade", "conflicts", e.to, relative)
 		if err := os.MkdirAll(filepath.Dir(proposedPath), 0o755); err != nil {

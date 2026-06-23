@@ -42,7 +42,7 @@ func TestUpgradeTo011AddsMiseTaskFiles(t *testing.T) {
 	assertUpgradeFileContent(t, filepath.Join(dir, ".mise", "tasks", "test"), v011TestTask)
 	assertExecutable(t, filepath.Join(dir, ".mise", "tasks", "dev"))
 	assertExecutable(t, filepath.Join(dir, ".mise", "tasks", "test"))
-	if !strings.Contains(stdout.String(), "added .mise/tasks/dev") {
+	if !strings.Contains(stdout.String(), "* Upgrade v0.1.10 -> v0.1.11 ... DONE") {
 		t.Fatalf("stdout = %q", stdout.String())
 	}
 }
@@ -258,7 +258,7 @@ func TestUpgradeTo013UpdatesGoModAndPromptsToRemoveMiseGoTool(t *testing.T) {
 
 	assertUpgradeFileContains(t, filepath.Join(dir, "go.mod"), "golazy.dev v0.1.13")
 	assertUpgradeFileContent(t, filepath.Join(dir, "mise.toml"), "[tools]\nnode = \"24\"\n")
-	if !strings.Contains(stdout.String(), "* Upgrading v0.1.12 -> v0.1.13") {
+	if !strings.Contains(stdout.String(), "* Upgrade v0.1.12 -> v0.1.13 ... DONE") {
 		t.Fatalf("stdout = %q", stdout.String())
 	}
 	if !strings.Contains(stderr.String(), "Go already bundles multi-version support") {
