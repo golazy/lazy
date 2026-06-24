@@ -69,8 +69,9 @@ lazy routes
 ```
 
 The command runs the application with the `lazydev,printroutes` build tags,
-lets `lazyapp.New` initialize the app and call `Draw`, then prints the route
-table without starting the HTTP server.
+passes local view and public roots as build-time values, lets `lazyapp.New`
+initialize the app and call `Draw`, then prints the route table without
+starting the HTTP server.
 
 ## Build JavaScript
 

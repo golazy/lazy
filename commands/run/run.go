@@ -17,17 +17,18 @@ import (
 )
 
 type Command struct {
-	Dir      string
-	CmdPath  string
-	ViewPath string
-	Addr     string
-	Port     string
-	GoWork   string
-	Stdin    io.Reader
-	Stdout   io.Writer
-	Stderr   io.Writer
-	Runner   commands.Runner
-	Context  context.Context
+	Dir        string
+	CmdPath    string
+	ViewPath   string
+	PublicPath string
+	Addr       string
+	Port       string
+	GoWork     string
+	Stdin      io.Reader
+	Stdout     io.Writer
+	Stderr     io.Writer
+	Runner     commands.Runner
+	Context    context.Context
 }
 
 func (c Command) Execute() (int, error) {
@@ -60,6 +61,7 @@ func (c Command) Execute() (int, error) {
 		root:        dir,
 		commandPath: candidate,
 		viewPath:    c.ViewPath,
+		publicPath:  c.PublicPath,
 		listenAddr:  publicListenAddr(c.Addr, c.Port),
 		goWork:      c.GoWork,
 		stdin:       c.Stdin,
@@ -69,7 +71,7 @@ func (c Command) Execute() (int, error) {
 }
 
 func (c Command) executeDirect(dir string, candidate string, runner commands.Runner) (int, error) {
-	env, err := appcmd.ViewPathEnv(dir, c.ViewPath)
+	buildFlags, err := appcmd.LazyDevBuildFlags(dir, c.ViewPath, c.PublicPath)
 	if err != nil {
 		return 1, err
 	}
@@ -91,12 +93,11 @@ func (c Command) executeDirect(dir string, candidate string, runner commands.Run
 	}
 	tasks = append(tasks, progress.UITask("Run application", func(ui *progress.UI) error {
 		return ui.Takeover(func(stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
-			if err := runner("go", appcmd.GoRunArgs("lazydev", filepath.ToSlash(candidate)), commands.Options{
+			if err := runner("go", appcmd.GoRunArgs("lazydev", filepath.ToSlash(candidate), buildFlags...), commands.Options{
 				Dir:    dir,
 				Stdin:  stdin,
 				Stdout: stdout,
 				Stderr: stderr,
-				Env:    env,
 			}); err != nil {
 				return fmt.Errorf("run application: %w", err)
 			}

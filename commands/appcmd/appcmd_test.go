@@ -75,6 +75,21 @@ func TestGoBuildArgs(t *testing.T) {
 	}
 }
 
+func TestGoRunArgsIncludesBuildFlags(t *testing.T) {
+	got := GoRunArgs("lazydev", "cmd/app", "-ldflags", "-X example.Value=dev")
+	want := []string{
+		"run",
+		"-tags",
+		"lazydev",
+		"-ldflags",
+		"-X example.Value=dev",
+		"./cmd/app",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("GoRunArgs() = %#v, want %#v", got, want)
+	}
+}
+
 func TestGoBuildArgsOmitsEmptyTags(t *testing.T) {
 	got := GoBuildArgs("", "cmd/app", "/tmp/app")
 	want := []string{
@@ -98,6 +113,49 @@ func TestResolveViewPathUsesDefaultAppViews(t *testing.T) {
 	}
 	if want := filepath.Join(dir, "app", "views"); got != want {
 		t.Fatalf("ResolveViewPath() = %q, want %q", got, want)
+	}
+}
+
+func TestLazyDevBuildFlagsResolveViewAndPublicPaths(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "app", "views", "layouts", "app.html.tpl"), "layout")
+	writeFile(t, filepath.Join(dir, "app", "public", ".keep"), "")
+
+	got, err := LazyDevBuildFlags(dir, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"-ldflags",
+		LazyDevLDFlags(LazyDevPaths{
+			Views:  filepath.Join(dir, "app", "views"),
+			Public: filepath.Join(dir, "app", "public"),
+		}),
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("LazyDevBuildFlags() = %#v, want %#v", got, want)
+	}
+}
+
+func TestLazyDevLDFlagsDoNotQuotePathValues(t *testing.T) {
+	got := LazyDevLDFlags(LazyDevPaths{
+		Views:  "/workspace/sample_app/app/views",
+		Public: "/workspace/sample_app/app/public",
+	})
+	want := "-X golazy.dev/lazyapp.ViewsPath=/workspace/sample_app/app/views -X golazy.dev/lazyapp.PublicPath=/workspace/sample_app/app/public"
+	if got != want {
+		t.Fatalf("LazyDevLDFlags() = %q, want %q", got, want)
+	}
+}
+
+func TestLazyDevLDFlagsQuoteWholeAssignmentWhenNeeded(t *testing.T) {
+	got := LazyDevLDFlags(LazyDevPaths{
+		Views:  "/workspace/sample app/app/views",
+		Public: "/workspace/sample app/app/public",
+	})
+	want := `-X "golazy.dev/lazyapp.ViewsPath=/workspace/sample app/app/views" -X "golazy.dev/lazyapp.PublicPath=/workspace/sample app/app/public"`
+	if got != want {
+		t.Fatalf("LazyDevLDFlags() = %q, want %q", got, want)
 	}
 }
 

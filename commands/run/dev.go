@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	jscommand "golazy.dev/lazy/commands/js"
@@ -39,10 +40,64 @@ type generatedAssetResult struct {
 	Duration time.Duration
 }
 
+type startupOutput struct {
+	mu           sync.Mutex
+	buffer       bytes.Buffer
+	stdoutTarget io.Writer
+	stderrTarget io.Writer
+}
+
+type startupOutputWriter struct {
+	output *startupOutput
+	stderr bool
+}
+
+func (o *startupOutput) Stdout() io.Writer {
+	return startupOutputWriter{output: o}
+}
+
+func (o *startupOutput) Stderr() io.Writer {
+	return startupOutputWriter{output: o, stderr: true}
+}
+
+func (o *startupOutput) Attach(stdout io.Writer, stderr io.Writer) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.buffer.Len() > 0 && stderr != nil {
+		_, _ = stderr.Write(o.buffer.Bytes())
+		o.buffer.Reset()
+	}
+	o.stdoutTarget = stdout
+	o.stderrTarget = stderr
+}
+
+func (o *startupOutput) String() string {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.buffer.String()
+}
+
+func (w startupOutputWriter) Write(p []byte) (int, error) {
+	if w.output == nil {
+		return len(p), nil
+	}
+	w.output.mu.Lock()
+	defer w.output.mu.Unlock()
+	target := w.output.stdoutTarget
+	if w.stderr {
+		target = w.output.stderrTarget
+	}
+	if target != nil {
+		return target.Write(p)
+	}
+	return w.output.buffer.Write(p)
+}
+
 type devRunner struct {
 	root        string
 	commandPath string
 	viewPath    string
+	publicPath  string
 	listenAddr  string
 	goWork      string
 	stdin       io.Reader
@@ -121,6 +176,7 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 		Root:           d.root,
 		CommandPath:    d.commandPath,
 		ViewPath:       d.viewPath,
+		PublicPath:     d.publicPath,
 		GoWork:         d.goWork,
 		Stdin:          d.stdin,
 		Stdout:         d.stdout,
@@ -145,6 +201,7 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 		var assets generatedAssetResult
 		var result devapp.BuildResult
 		var next *devapp.Process
+		var runOutput string
 		tasks := make(progress.Tasks, 0, 3)
 		if assetMode != javaScriptAssetNone {
 			tasks = append(tasks, progress.Task(javaScriptAssetTaskName(assetMode), func(_ io.Reader, _ io.Writer, stderr io.Writer) error {
@@ -164,12 +221,18 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 		}))
 		tasks = append(tasks, progress.UITask("Start application", func(ui *progress.UI) error {
 			return ui.Takeover(func(stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
+				startup := &startupOutput{}
 				startApp := app
 				startApp.Stdin = stdin
-				startApp.Stdout = stdout
-				startApp.Stderr = stderr
+				startApp.Stdout = startup.Stdout()
+				startApp.Stderr = startup.Stderr()
 				var err error
 				next, err = startApp.Start(ctx, result.Binary)
+				if err != nil {
+					runOutput = startup.String()
+					return err
+				}
+				startup.Attach(stdout, stderr)
 				return err
 			})
 		}))
@@ -209,8 +272,11 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 				WatchedRoot: d.root,
 				BuildCount:  buildNumber,
 				Duration:    duration,
-				Output:      output,
+				Output:      runOutput,
 			})
+			if runOutput != "" {
+				printOutput(d.stderr, runOutput)
+			}
 			return
 		}
 

@@ -21,7 +21,8 @@ func TestCommandBuildsTmuxSession(t *testing.T) {
 	}
 
 	code, err := (Command{
-		Dir: "/tmp/shop",
+		Dir:        "/tmp/shop",
+		PublicPath: "public_files",
 		Config: lazyconfig.Config{
 			Tmux:     lazyconfig.Tmux{Session: "shop"},
 			Services: []lazyconfig.Service{{Name: "postgres"}},
@@ -41,7 +42,7 @@ func TestCommandBuildsTmuxSession(t *testing.T) {
 		{command: "mise", args: []string{"exec", "--", "tmux", "has-session", "-t", "shop"}, dir: "/tmp/shop"},
 		{command: "mise", args: []string{"exec", "--", "tmux", "new-session", "-d", "-s", "shop", "-n", "dev", "mise run postgres:start"}, dir: "/tmp/shop"},
 		{command: "mise", args: []string{"exec", "--", "tmux", "split-window", "-d", "-t", "shop:dev", "lazy tailwind --watch"}, dir: "/tmp/shop"},
-		{command: "mise", args: []string{"exec", "--", "tmux", "split-window", "-d", "-t", "shop:dev", "env LAZY_TMUX=1 LAZY_TMUX_SESSION=shop LAZY_MULTIVERSION=off lazy"}, dir: "/tmp/shop"},
+		{command: "mise", args: []string{"exec", "--", "tmux", "split-window", "-d", "-t", "shop:dev", "env LAZY_TMUX=1 LAZY_TMUX_SESSION=shop LAZY_MULTIVERSION=off lazy --publicpath public_files"}, dir: "/tmp/shop"},
 		{command: "mise", args: []string{"exec", "--", "tmux", "split-window", "-d", "-t", "shop:dev", "env LAZY_TMUX=1 LAZY_TMUX_SESSION=shop LAZY_MULTIVERSION=off lazy command-center"}, dir: "/tmp/shop"},
 		{command: "mise", args: []string{"exec", "--", "tmux", "select-layout", "-t", "shop:dev", "tiled"}, dir: "/tmp/shop"},
 		{command: "mise", args: []string{"exec", "--", "tmux", "new-window", "-d", "-t", "shop:", "-n", "work", "nvim"}, dir: "/tmp/shop"},

@@ -120,9 +120,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- `lazy` now resolves local development view paths itself and passes the
-  concrete path to `lazydev` application processes through `GOLAZY_VIEW_PATH`,
-  instead of configuring framework view lookup through linker flags.
+- `lazy` now resolves local development view and public paths itself and passes
+  the concrete paths to `lazydev` application builds through linker flags.
 - Updated the CLI release version to `v0.1.12` so `lazy new` selects the
   matching `golazy/sample_app` template tag with top-level application services.
 

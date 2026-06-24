@@ -24,6 +24,7 @@ type Config struct {
 	Root           string
 	CommandPath    string
 	ViewPath       string
+	PublicPath     string
 	GoWork         string
 	Stdin          io.Reader
 	Stdout         io.Writer
@@ -64,12 +65,16 @@ func (c Config) Build(ctx context.Context, tmpDir string, buildNumber int) Build
 		}
 	}
 	if err == nil {
-		args := appcmd.GoBuildArgs("lazydev", filepath.ToSlash(c.CommandPath), binary)
-		build := exec.CommandContext(ctx, "go", args...)
-		build.Dir = c.Root
-		build.Stdout = &output
-		build.Stderr = &output
-		err = build.Run()
+		var buildFlags []string
+		buildFlags, err = appcmd.LazyDevBuildFlags(c.Root, c.ViewPath, c.PublicPath)
+		if err == nil {
+			args := appcmd.GoBuildArgs("lazydev", filepath.ToSlash(c.CommandPath), binary, buildFlags...)
+			build := exec.CommandContext(ctx, "go", args...)
+			build.Dir = c.Root
+			build.Stdout = &output
+			build.Stderr = &output
+			err = build.Run()
+		}
 	}
 	return BuildResult{
 		Binary:   binary,
@@ -84,11 +89,6 @@ func (c Config) Start(ctx context.Context, binary string) (*Process, error) {
 	if err != nil {
 		return nil, err
 	}
-	viewPathEnv, err := appcmd.ViewPathEnv(c.Root, c.ViewPath)
-	if err != nil {
-		return nil, err
-	}
-
 	stopTimeout := stopTimeoutOrDefault(c.StopTimeout)
 	cmd := exec.CommandContext(ctx, binary)
 	cmd.Cancel = func() error {
@@ -106,7 +106,7 @@ func (c Config) Start(ctx context.Context, binary string) (*Process, error) {
 	cmd.Stdin = c.Stdin
 	cmd.Stdout = c.Stdout
 	cmd.Stderr = c.Stderr
-	cmd.Env = append(os.Environ(), append(viewPathEnv, "ADDR="+addr)...)
+	cmd.Env = append(os.Environ(), "ADDR="+addr)
 
 	done := make(chan error, 1)
 	process := &Process{

@@ -246,13 +246,22 @@ func statusPage(status Status) []byte {
 		builder.WriteString("</ul>")
 	}
 	if status.Output != "" {
-		builder.WriteString("<h2>Build output</h2><pre>")
+		builder.WriteString("<h2>")
+		builder.WriteString(html.EscapeString(outputHeading(status.State)))
+		builder.WriteString("</h2><pre>")
 		builder.WriteString(html.EscapeString(status.Output))
 		builder.WriteString("</pre>")
 	}
 	builder.Write(reloadScript)
 	builder.WriteString("</body></html>")
 	return []byte(builder.String())
+}
+
+func outputHeading(state State) string {
+	if state == StateRunFailed {
+		return "Run output"
+	}
+	return "Build output"
 }
 
 func writeStatusItem(builder *strings.Builder, name string, value string) {

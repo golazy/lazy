@@ -31,6 +31,7 @@ func TestDevRunsCachedNativeHelper(t *testing.T) {
 		Dir:          "/workspace/shop",
 		CmdPath:      "cmd/web",
 		ViewPath:     "views",
+		PublicPath:   "public_files",
 		Title:        "Shop",
 		Width:        1200,
 		Height:       800,
@@ -80,6 +81,7 @@ func TestDevRunsCachedNativeHelper(t *testing.T) {
 		"--", "/usr/local/bin/lazy",
 		"--cmdpath", "cmd/web",
 		"--viewpath", "views",
+		"--publicpath", "public_files",
 	}
 	if got, want := calls, []nativeInvocation{{
 		command: helper,

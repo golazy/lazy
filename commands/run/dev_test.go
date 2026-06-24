@@ -1,6 +1,7 @@
 package run
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"path/filepath"
@@ -107,5 +108,31 @@ func TestShouldExitAfterApplicationDone(t *testing.T) {
 
 	if shouldExitAfterApplicationDone(context.Background(), errors.New("application crashed")) {
 		t.Fatal("unexpected application crash should leave lazy running")
+	}
+}
+
+func TestStartupOutputBuffersUntilAttached(t *testing.T) {
+	output := &startupOutput{}
+	if _, err := output.Stderr().Write([]byte("panic: broken\n")); err != nil {
+		t.Fatal(err)
+	}
+	if got := output.String(); got != "panic: broken\n" {
+		t.Fatalf("captured output = %q, want panic", got)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	output.Attach(&stdout, &stderr)
+	if got := stderr.String(); got != "panic: broken\n" {
+		t.Fatalf("attached stderr = %q, want buffered panic", got)
+	}
+	if got := output.String(); got != "" {
+		t.Fatalf("captured output after attach = %q, want empty", got)
+	}
+	if _, err := output.Stdout().Write([]byte("live\n")); err != nil {
+		t.Fatal(err)
+	}
+	if got := stdout.String(); got != "live\n" {
+		t.Fatalf("stdout after attach = %q, want live output", got)
 	}
 }

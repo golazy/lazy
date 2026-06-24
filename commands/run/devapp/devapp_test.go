@@ -9,6 +9,8 @@ import (
 	"runtime"
 	"testing"
 	"time"
+
+	"golazy.dev/lazy/commands/appcmd"
 )
 
 func TestBuildRunsGoModTidyBeforeBuild(t *testing.T) {
@@ -17,6 +19,8 @@ func TestBuildRunsGoModTidyBeforeBuild(t *testing.T) {
 	}
 
 	dir := t.TempDir()
+	writeTestFile(t, filepath.Join(dir, "app", "views", "layouts", "app.html.tpl"), "layout")
+	writeTestFile(t, filepath.Join(dir, "app", "public", ".keep"), "")
 	fakeBin := filepath.Join(dir, "bin")
 	logPath := filepath.Join(dir, "go.log")
 	writeTestFile(t, filepath.Join(fakeBin, "mise"), `#!/bin/sh
@@ -74,7 +78,10 @@ exit 1
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "mod tidy\nbuild -tags lazydev -o " + result.Binary + " ./cmd/app\n"
+	want := "mod tidy\nbuild -tags lazydev -ldflags " + appcmd.LazyDevLDFlags(appcmd.LazyDevPaths{
+		Views:  filepath.Join(dir, "app", "views"),
+		Public: filepath.Join(dir, "app", "public"),
+	}) + " -o " + result.Binary + " ./cmd/app\n"
 	if string(data) != want {
 		t.Fatalf("go log = %q, want %q", data, want)
 	}
@@ -86,6 +93,8 @@ func TestBuildSkipsGoModTidyWhenGoEnvGOWORKIsActive(t *testing.T) {
 	}
 
 	dir := t.TempDir()
+	writeTestFile(t, filepath.Join(dir, "app", "views", "layouts", "app.html.tpl"), "layout")
+	writeTestFile(t, filepath.Join(dir, "app", "public", ".keep"), "")
 	fakeBin := filepath.Join(dir, "bin")
 	logPath := filepath.Join(dir, "go.log")
 	writeTestFile(t, filepath.Join(fakeBin, "go"), `#!/bin/sh
@@ -127,7 +136,10 @@ exit 1
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "build -tags lazydev -o " + result.Binary + " ./cmd/app\n"
+	want := "build -tags lazydev -ldflags " + appcmd.LazyDevLDFlags(appcmd.LazyDevPaths{
+		Views:  filepath.Join(dir, "app", "views"),
+		Public: filepath.Join(dir, "app", "public"),
+	}) + " -o " + result.Binary + " ./cmd/app\n"
 	if string(data) != want {
 		t.Fatalf("go log = %q, want %q", data, want)
 	}

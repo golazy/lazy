@@ -62,3 +62,19 @@ func TestIsHTMLResponse(t *testing.T) {
 		}
 	}
 }
+
+func TestStatusPageLabelsRunFailureOutput(t *testing.T) {
+	page := string(statusPage(Status{
+		State:  StateRunFailed,
+		Output: "panic: broken",
+	}))
+	if !strings.Contains(page, "<h2>Run output</h2>") {
+		t.Fatalf("status page does not label run output:\n%s", page)
+	}
+	if strings.Contains(page, "<h2>Build output</h2>") {
+		t.Fatalf("status page used build output label for run failure:\n%s", page)
+	}
+	if !strings.Contains(page, "panic: broken") {
+		t.Fatalf("status page does not include run output:\n%s", page)
+	}
+}

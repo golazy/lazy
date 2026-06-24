@@ -17,12 +17,13 @@ import (
 )
 
 type Command struct {
-	Dir      string
-	CmdPath  string
-	ViewPath string
-	Stdout   io.Writer
-	Stderr   io.Writer
-	Runner   commands.OutputRunner
+	Dir        string
+	CmdPath    string
+	ViewPath   string
+	PublicPath string
+	Stdout     io.Writer
+	Stderr     io.Writer
+	Runner     commands.OutputRunner
 }
 
 type Route struct {
@@ -55,15 +56,14 @@ func (c Command) Execute() (int, error) {
 		runner = commands.ExecOutput
 	}
 
-	env, err := appcmd.ViewPathEnv(dir, c.ViewPath)
+	buildFlags, err := appcmd.LazyDevBuildFlags(dir, c.ViewPath, c.PublicPath)
 	if err != nil {
 		return 1, err
 	}
-	output, err := runner("go", appcmd.GoRunArgs("lazydev,printroutes", filepath.ToSlash(candidate)), commands.Options{
+	output, err := runner("go", appcmd.GoRunArgs("lazydev,printroutes", filepath.ToSlash(candidate), buildFlags...), commands.Options{
 		Dir:    dir,
 		Stdout: c.Stdout,
 		Stderr: c.Stderr,
-		Env:    env,
 	})
 	if err != nil {
 		var processExit *commands.ExitError

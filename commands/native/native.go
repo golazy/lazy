@@ -20,17 +20,18 @@ import (
 const helperRepo = "https://github.com/golazy/native"
 
 type Command struct {
-	Dir      string
-	CmdPath  string
-	ViewPath string
-	Out      string
-	Target   string
-	Title    string
-	Width    int
-	Height   int
-	Stdin    io.Reader
-	Stdout   io.Writer
-	Stderr   io.Writer
+	Dir        string
+	CmdPath    string
+	ViewPath   string
+	PublicPath string
+	Out        string
+	Target     string
+	Title      string
+	Width      int
+	Height     int
+	Stdin      io.Reader
+	Stdout     io.Writer
+	Stderr     io.Writer
 
 	Runner       commands.Runner
 	OutputRunner commands.OutputRunner
@@ -89,6 +90,9 @@ func (c Command) ExecuteDev() (int, error) {
 	}
 	if c.ViewPath != "" && c.ViewPath != appcmd.DefaultViewPath {
 		args = append(args, "--viewpath", filepath.ToSlash(c.ViewPath))
+	}
+	if c.PublicPath != "" && c.PublicPath != appcmd.DefaultPublicPath {
+		args = append(args, "--publicpath", filepath.ToSlash(c.PublicPath))
 	}
 
 	if err := c.runner()(helper, args, commands.Options{

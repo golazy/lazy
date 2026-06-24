@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"golazy.dev/lazy/commands"
+	"golazy.dev/lazy/commands/appcmd"
 )
 
 type invocation struct {
@@ -22,6 +23,7 @@ func TestUsesFirstCommandUnderCmd(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "go.mod"), "module github.com/golazy/sample_app\n")
 	writeFile(t, filepath.Join(dir, "app", "views", "layouts", "app.html.tpl"), "layout")
+	writeFile(t, filepath.Join(dir, "app", "public", ".keep"), "")
 	writeCommand(t, filepath.Join(dir, "cmd", "sample_app"))
 	writeCommand(t, filepath.Join(dir, "cmd", "admin"))
 
@@ -60,11 +62,16 @@ func TestUsesFirstCommandUnderCmd(t *testing.T) {
 		"run",
 		"-tags",
 		"lazydev",
+		"-ldflags",
+		appcmd.LazyDevLDFlags(appcmd.LazyDevPaths{
+			Views:  filepath.Join(dir, "app", "views"),
+			Public: filepath.Join(dir, "app", "public"),
+		}),
 		"./cmd/admin",
 	}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("args = %#v, want %#v", got, want)
 	}
-	if got, want := calls[1].options.Env, []string{"GOLAZY_VIEW_PATH=" + filepath.Join(dir, "app", "views")}; !reflect.DeepEqual(got, want) {
+	if got, want := calls[1].options.Env, []string(nil); !reflect.DeepEqual(got, want) {
 		t.Fatalf("env = %#v, want %#v", got, want)
 	}
 }
@@ -73,14 +80,16 @@ func TestUsesExplicitCommandPathAndViewPath(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "go.mod"), "module example.com/team/my_app\n")
 	writeFile(t, filepath.Join(dir, "views", "layouts", "app.html.tpl"), "layout")
+	writeFile(t, filepath.Join(dir, "public_files", ".keep"), "")
 	writeCommand(t, filepath.Join(dir, "cmd", "app"))
 	writeCommand(t, dir)
 
 	var calls []invocation
 	command := Command{
-		Dir:      dir,
-		CmdPath:  ".",
-		ViewPath: "views",
+		Dir:        dir,
+		CmdPath:    ".",
+		ViewPath:   "views",
+		PublicPath: "public_files",
 		Runner: func(name string, args []string, options commands.Options) error {
 			calls = append(calls, invocation{command: name, args: args, options: options})
 			return nil
@@ -101,11 +110,16 @@ func TestUsesExplicitCommandPathAndViewPath(t *testing.T) {
 		"run",
 		"-tags",
 		"lazydev",
+		"-ldflags",
+		appcmd.LazyDevLDFlags(appcmd.LazyDevPaths{
+			Views:  filepath.Join(dir, "views"),
+			Public: filepath.Join(dir, "public_files"),
+		}),
 		".",
 	}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("args = %#v, want %#v", got, want)
 	}
-	if got, want := calls[1].options.Env, []string{"GOLAZY_VIEW_PATH=" + filepath.Join(dir, "views")}; !reflect.DeepEqual(got, want) {
+	if got, want := calls[1].options.Env, []string(nil); !reflect.DeepEqual(got, want) {
 		t.Fatalf("env = %#v, want %#v", got, want)
 	}
 }
@@ -114,6 +128,7 @@ func TestSkipsGoModTidyWhenWorkspaceModeIsActive(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "go.mod"), "module example.com/team/my_app\n")
 	writeFile(t, filepath.Join(dir, "app", "views", "layouts", "app.html.tpl"), "layout")
+	writeFile(t, filepath.Join(dir, "app", "public", ".keep"), "")
 	writeCommand(t, filepath.Join(dir, "cmd", "app"))
 
 	var calls []invocation
@@ -140,6 +155,11 @@ func TestSkipsGoModTidyWhenWorkspaceModeIsActive(t *testing.T) {
 		"run",
 		"-tags",
 		"lazydev",
+		"-ldflags",
+		appcmd.LazyDevLDFlags(appcmd.LazyDevPaths{
+			Views:  filepath.Join(dir, "app", "views"),
+			Public: filepath.Join(dir, "app", "public"),
+		}),
 		"./cmd/app",
 	}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("args = %#v, want %#v", got, want)
@@ -150,6 +170,7 @@ func TestExecuteDirectUsesProgressOutput(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "go.mod"), "module example.com/team/my_app\n")
 	writeFile(t, filepath.Join(dir, "app", "views", "layouts", "app.html.tpl"), "layout")
+	writeFile(t, filepath.Join(dir, "app", "public", ".keep"), "")
 	writeCommand(t, filepath.Join(dir, "cmd", "app"))
 
 	var stdout bytes.Buffer
@@ -182,6 +203,7 @@ func TestExecuteDirectReturnsApplicationExitCode(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "go.mod"), "module example.com/team/my_app\n")
 	writeFile(t, filepath.Join(dir, "app", "views", "layouts", "app.html.tpl"), "layout")
+	writeFile(t, filepath.Join(dir, "app", "public", ".keep"), "")
 	writeCommand(t, filepath.Join(dir, "cmd", "app"))
 
 	var stderr bytes.Buffer

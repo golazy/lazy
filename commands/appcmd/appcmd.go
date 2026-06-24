@@ -15,7 +15,10 @@ import (
 )
 
 const DefaultViewPath = "app/views"
-const ViewPathEnvKey = "GOLAZY_VIEW_PATH"
+const DefaultPublicPath = "app/public"
+
+const lazyappViewsPathSymbol = "golazy.dev/lazyapp.ViewsPath"
+const lazyappPublicPathSymbol = "golazy.dev/lazyapp.PublicPath"
 
 func Find(dir string, cmdPath string) (string, error) {
 	modulePath, err := ModuleName(filepath.Join(dir, "go.mod"))
@@ -70,29 +73,62 @@ func ModuleName(filename string) (string, error) {
 	return module, nil
 }
 
-func GoRunArgs(tags string, commandPath string) []string {
-	return []string{
-		"run",
-		"-tags",
-		tags,
-		goRunPath(commandPath),
+func GoRunArgs(tags string, commandPath string, buildFlags ...string) []string {
+	args := []string{"run"}
+	if strings.TrimSpace(tags) != "" {
+		args = append(args, "-tags", tags)
 	}
+	args = append(args, buildFlags...)
+	return append(args, goRunPath(commandPath))
 }
 
-func GoBuildArgs(tags string, commandPath string, outputPath string) []string {
+func GoBuildArgs(tags string, commandPath string, outputPath string, buildFlags ...string) []string {
 	args := []string{"build"}
 	if strings.TrimSpace(tags) != "" {
 		args = append(args, "-tags", tags)
 	}
+	args = append(args, buildFlags...)
 	return append(args, "-o", outputPath, goRunPath(commandPath))
 }
 
-func ViewPathEnv(root string, viewPath string) ([]string, error) {
-	resolved, err := ResolveViewPath(root, viewPath)
+type LazyDevPaths struct {
+	Views  string
+	Public string
+}
+
+func LazyDevBuildFlags(root string, viewPath string, publicPath string) ([]string, error) {
+	paths, err := ResolveLazyDevPaths(root, viewPath, publicPath)
 	if err != nil {
 		return nil, err
 	}
-	return []string{ViewPathEnvKey + "=" + resolved}, nil
+	return []string{"-ldflags", LazyDevLDFlags(paths)}, nil
+}
+
+func LazyDevLDFlags(paths LazyDevPaths) string {
+	return strings.Join([]string{
+		"-X", ldflagAssignment(lazyappViewsPathSymbol, paths.Views),
+		"-X", ldflagAssignment(lazyappPublicPathSymbol, paths.Public),
+	}, " ")
+}
+
+func ldflagAssignment(symbol string, value string) string {
+	field := symbol + "=" + value
+	if strings.ContainsAny(field, " \t\r\n\"'") {
+		return strconv.Quote(field)
+	}
+	return field
+}
+
+func ResolveLazyDevPaths(root string, viewPath string, publicPath string) (LazyDevPaths, error) {
+	views, err := ResolveViewPath(root, viewPath)
+	if err != nil {
+		return LazyDevPaths{}, err
+	}
+	public, err := ResolvePublicPath(root, publicPath)
+	if err != nil {
+		return LazyDevPaths{}, err
+	}
+	return LazyDevPaths{Views: views, Public: public}, nil
 }
 
 func ResolveViewPath(root string, viewPath string) (string, error) {
@@ -106,6 +142,17 @@ func ResolveViewPath(root string, viewPath string) (string, error) {
 	return validateViewPath(filepath.Join(root, viewPath))
 }
 
+func ResolvePublicPath(root string, publicPath string) (string, error) {
+	publicPath = strings.TrimSpace(publicPath)
+	if publicPath == "" {
+		publicPath = DefaultPublicPath
+	}
+	if filepath.IsAbs(publicPath) {
+		return validatePublicPath(publicPath)
+	}
+	return validatePublicPath(filepath.Join(root, publicPath))
+}
+
 func validateViewPath(viewPath string) (string, error) {
 	abs, err := filepath.Abs(viewPath)
 	if err != nil {
@@ -117,6 +164,21 @@ func validateViewPath(viewPath string) (string, error) {
 	}
 	if info.IsDir() {
 		return "", fmt.Errorf("views path %q contains a directory at layouts/app.html.tpl", viewPath)
+	}
+	return abs, nil
+}
+
+func validatePublicPath(publicPath string) (string, error) {
+	abs, err := filepath.Abs(publicPath)
+	if err != nil {
+		return "", fmt.Errorf("resolve public path %q: %w", publicPath, err)
+	}
+	info, err := os.Stat(abs)
+	if err != nil {
+		return "", fmt.Errorf("public path %q is not readable: %w", publicPath, err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("public path %q is not a directory", publicPath)
 	}
 	return abs, nil
 }

@@ -19,14 +19,15 @@ const (
 )
 
 type Command struct {
-	Dir      string
-	CmdPath  string
-	ViewPath string
-	Config   lazyconfig.Config
-	Stdin    io.Reader
-	Stdout   io.Writer
-	Stderr   io.Writer
-	Runner   commands.Runner
+	Dir        string
+	CmdPath    string
+	ViewPath   string
+	PublicPath string
+	Config     lazyconfig.Config
+	Stdin      io.Reader
+	Stdout     io.Writer
+	Stderr     io.Writer
+	Runner     commands.Runner
 }
 
 func (c Command) Execute() (int, error) {
@@ -101,7 +102,7 @@ func (c Command) panes(session string) []pane {
 	}
 	panes = append(panes, pane{
 		Title:   "app",
-		Command: appCommand(session, c.CmdPath, c.ViewPath),
+		Command: appCommand(session, c.CmdPath, c.ViewPath, c.PublicPath),
 	})
 	panes = append(panes, pane{
 		Title:   "command-center",
@@ -136,7 +137,7 @@ func (c Command) tmuxAttach(runner commands.Runner, session string) error {
 	})
 }
 
-func appCommand(session string, cmdPath string, viewPath string) string {
+func appCommand(session string, cmdPath string, viewPath string, publicPath string) string {
 	parts := []string{
 		"env",
 		InSessionEnv + "=1",
@@ -149,6 +150,9 @@ func appCommand(session string, cmdPath string, viewPath string) string {
 	}
 	if viewPath != "" && viewPath != appcmd.DefaultViewPath {
 		parts = append(parts, "--viewpath", shellQuote(filepath.ToSlash(viewPath)))
+	}
+	if publicPath != "" && publicPath != appcmd.DefaultPublicPath {
+		parts = append(parts, "--publicpath", shellQuote(filepath.ToSlash(publicPath)))
 	}
 	return strings.Join(parts, " ")
 }

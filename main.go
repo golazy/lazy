@@ -141,7 +141,7 @@ func executeBastard(args []string, stdin io.Reader, stdout io.Writer, stderr io.
 }
 
 func printUsage(stdout io.Writer) {
-	fmt.Fprintln(stdout, "usage: lazy [--cmdpath <path>] [--viewpath <path>]")
+	fmt.Fprintln(stdout, "usage: lazy [--cmdpath <path>] [--viewpath <path>] [--publicpath <path>]")
 	fmt.Fprintln(stdout)
 	fmt.Fprintln(stdout, "commands:")
 	fmt.Fprintln(stdout, "  lazy")
@@ -201,6 +201,7 @@ func executeNative(args []string, stdin io.Reader, stdout io.Writer, stderr io.W
 	flags.SetOutput(stderr)
 	cmdPath := flags.String("cmdpath", "", "application command path")
 	viewPath := flags.String("viewpath", appcmd.DefaultViewPath, "local view path for lazydev builds")
+	publicPath := flags.String("publicpath", appcmd.DefaultPublicPath, "local public path for lazydev builds")
 	title := flags.String("title", "", "native window title")
 	width := flags.Int("width", 0, "native window width")
 	height := flags.Int("height", 0, "native window height")
@@ -208,19 +209,20 @@ func executeNative(args []string, stdin io.Reader, stdout io.Writer, stderr io.W
 		return 1
 	}
 	if flags.NArg() != 0 {
-		fmt.Fprintln(stderr, "lazy: usage: lazy native [--cmdpath <path>] [--viewpath <path>] [--title <title>] [--width <px>] [--height <px>]")
+		fmt.Fprintln(stderr, "lazy: usage: lazy native [--cmdpath <path>] [--viewpath <path>] [--publicpath <path>] [--title <title>] [--width <px>] [--height <px>]")
 		return 1
 	}
 
 	code, err := (nativecommand.Command{
-		CmdPath:  *cmdPath,
-		ViewPath: *viewPath,
-		Title:    *title,
-		Width:    *width,
-		Height:   *height,
-		Stdin:    stdin,
-		Stdout:   stdout,
-		Stderr:   stderr,
+		CmdPath:    *cmdPath,
+		ViewPath:   *viewPath,
+		PublicPath: *publicPath,
+		Title:      *title,
+		Width:      *width,
+		Height:     *height,
+		Stdin:      stdin,
+		Stdout:     stdout,
+		Stderr:     stderr,
 	}).ExecuteDev()
 	if err != nil {
 		fmt.Fprintf(stderr, "lazy: %v\n", err)
@@ -306,11 +308,12 @@ func executeRun(config envConfig, args []string, stdin io.Reader, stdout io.Writ
 	flags.SetOutput(stderr)
 	cmdPath := flags.String("cmdpath", "", "application command path")
 	viewPath := flags.String("viewpath", appcmd.DefaultViewPath, "local view path for lazydev builds")
+	publicPath := flags.String("publicpath", appcmd.DefaultPublicPath, "local public path for lazydev builds")
 	if err := flags.Parse(args); err != nil {
 		return 1
 	}
 	if flags.NArg() != 0 {
-		fmt.Fprintln(stderr, "lazy: usage: lazy [--cmdpath <path>] [--viewpath <path>]")
+		fmt.Fprintln(stderr, "lazy: usage: lazy [--cmdpath <path>] [--viewpath <path>] [--publicpath <path>]")
 		return 1
 	}
 
@@ -332,13 +335,14 @@ func executeRun(config envConfig, args []string, stdin io.Reader, stdout io.Writ
 		}
 		if ok {
 			code, err := (lazytmux.Command{
-				Dir:      ".",
-				CmdPath:  *cmdPath,
-				ViewPath: *viewPath,
-				Config:   lazyToml,
-				Stdin:    stdin,
-				Stdout:   stdout,
-				Stderr:   stderr,
+				Dir:        ".",
+				CmdPath:    *cmdPath,
+				ViewPath:   *viewPath,
+				PublicPath: *publicPath,
+				Config:     lazyToml,
+				Stdin:      stdin,
+				Stdout:     stdout,
+				Stderr:     stderr,
 			}).Execute()
 			if err != nil {
 				fmt.Fprintf(stderr, "lazy: %v\n", err)
@@ -348,14 +352,15 @@ func executeRun(config envConfig, args []string, stdin io.Reader, stdout io.Writ
 	}
 
 	code, err := (runcommand.Command{
-		CmdPath:  *cmdPath,
-		ViewPath: *viewPath,
-		Addr:     config.Addr,
-		Port:     config.Port,
-		GoWork:   config.GoWork,
-		Stdin:    stdin,
-		Stdout:   stdout,
-		Stderr:   stderr,
+		CmdPath:    *cmdPath,
+		ViewPath:   *viewPath,
+		PublicPath: *publicPath,
+		Addr:       config.Addr,
+		Port:       config.Port,
+		GoWork:     config.GoWork,
+		Stdin:      stdin,
+		Stdout:     stdout,
+		Stderr:     stderr,
 	}).Execute()
 	if err != nil {
 		fmt.Fprintf(stderr, "lazy: %v\n", err)
@@ -395,19 +400,21 @@ func executeRoutes(args []string, stdout io.Writer, stderr io.Writer) int {
 	flags.SetOutput(stderr)
 	cmdPath := flags.String("cmdpath", "", "application command path")
 	viewPath := flags.String("viewpath", appcmd.DefaultViewPath, "local view path for lazydev builds")
+	publicPath := flags.String("publicpath", appcmd.DefaultPublicPath, "local public path for lazydev builds")
 	if err := flags.Parse(args); err != nil {
 		return 1
 	}
 	if flags.NArg() != 0 {
-		fmt.Fprintln(stderr, "lazy: usage: lazy routes [--cmdpath <path>] [--viewpath <path>]")
+		fmt.Fprintln(stderr, "lazy: usage: lazy routes [--cmdpath <path>] [--viewpath <path>] [--publicpath <path>]")
 		return 1
 	}
 
 	code, err := (routescommand.Command{
-		CmdPath:  *cmdPath,
-		ViewPath: *viewPath,
-		Stdout:   stdout,
-		Stderr:   stderr,
+		CmdPath:    *cmdPath,
+		ViewPath:   *viewPath,
+		PublicPath: *publicPath,
+		Stdout:     stdout,
+		Stderr:     stderr,
 	}).Execute()
 	if err != nil {
 		fmt.Fprintf(stderr, "lazy: %v\n", err)

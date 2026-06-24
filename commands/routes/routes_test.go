@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"golazy.dev/lazy/commands"
+	"golazy.dev/lazy/commands/appcmd"
 )
 
 type invocation struct {
@@ -21,6 +22,7 @@ func TestCommandRunsApplicationWithPrintRoutesTag(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "go.mod"), "module example.com/team/my_app\n")
 	writeFile(t, filepath.Join(dir, "app", "views", "layouts", "app.html.tpl"), "layout")
+	writeFile(t, filepath.Join(dir, "app", "public", ".keep"), "")
 	writeCommand(t, filepath.Join(dir, "cmd", "app"))
 
 	var calls []invocation
@@ -52,11 +54,16 @@ func TestCommandRunsApplicationWithPrintRoutesTag(t *testing.T) {
 		"run",
 		"-tags",
 		"lazydev,printroutes",
+		"-ldflags",
+		appcmd.LazyDevLDFlags(appcmd.LazyDevPaths{
+			Views:  filepath.Join(dir, "app", "views"),
+			Public: filepath.Join(dir, "app", "public"),
+		}),
 		"./cmd/app",
 	}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("args = %#v, want %#v", got, want)
 	}
-	if got, want := calls[0].options.Env, []string{"GOLAZY_VIEW_PATH=" + filepath.Join(dir, "app", "views")}; !reflect.DeepEqual(got, want) {
+	if got, want := calls[0].options.Env, []string(nil); !reflect.DeepEqual(got, want) {
 		t.Fatalf("env = %#v, want %#v", got, want)
 	}
 	if !strings.Contains(stdout.String(), "root") || !strings.Contains(stdout.String(), "home#Index") {
@@ -68,16 +75,18 @@ func TestCommandUsesExplicitCommandAndViewPath(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "go.mod"), "module example.com/team/blog\n")
 	writeFile(t, filepath.Join(dir, "views", "layouts", "app.html.tpl"), "layout")
+	writeFile(t, filepath.Join(dir, "public_files", ".keep"), "")
 	writeCommand(t, filepath.Join(dir, "cmd", "blog"))
 	writeCommand(t, filepath.Join(dir, "cmd", "app"))
 
 	var calls []invocation
 	command := Command{
-		Dir:      dir,
-		CmdPath:  "cmd/blog",
-		ViewPath: "views",
-		Stdout:   &bytes.Buffer{},
-		Stderr:   &bytes.Buffer{},
+		Dir:        dir,
+		CmdPath:    "cmd/blog",
+		ViewPath:   "views",
+		PublicPath: "public_files",
+		Stdout:     &bytes.Buffer{},
+		Stderr:     &bytes.Buffer{},
 		Runner: func(name string, args []string, options commands.Options) ([]byte, error) {
 			calls = append(calls, invocation{command: name, args: args, options: options})
 			return []byte{}, nil
@@ -95,11 +104,16 @@ func TestCommandUsesExplicitCommandAndViewPath(t *testing.T) {
 		"run",
 		"-tags",
 		"lazydev,printroutes",
+		"-ldflags",
+		appcmd.LazyDevLDFlags(appcmd.LazyDevPaths{
+			Views:  filepath.Join(dir, "views"),
+			Public: filepath.Join(dir, "public_files"),
+		}),
 		"./cmd/blog",
 	}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("args = %#v, want %#v", got, want)
 	}
-	if got, want := calls[0].options.Env, []string{"GOLAZY_VIEW_PATH=" + filepath.Join(dir, "views")}; !reflect.DeepEqual(got, want) {
+	if got, want := calls[0].options.Env, []string(nil); !reflect.DeepEqual(got, want) {
 		t.Fatalf("env = %#v, want %#v", got, want)
 	}
 }
