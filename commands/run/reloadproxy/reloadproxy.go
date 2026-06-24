@@ -32,12 +32,13 @@ var reloadScript = []byte(`<script>
 type State string
 
 const (
-	StateQueued      State = "queued"
-	StateBuilding    State = "building"
-	StateBuildFailed State = "build_failed"
-	StateRunning     State = "running"
-	StateRunFailed   State = "run_failed"
-	StateStopped     State = "stopped"
+	StateQueued       State = "queued"
+	StateBuilding     State = "building"
+	StateBuildFailed  State = "build_failed"
+	StateRunning      State = "running"
+	StateRunFailed    State = "run_failed"
+	StateReloadFailed State = "reload_failed"
+	StateStopped      State = "stopped"
 )
 
 type Status struct {
@@ -258,10 +259,14 @@ func statusPage(status Status) []byte {
 }
 
 func outputHeading(state State) string {
-	if state == StateRunFailed {
+	switch state {
+	case StateRunFailed:
 		return "Run output"
+	case StateReloadFailed:
+		return "Reload output"
+	default:
+		return "Build output"
 	}
-	return "Build output"
 }
 
 func writeStatusItem(builder *strings.Builder, name string, value string) {

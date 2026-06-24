@@ -78,3 +78,19 @@ func TestStatusPageLabelsRunFailureOutput(t *testing.T) {
 		t.Fatalf("status page does not include run output:\n%s", page)
 	}
 }
+
+func TestStatusPageLabelsReloadFailureOutput(t *testing.T) {
+	page := string(statusPage(Status{
+		State:  StateReloadFailed,
+		Output: "reload views: parse failed",
+	}))
+	if !strings.Contains(page, "<h2>Reload output</h2>") {
+		t.Fatalf("status page does not label reload output:\n%s", page)
+	}
+	if strings.Contains(page, "<h2>Build output</h2>") {
+		t.Fatalf("status page used build output label for reload failure:\n%s", page)
+	}
+	if !strings.Contains(page, "reload views: parse failed") {
+		t.Fatalf("status page does not include reload output:\n%s", page)
+	}
+}

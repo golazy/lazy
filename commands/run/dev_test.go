@@ -4,8 +4,12 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -92,6 +96,72 @@ func TestOnlyGeneratedJavaScriptOutputs(t *testing.T) {
 	}
 	if onlyGeneratedJavaScriptOutputs(nil) {
 		t.Fatal("empty changes should not be ignored")
+	}
+}
+
+func TestClassifyDevelopmentChange(t *testing.T) {
+	tests := []struct {
+		name       string
+		viewPath   string
+		publicPath string
+		changed    []string
+		want       devChangeAction
+	}{
+		{name: "default view", changed: []string{"app/views/home/index.html.tpl"}, want: devChangeReloadViews},
+		{name: "default public", changed: []string{"app/public/styles.css"}, want: devChangeReloadBrowser},
+		{name: "view and public", changed: []string{"app/views/home/index.html.tpl", "app/public/styles.css"}, want: devChangeReloadViews},
+		{name: "custom view", viewPath: "views", changed: []string{"views/pages/index.html.tpl"}, want: devChangeReloadViews},
+		{name: "custom public", publicPath: "public_files", changed: []string{"public_files/styles.css"}, want: devChangeReloadBrowser},
+		{name: "go source", changed: []string{"app/controllers/home.go"}, want: devChangeRebuild},
+		{name: "view and go source", changed: []string{"app/views/home/index.html.tpl", "app/controllers/home.go"}, want: devChangeRebuild},
+		{name: "outside absolute view path", viewPath: "/tmp/views", changed: []string{"app/views/home/index.html.tpl"}, want: devChangeRebuild},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := classifyDevelopmentChange(test.viewPath, test.publicPath, test.changed); got != test.want {
+				t.Fatalf("classifyDevelopmentChange() = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
+func TestReloadViewsPostsToLazyDevControlPlane(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("method = %s, want POST", r.Method)
+		}
+		if r.URL.Path != "/_golazy/views/reload" {
+			t.Fatalf("path = %s, want reload path", r.URL.Path)
+		}
+		_, _ = fmt.Fprint(w, "reload views ok\n")
+	}))
+	defer server.Close()
+
+	result := reloadViews(context.Background(), strings.TrimPrefix(server.URL, "http://"))
+	if result.Err != nil {
+		t.Fatalf("reloadViews() error = %v", result.Err)
+	}
+	if got, want := result.Output, "reload views ok\n"; got != want {
+		t.Fatalf("Output = %q, want %q", got, want)
+	}
+	if result.Duration <= 0 {
+		t.Fatal("Duration was not recorded")
+	}
+}
+
+func TestReloadViewsReportsResponseError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "parse failed", http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	result := reloadViews(context.Background(), strings.TrimPrefix(server.URL, "http://"))
+	if result.Err == nil {
+		t.Fatal("reloadViews() error is nil")
+	}
+	if !strings.Contains(result.Output, "parse failed") {
+		t.Fatalf("Output = %q, want parse failure", result.Output)
 	}
 }
 

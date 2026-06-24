@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -12,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"golazy.dev/lazy/commands/appcmd"
 	jscommand "golazy.dev/lazy/commands/js"
 	"golazy.dev/lazy/commands/run/devapp"
 	"golazy.dev/lazy/commands/run/reloadproxy"
@@ -23,8 +25,11 @@ const (
 	defaultPollInterval   = 500 * time.Millisecond
 	defaultDebounce       = 150 * time.Millisecond
 	defaultStartupTimeout = 10 * time.Second
+	viewReloadTimeout     = 5 * time.Second
 	stopTimeout           = 2 * time.Second
 )
+
+const lazyDevReloadViewsPath = "/_golazy/views/reload"
 
 type javaScriptAssetMode int
 
@@ -39,6 +44,20 @@ type generatedAssetResult struct {
 	Err      error
 	Duration time.Duration
 }
+
+type viewReloadResult struct {
+	Output   string
+	Err      error
+	Duration time.Duration
+}
+
+type devChangeAction int
+
+const (
+	devChangeRebuild devChangeAction = iota
+	devChangeReloadBrowser
+	devChangeReloadViews
+)
 
 type startupOutput struct {
 	mu           sync.Mutex
@@ -329,6 +348,64 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 			if onlyGeneratedJavaScriptOutputs(changed) {
 				continue
 			}
+			switch classifyDevelopmentChange(d.viewPath, d.publicPath, changed) {
+			case devChangeReloadBrowser:
+				if current != nil {
+					proxy.UpdateStatus(reloadproxy.Status{
+						State:       reloadproxy.StateRunning,
+						Message:     "Application is running.",
+						CommandPath: d.commandPath,
+						WatchedRoot: d.root,
+						BuildCount:  buildNumber,
+						Changed:     changed,
+					})
+					proxy.BroadcastReload()
+					fmt.Fprintf(d.stderr, "lazy: browser reloaded after %d public file change(s)\n", len(changed))
+					continue
+				}
+			case devChangeReloadViews:
+				if current != nil {
+					var result viewReloadResult
+					err := d.runProgress(progress.Tasks{
+						progress.Task("Reload views", func(_ io.Reader, _ io.Writer, stderr io.Writer) error {
+							result = reloadViews(ctx, current.Addr())
+							if result.Err != nil && result.Output != "" {
+								printOutput(stderr, result.Output)
+							}
+							return result.Err
+						}),
+					})
+					if err != nil {
+						output := result.Output
+						if strings.TrimSpace(output) == "" {
+							output = err.Error() + "\n"
+						}
+						proxy.UpdateStatus(reloadproxy.Status{
+							State:       reloadproxy.StateReloadFailed,
+							Message:     fmt.Sprintf("Reload views failed after %s.", result.Duration.Round(time.Millisecond)),
+							CommandPath: d.commandPath,
+							WatchedRoot: d.root,
+							BuildCount:  buildNumber,
+							Duration:    result.Duration,
+							Changed:     changed,
+							Output:      output,
+						})
+						continue
+					}
+					proxy.UpdateStatus(reloadproxy.Status{
+						State:       reloadproxy.StateRunning,
+						Message:     "Application is running.",
+						CommandPath: d.commandPath,
+						WatchedRoot: d.root,
+						BuildCount:  buildNumber,
+						Duration:    result.Duration,
+						Changed:     changed,
+					})
+					proxy.BroadcastReload()
+					fmt.Fprintf(d.stderr, "lazy: views reloaded after %s\n", result.Duration.Round(time.Millisecond))
+					continue
+				}
+			}
 			rebuild(fmt.Sprintf("Rebuilding after %d changed file(s).", len(changed)), changed)
 		case err := <-appDone:
 			appDone = nil
@@ -363,6 +440,39 @@ func (d *devRunner) runProgress(tasks progress.Tasks) error {
 
 func (d *devRunner) generateAssets(changed []string) generatedAssetResult {
 	return d.generateAssetsForMode(javaScriptAssetGenerationMode(d.root, changed))
+}
+
+func reloadViews(ctx context.Context, addr string) viewReloadResult {
+	started := time.Now()
+	reloadCtx, cancel := context.WithTimeout(ctx, viewReloadTimeout)
+	defer cancel()
+
+	request, err := http.NewRequestWithContext(reloadCtx, http.MethodPost, "http://"+addr+lazyDevReloadViewsPath, nil)
+	if err != nil {
+		return viewReloadResult{Err: err, Duration: time.Since(started)}
+	}
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		return viewReloadResult{Err: err, Duration: time.Since(started)}
+	}
+	defer response.Body.Close()
+
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return viewReloadResult{Err: err, Duration: time.Since(started)}
+	}
+	output := string(body)
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		if strings.TrimSpace(output) == "" {
+			output = response.Status + "\n"
+		}
+		return viewReloadResult{
+			Output:   output,
+			Err:      fmt.Errorf("reload views: %s", strings.TrimSpace(output)),
+			Duration: time.Since(started),
+		}
+	}
+	return viewReloadResult{Output: output, Duration: time.Since(started)}
 }
 
 func (d *devRunner) generateAssetsForMode(mode javaScriptAssetMode) generatedAssetResult {
@@ -437,6 +547,52 @@ func javaScriptAssetGenerationMode(root string, changed []string) javaScriptAsse
 		}
 	}
 	return mode
+}
+
+func classifyDevelopmentChange(viewPath string, publicPath string, changed []string) devChangeAction {
+	if len(changed) == 0 {
+		return devChangeRebuild
+	}
+	hasView := false
+	hasPublic := false
+	for _, path := range changed {
+		switch {
+		case isActiveRootPath(path, viewPath, appcmd.DefaultViewPath):
+			hasView = true
+		case isActiveRootPath(path, publicPath, appcmd.DefaultPublicPath):
+			hasPublic = true
+		default:
+			return devChangeRebuild
+		}
+	}
+	if hasView {
+		return devChangeReloadViews
+	}
+	if hasPublic {
+		return devChangeReloadBrowser
+	}
+	return devChangeRebuild
+}
+
+func isActiveRootPath(path string, configuredRoot string, defaultRoot string) bool {
+	root, ok := normalizedRelativeRoot(configuredRoot, defaultRoot)
+	if !ok {
+		return false
+	}
+	path = cleanWatchPath(path)
+	return path == root || strings.HasPrefix(path, root+"/")
+}
+
+func normalizedRelativeRoot(configuredRoot string, defaultRoot string) (string, bool) {
+	root := strings.TrimSpace(configuredRoot)
+	if root == "" {
+		root = defaultRoot
+	}
+	root = filepath.Clean(filepath.FromSlash(root))
+	if filepath.IsAbs(root) || root == "." || strings.HasPrefix(root, ".."+string(filepath.Separator)) || root == ".." {
+		return "", false
+	}
+	return filepath.ToSlash(root), true
 }
 
 func isJavaScriptPackageInput(path string) bool {
