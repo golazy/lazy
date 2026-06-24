@@ -15,6 +15,7 @@ import (
 	"golazy.dev/lazy/commands/run/devapp"
 	"golazy.dev/lazy/commands/run/reloadproxy"
 	"golazy.dev/lazy/commands/run/watcher"
+	"golazy.dev/lazytui/progress"
 )
 
 const (
@@ -79,8 +80,26 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	proxy, err := reloadproxy.New(d.listenAddr)
-	if err != nil {
+	var proxy *reloadproxy.Proxy
+	if err := d.runProgress(progress.Tasks{
+		progress.Task("Start reload proxy", func(_ io.Reader, _ io.Writer, _ io.Writer) error {
+			next, err := reloadproxy.New(d.listenAddr)
+			if err != nil {
+				return err
+			}
+			next.UpdateStatus(reloadproxy.Status{
+				State:       reloadproxy.StateQueued,
+				Message:     "Waiting for the first build.",
+				CommandPath: d.commandPath,
+				WatchedRoot: d.root,
+			})
+			if err := next.Start(); err != nil {
+				return err
+			}
+			proxy = next
+			return nil
+		}),
+	}); err != nil {
 		return 1, err
 	}
 	defer func() {
@@ -88,15 +107,6 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 		defer cancel()
 		_ = proxy.Shutdown(shutdownCtx)
 	}()
-	proxy.UpdateStatus(reloadproxy.Status{
-		State:       reloadproxy.StateQueued,
-		Message:     "Waiting for the first build.",
-		CommandPath: d.commandPath,
-		WatchedRoot: d.root,
-	})
-	if err := proxy.Start(); err != nil {
-		return 1, err
-	}
 
 	fmt.Fprintf(d.stderr, "lazy: serving %s with hot reload\n", displayListenAddr(proxy.Addr()))
 
@@ -131,59 +141,78 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 			WatchedRoot: d.root,
 			BuildCount:  buildNumber,
 		})
-		assets := d.generateAssets(changed)
-		if assets.Output != "" {
-			printOutput(d.stderr, assets.Output)
+		assetMode := javaScriptAssetGenerationMode(d.root, changed)
+		var assets generatedAssetResult
+		var result devapp.BuildResult
+		var next *devapp.Process
+		tasks := make(progress.Tasks, 0, 3)
+		if assetMode != javaScriptAssetNone {
+			tasks = append(tasks, progress.Task(javaScriptAssetTaskName(assetMode), func(_ io.Reader, _ io.Writer, stderr io.Writer) error {
+				assets = d.generateAssetsForMode(assetMode)
+				if assets.Output != "" {
+					printOutput(stderr, assets.Output)
+				}
+				return assets.Err
+			}))
 		}
-		if assets.Err != nil {
-			proxy.UpdateStatus(reloadproxy.Status{
-				State:       reloadproxy.StateBuildFailed,
-				Message:     fmt.Sprintf("JavaScript generation failed after %s.", assets.Duration.Round(time.Millisecond)),
-				CommandPath: d.commandPath,
-				WatchedRoot: d.root,
-				BuildCount:  buildNumber,
-				Duration:    assets.Duration,
-				Output:      assets.Output,
+		tasks = append(tasks, progress.Task("Build application", func(_ io.Reader, _ io.Writer, stderr io.Writer) error {
+			result = app.Build(ctx, tmpDir, buildNumber)
+			if result.Output != "" {
+				printOutput(stderr, result.Output)
+			}
+			return result.Err
+		}))
+		tasks = append(tasks, progress.UITask("Start application", func(ui *progress.UI) error {
+			return ui.Takeover(func(stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
+				startApp := app
+				startApp.Stdin = stdin
+				startApp.Stdout = stdout
+				startApp.Stderr = stderr
+				var err error
+				next, err = startApp.Start(ctx, result.Binary)
+				return err
 			})
-			fmt.Fprintf(d.stderr, "lazy: JavaScript generation failed after %s: %v\n", assets.Duration.Round(time.Millisecond), assets.Err)
-			return
-		}
+		}))
 
-		result := app.Build(ctx, tmpDir, buildNumber)
-		if result.Output != "" {
-			printOutput(d.stderr, result.Output)
-		}
+		err := d.runProgress(tasks)
 		output := combineOutput(assets.Output, result.Output)
 		duration := time.Since(started)
-		if result.Err != nil {
-			proxy.UpdateStatus(reloadproxy.Status{
-				State:       reloadproxy.StateBuildFailed,
-				Message:     fmt.Sprintf("Build failed after %s.", duration.Round(time.Millisecond)),
-				CommandPath: d.commandPath,
-				WatchedRoot: d.root,
-				BuildCount:  buildNumber,
-				Duration:    duration,
-				Output:      output,
-			})
-			fmt.Fprintf(d.stderr, "lazy: build failed after %s\n", duration.Round(time.Millisecond))
-			return
-		}
-
-		next, err := app.Start(ctx, result.Binary)
 		if err != nil {
+			if assets.Err != nil {
+				proxy.UpdateStatus(reloadproxy.Status{
+					State:       reloadproxy.StateBuildFailed,
+					Message:     fmt.Sprintf("JavaScript generation failed after %s.", assets.Duration.Round(time.Millisecond)),
+					CommandPath: d.commandPath,
+					WatchedRoot: d.root,
+					BuildCount:  buildNumber,
+					Duration:    assets.Duration,
+					Output:      assets.Output,
+				})
+				return
+			}
+			if result.Err != nil {
+				proxy.UpdateStatus(reloadproxy.Status{
+					State:       reloadproxy.StateBuildFailed,
+					Message:     fmt.Sprintf("Build failed after %s.", duration.Round(time.Millisecond)),
+					CommandPath: d.commandPath,
+					WatchedRoot: d.root,
+					BuildCount:  buildNumber,
+					Duration:    duration,
+					Output:      output,
+				})
+				return
+			}
 			proxy.UpdateStatus(reloadproxy.Status{
 				State:       reloadproxy.StateRunFailed,
 				Message:     err.Error(),
 				CommandPath: d.commandPath,
 				WatchedRoot: d.root,
 				BuildCount:  buildNumber,
-				Duration:    time.Since(started),
+				Duration:    duration,
 				Output:      output,
 			})
-			fmt.Fprintf(d.stderr, "lazy: application failed to start: %v\n", err)
 			return
 		}
-		duration = time.Since(started)
 
 		old := current
 		current = next
@@ -262,8 +291,15 @@ func shouldExitAfterApplicationDone(ctx context.Context, err error) bool {
 	return ctx.Err() != nil || err == nil || devapp.Interrupted(err)
 }
 
+func (d *devRunner) runProgress(tasks progress.Tasks) error {
+	return progress.Run(tasks, d.stdin, d.stdout, d.stderr)
+}
+
 func (d *devRunner) generateAssets(changed []string) generatedAssetResult {
-	mode := javaScriptAssetGenerationMode(d.root, changed)
+	return d.generateAssetsForMode(javaScriptAssetGenerationMode(d.root, changed))
+}
+
+func (d *devRunner) generateAssetsForMode(mode javaScriptAssetMode) generatedAssetResult {
 	if mode == javaScriptAssetNone {
 		return generatedAssetResult{}
 	}
@@ -289,6 +325,17 @@ func (d *devRunner) generateAssets(changed []string) generatedAssetResult {
 		return bundleJavaScriptAssets(d.root, started)
 	default:
 		return generatedAssetResult{}
+	}
+}
+
+func javaScriptAssetTaskName(mode javaScriptAssetMode) string {
+	switch mode {
+	case javaScriptAssetFull:
+		return "Generate JavaScript assets"
+	case javaScriptAssetBundle:
+		return "Bundle JavaScript assets"
+	default:
+		return "Generate JavaScript assets"
 	}
 }
 

@@ -18,9 +18,11 @@ The command reads the module path from `go.mod` and first looks for
 not active, builds the app command into a temporary binary, serves the public
 `ADDR` or `PORT` through a local proxy, runs the app on an internal loopback
 port, watches application files, rebuilds and restarts on changes, and injects
-a small reload client into HTML responses. Build output is printed to stderr;
-if the app is not running, the proxy serves a status page with the latest build
-state.
+a small reload client into HTML responses. Proxy startup, generated-asset work,
+builds, and app starts use compact progress lines. Successful task output stays
+hidden, failed task output is printed, and the application process still writes
+directly to the terminal. If the app is not running, the proxy serves a status
+page with the latest build state.
 
 When an application has `lazy.toml`, `lazy` opens the configured development
 workspace in tmux through mise. Service panes run `mise run <service>:start`,

@@ -13,6 +13,7 @@ import (
 	"golazy.dev/lazy/commands"
 	"golazy.dev/lazy/commands/appcmd"
 	"golazy.dev/lazy/commands/gowork"
+	"golazy.dev/lazytui/progress"
 )
 
 type Command struct {
@@ -76,28 +77,57 @@ func (c Command) executeDirect(dir string, candidate string, runner commands.Run
 	if err != nil {
 		return 1, fmt.Errorf("inspect Go workspace: %w", err)
 	}
+	tasks := progress.Tasks{}
 	if !workspaceActive {
-		if err := runner("go", []string{"mod", "tidy"}, commands.Options{
-			Dir:     dir,
-			Capture: true,
-		}); err != nil {
-			return 1, fmt.Errorf("go mod tidy: %w", err)
-		}
+		tasks = append(tasks, progress.Task("Update Go modules", func(_ io.Reader, _ io.Writer, _ io.Writer) error {
+			if err := runner("go", []string{"mod", "tidy"}, commands.Options{
+				Dir:     dir,
+				Capture: true,
+			}); err != nil {
+				return fmt.Errorf("go mod tidy: %w", err)
+			}
+			return nil
+		}))
 	}
-	err = runner("go", appcmd.GoRunArgs("lazydev", filepath.ToSlash(candidate)), commands.Options{
-		Dir:    dir,
-		Stdin:  c.Stdin,
-		Stdout: c.Stdout,
-		Stderr: c.Stderr,
-		Env:    env,
-	})
-	if err == nil {
-		return 0, nil
-	}
+	tasks = append(tasks, progress.UITask("Run application", func(ui *progress.UI) error {
+		return ui.Takeover(func(stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
+			if err := runner("go", appcmd.GoRunArgs("lazydev", filepath.ToSlash(candidate)), commands.Options{
+				Dir:    dir,
+				Stdin:  stdin,
+				Stdout: stdout,
+				Stderr: stderr,
+				Env:    env,
+			}); err != nil {
+				return fmt.Errorf("run application: %w", err)
+			}
+			return nil
+		})
+	}))
 
-	var processExit *commands.ExitError
-	if errors.As(err, &processExit) {
-		return processExit.Code, nil
+	if err := c.runProgress(tasks); err != nil {
+		var processExit *commands.ExitError
+		if errors.As(err, &processExit) {
+			return processExit.Code, nil
+		}
+		return 1, err
 	}
-	return 1, fmt.Errorf("run application: %w", err)
+	return 0, nil
+}
+
+func (c Command) stdout() io.Writer {
+	if c.Stdout == nil {
+		return io.Discard
+	}
+	return c.Stdout
+}
+
+func (c Command) stderr() io.Writer {
+	if c.Stderr == nil {
+		return io.Discard
+	}
+	return c.Stderr
+}
+
+func (c Command) runProgress(tasks progress.Tasks) error {
+	return progress.Run(tasks, c.Stdin, c.stdout(), c.stderr())
 }

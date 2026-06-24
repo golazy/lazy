@@ -2,6 +2,7 @@ package run
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -142,6 +143,69 @@ func TestSkipsGoModTidyWhenWorkspaceModeIsActive(t *testing.T) {
 		"./cmd/app",
 	}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("args = %#v, want %#v", got, want)
+	}
+}
+
+func TestExecuteDirectUsesProgressOutput(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "go.mod"), "module example.com/team/my_app\n")
+	writeFile(t, filepath.Join(dir, "app", "views", "layouts", "app.html.tpl"), "layout")
+	writeCommand(t, filepath.Join(dir, "cmd", "app"))
+
+	var stdout bytes.Buffer
+	command := Command{
+		Dir:    dir,
+		Stdout: &stdout,
+		Stderr: &bytes.Buffer{},
+		Runner: func(string, []string, commands.Options) error {
+			return nil
+		},
+	}
+
+	code, err := command.Execute()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != 0 {
+		t.Fatalf("exit code = %d", code)
+	}
+	output := stdout.String()
+	if !strings.Contains(output, "* Update Go modules ... DONE") {
+		t.Fatalf("stdout = %q, missing module progress", output)
+	}
+	if !strings.Contains(output, "* Run application ... DONE") {
+		t.Fatalf("stdout = %q, missing run progress", output)
+	}
+}
+
+func TestExecuteDirectReturnsApplicationExitCode(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "go.mod"), "module example.com/team/my_app\n")
+	writeFile(t, filepath.Join(dir, "app", "views", "layouts", "app.html.tpl"), "layout")
+	writeCommand(t, filepath.Join(dir, "cmd", "app"))
+
+	var stderr bytes.Buffer
+	command := Command{
+		Dir:    dir,
+		Stdout: &bytes.Buffer{},
+		Stderr: &stderr,
+		Runner: func(_ string, args []string, _ commands.Options) error {
+			if len(args) >= 2 && args[0] == "mod" && args[1] == "tidy" {
+				return nil
+			}
+			return &commands.ExitError{Code: 7, Err: errors.New("exit status 7")}
+		},
+	}
+
+	code, err := command.Execute()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != 7 {
+		t.Fatalf("exit code = %d, want 7", code)
+	}
+	if !strings.Contains(stderr.String(), "error: run application: exit status 7") {
+		t.Fatalf("stderr = %q, missing progress error", stderr.String())
 	}
 }
 

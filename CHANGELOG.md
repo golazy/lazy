@@ -26,6 +26,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - CLI-owned environment variables are now loaded through `lazy/config.go` using
   `golazy.dev/lazyconfig` and passed into subcommands instead of being read
   ad hoc throughout the command tree.
+- The default `lazy` development command now uses `golazy.dev/lazytui/progress`
+  for proxy startup, generated-asset work, Go builds, and application starts
+  while leaving the running app's own output attached to the terminal.
 
 ## [0.1.14] - 2026-06-23
 
