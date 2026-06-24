@@ -1,6 +1,21 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	"golazy.dev/lazy/commands/lazytmux"
+)
+
+const (
+	addrEnv              = "ADDR"
+	goWorkEnv            = "GOWORK"
+	lazyCmdEnv           = "LAZYCMD"
+	lazyMultiversionEnv  = "LAZY_MULTIVERSION"
+	lazyMultiversionOff  = "off"
+	lazyTmuxSessionEnv   = lazytmux.SessionEnv
+	lazyTmuxInSessionEnv = lazytmux.InSessionEnv
+	portEnv              = "PORT"
+)
 
 func TestLoadConfigFromEnvironment(t *testing.T) {
 	t.Setenv(addrEnv, "127.0.0.1:4000")

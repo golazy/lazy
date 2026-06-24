@@ -41,7 +41,7 @@ func maybeExecuteLazyCmd(config envConfig, args []string, stdin io.Reader, stdou
 		Stdin:  stdin,
 		Stdout: stdout,
 		Stderr: stderr,
-		Env:    []string{lazyMultiversionEnv + "=" + lazyMultiversionOff},
+		Env:    []string{"LAZY_MULTIVERSION=off"},
 	})
 	if err != nil {
 		fmt.Fprintf(stderr, "lazy: run %s: %v\n", targetPath, err)
@@ -194,7 +194,7 @@ func runLazyVersion(binary string, args []string, stdin io.Reader, stdout io.Wri
 		Stdin:  stdin,
 		Stdout: stdout,
 		Stderr: stderr,
-		Env:    []string{lazyMultiversionEnv + "=" + lazyMultiversionOff},
+		Env:    []string{"LAZY_MULTIVERSION=off"},
 	})
 }
 

@@ -3,29 +3,17 @@ package main
 import (
 	"strings"
 
-	"golazy.dev/lazy/commands/lazytmux"
 	envconfig "golazy.dev/lazyconfig"
 )
 
-const (
-	addrEnv              = "ADDR"
-	goWorkEnv            = "GOWORK"
-	lazyCmdEnv           = "LAZYCMD"
-	lazyMultiversionEnv  = "LAZY_MULTIVERSION"
-	lazyMultiversionOff  = "off"
-	lazyTmuxSessionEnv   = lazytmux.SessionEnv
-	lazyTmuxInSessionEnv = lazytmux.InSessionEnv
-	portEnv              = "PORT"
-)
-
 type envConfig struct {
-	Addr             string `var:"ADDR"`
-	GoWork           string `var:"GOWORK"`
-	LazyCmd          string `var:"LAZYCMD"`
-	LazyMultiversion string `var:"LAZY_MULTIVERSION"`
-	LazyTmux         string `var:"LAZY_TMUX"`
-	LazyTmuxSession  string `var:"LAZY_TMUX_SESSION"`
-	Port             string `var:"PORT"`
+	Addr             string
+	GoWork           string
+	LazyCmd          string
+	LazyMultiversion string
+	LazyTmux         string
+	LazyTmuxSession  string
+	Port             string
 }
 
 func loadConfig() (envConfig, error) {
@@ -37,7 +25,7 @@ func (c envConfig) lazyCmdTarget() string {
 }
 
 func (c envConfig) multiversionOff() bool {
-	return strings.EqualFold(strings.TrimSpace(c.LazyMultiversion), lazyMultiversionOff)
+	return strings.EqualFold(strings.TrimSpace(c.LazyMultiversion), "off")
 }
 
 func (c envConfig) inLazyTmux() bool {
