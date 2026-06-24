@@ -360,7 +360,7 @@ func TestReplaceSecureCookieKeySupportsLegacyConst(t *testing.T) {
 }
 
 func TestCopiesSourceDirectoryRenamesAndValidates(t *testing.T) {
-	t.Setenv("GOWORK", "off")
+	t.Setenv("GOWORK", "")
 
 	dir := t.TempDir()
 	source := filepath.Join(dir, "sample_app")
@@ -430,7 +430,7 @@ func TestCopiesSourceDirectoryRenamesAndValidates(t *testing.T) {
 	assertInitialGitCommitCalls(t, calls[4:], destination)
 }
 
-func TestCopiesSourceDirectoryValidatesWithWorkspaceReplaces(t *testing.T) {
+func TestCopiesSourceDirectoryValidatesWithTemporaryWorkspace(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, "golazy"), 0o755); err != nil {
 		t.Fatal(err)
@@ -465,16 +465,34 @@ func TestCopiesSourceDirectoryValidatesWithWorkspaceReplaces(t *testing.T) {
 		Stdout:    &bytes.Buffer{},
 		Runner: func(name string, args []string, options commands.Options) error {
 			calls = append(calls, invocation{command: name, args: args, options: options})
+			if name == "go" {
+				workPath := envValue(options.Env, "GOWORK")
+				if workPath == "" || workPath == "off" {
+					t.Fatalf("go env = %#v, want temporary GOWORK", options.Env)
+				}
+				data, err := os.ReadFile(workPath)
+				if err != nil {
+					t.Fatalf("read temporary go.work: %v", err)
+				}
+				content := string(data)
+				if !strings.Contains(content, "replace golazy.dev v0.1.4 => ./golazy") {
+					t.Fatalf("temporary go.work missing replace:\n%s", content)
+				}
+				if !strings.Contains(content, "./my_app") {
+					t.Fatalf("temporary go.work missing generated app use:\n%s", content)
+				}
+			}
 			if name == "git" && len(args) > 0 {
 				switch args[0] {
 				case "init":
 					return os.MkdirAll(filepath.Join(options.Dir, ".git"), 0o755)
 				case "add":
-					if _, err := os.Stat(filepath.Join(options.Dir, ".lazy-go.mod")); !os.IsNotExist(err) {
-						t.Fatalf(".lazy-go.mod exists before git add: %v", err)
+					matches, err := filepath.Glob(filepath.Join(dir, ".lazy-go-work-*.work"))
+					if err != nil {
+						t.Fatalf("glob temporary go.work files: %v", err)
 					}
-					if _, err := os.Stat(filepath.Join(options.Dir, ".lazy-go.sum")); !os.IsNotExist(err) {
-						t.Fatalf(".lazy-go.sum exists before git add: %v", err)
+					if len(matches) != 0 {
+						t.Fatalf("temporary go.work exists before git add: %v", matches)
 					}
 				}
 			}
@@ -498,28 +516,24 @@ func TestCopiesSourceDirectoryValidatesWithWorkspaceReplaces(t *testing.T) {
 	if calls[2].command != "go" {
 		t.Fatalf("tidy command = %s, want go", calls[2].command)
 	}
-	if got, want := calls[2].args, []string{"mod", "tidy", "-modfile=.lazy-go.mod"}; !reflect.DeepEqual(got, want) {
+	if got, want := calls[2].args, []string{"mod", "tidy"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("tidy args = %#v, want %#v", got, want)
 	}
 	if calls[3].command != "go" {
 		t.Fatalf("test command = %s, want go", calls[3].command)
 	}
-	if got, want := calls[3].args, []string{"test", "-modfile=.lazy-go.mod", "./..."}; !reflect.DeepEqual(got, want) {
+	if got, want := calls[3].args, []string{"test", "./..."}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("test args = %#v, want %#v", got, want)
-	}
-	for _, call := range []invocation{calls[2], calls[3]} {
-		if !contains(call.options.Env, "GOWORK=off") {
-			t.Fatalf("%s env = %#v, does not contain GOWORK=off", call.command, call.options.Env)
-		}
 	}
 
 	destination := filepath.Join(dir, "my_app")
 	assertInitialGitCommitCalls(t, calls[4:], destination)
-	if _, err := os.Stat(filepath.Join(destination, ".lazy-go.mod")); !os.IsNotExist(err) {
-		t.Fatalf(".lazy-go.mod still exists: %v", err)
+	matches, err := filepath.Glob(filepath.Join(dir, ".lazy-go-work-*.work"))
+	if err != nil {
+		t.Fatalf("glob temporary go.work files: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(destination, ".lazy-go.sum")); !os.IsNotExist(err) {
-		t.Fatalf(".lazy-go.sum still exists: %v", err)
+	if len(matches) != 0 {
+		t.Fatalf("temporary go.work still exists: %v", matches)
 	}
 	assertFileContains(t, filepath.Join(destination, "go.mod"), "require golazy.dev v0.1.4")
 }
@@ -639,11 +653,12 @@ func assertInitialGitCommitCalls(t *testing.T, calls []invocation, destination s
 	}
 }
 
-func contains(values []string, expected string) bool {
+func envValue(values []string, key string) string {
+	prefix := key + "="
 	for _, value := range values {
-		if value == expected {
-			return true
+		if strings.HasPrefix(value, prefix) {
+			return strings.TrimPrefix(value, prefix)
 		}
 	}
-	return false
+	return ""
 }
