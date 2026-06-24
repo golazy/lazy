@@ -14,12 +14,13 @@ The command reads the module path from `go.mod` and first looks for
 `./cmd/<module-name>`. If that directory does not exist, it falls back to
 `./cmd/app`.
 
-`lazy` is a development runner. It runs `go mod tidy`, builds the app command
-into a temporary binary, serves the public `ADDR` or `PORT` through a local
-proxy, runs the app on an internal loopback port, watches application files,
-rebuilds and restarts on changes, and injects a small reload client into HTML
-responses. Build output is printed to stderr; if the app is not running, the
-proxy serves a status page with the latest build state.
+`lazy` is a development runner. It runs `go mod tidy` when Go workspace mode is
+not active, builds the app command into a temporary binary, serves the public
+`ADDR` or `PORT` through a local proxy, runs the app on an internal loopback
+port, watches application files, rebuilds and restarts on changes, and injects
+a small reload client into HTML responses. Build output is printed to stderr;
+if the app is not running, the proxy serves a status page with the latest build
+state.
 
 When an application has `lazy.toml`, `lazy` opens the configured development
 workspace in tmux through mise. Service panes run `mise run <service>:start`,
@@ -219,16 +220,16 @@ GOBIN=<user-cache-dir>/golazy/lazy/builds/<version> go install golazy.dev/lazy@<
 ```
 
 The matching binary receives the same command-line arguments with
-`NO_VERSION_CHECK=true` in its environment, which prevents recursive version
+`LAZY_MULTIVERSION=off` in its environment, which prevents recursive version
 handoffs. `lazy --version` and `lazy new` always use the binary that was
 directly invoked.
 
-Use `--skip-version-check` when you intentionally need the directly invoked
+Set `LAZY_MULTIVERSION=off` when you intentionally need the directly invoked
 binary to run app-bound commands against a mismatched local application, for
 example during CLI development and tests:
 
 ```sh
-lazy --skip-version-check js
+LAZY_MULTIVERSION=off lazy js
 ```
 
 ## Structure

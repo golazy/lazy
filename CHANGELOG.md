@@ -17,6 +17,16 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   migrations using `go/parser`, AST edits, `go/format`, and changed-file
   writes.
 
+### Changed
+
+- `LAZY_MULTIVERSION=off` now disables project-version CLI handoff for local
+  testing, replacing the removed global `--skip-version-check` flag.
+- The default `lazy` development command now skips automatic `go mod tidy` when
+  `GOWORK` or `go env GOWORK` points at an active Go workspace.
+- CLI-owned environment variables are now loaded through `lazy/config.go` using
+  `golazy.dev/lazyconfig` and passed into subcommands instead of being read
+  ad hoc throughout the command tree.
+
 ## [0.1.14] - 2026-06-23
 
 ### Added

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"golazy.dev/lazy/commands/appcmd"
+	"golazy.dev/lazy/commands/gowork"
 )
 
 const defaultStopTimeout = 2 * time.Second
@@ -23,6 +24,7 @@ type Config struct {
 	Root           string
 	CommandPath    string
 	ViewPath       string
+	GoWork         string
 	Stdin          io.Reader
 	Stdout         io.Writer
 	Stderr         io.Writer
@@ -49,12 +51,18 @@ func (c Config) Build(ctx context.Context, tmpDir string, buildNumber int) Build
 	binary := filepath.Join(tmpDir, "app-"+strconv.Itoa(buildNumber)+exeSuffix())
 
 	var output bytes.Buffer
-	tidy := exec.CommandContext(ctx, "go", "mod", "tidy")
-	tidy.Dir = c.Root
-	tidy.Stdout = &output
-	tidy.Stderr = &output
-
-	err := tidy.Run()
+	workspaceActive, err := gowork.Active(c.Root, c.GoWork)
+	if err != nil {
+		err = fmt.Errorf("inspect Go workspace: %w", err)
+	} else {
+		if !workspaceActive {
+			tidy := exec.CommandContext(ctx, "go", "mod", "tidy")
+			tidy.Dir = c.Root
+			tidy.Stdout = &output
+			tidy.Stderr = &output
+			err = tidy.Run()
+		}
+	}
 	if err == nil {
 		args := appcmd.GoBuildArgs("lazydev", filepath.ToSlash(c.CommandPath), binary)
 		build := exec.CommandContext(ctx, "go", args...)

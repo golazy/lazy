@@ -28,19 +28,22 @@ func main() {
 }
 
 func execute(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
-	if handled, code := maybeExecuteLazyCmd(args, stdin, stdout, stderr); handled {
+	config, err := loadConfig()
+	if err != nil {
+		fmt.Fprintf(stderr, "lazy: %v\n", err)
+		return 1
+	}
+
+	if handled, code := maybeExecuteLazyCmd(config, args, stdin, stdout, stderr); handled {
 		return code
 	}
 
-	args, skipVersionCheck := removeSkipVersionCheckFlag(args)
-	if !skipVersionCheck {
-		if handled, code := maybeExecuteProjectVersion(args, stdin, stdout, stderr); handled {
-			return code
-		}
+	if handled, code := maybeExecuteProjectVersion(config, args, stdin, stdout, stderr); handled {
+		return code
 	}
 
 	if len(args) == 0 {
-		return executeRun(args, stdin, stdout, stderr)
+		return executeRun(config, args, stdin, stdout, stderr)
 	}
 
 	switch args[0] {
@@ -91,6 +94,7 @@ func execute(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer)
 			Version:         version,
 			CurrentVersion:  currentVersion(),
 			SourceDir:       *sourceDir,
+			GoWork:          config.GoWork,
 			SkipUpdateCheck: *skipUpdateCheck,
 			Stdout:          stdout,
 			Stderr:          stderr,
@@ -109,12 +113,12 @@ func execute(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer)
 	case "docs":
 		return executeDocs(args[1:], stdout, stderr)
 	case "command-center":
-		return executeCommandCenter(args[1:], stdin, stdout, stderr)
+		return executeCommandCenter(config, args[1:], stdin, stdout, stderr)
 	case "bastard":
 		return executeBastard(args[1:], stdin, stdout, stderr)
 	default:
 		if strings.HasPrefix(args[0], "-") {
-			return executeRun(args, stdin, stdout, stderr)
+			return executeRun(config, args, stdin, stdout, stderr)
 		}
 		fmt.Fprintf(stderr, "lazy: unknown command %q\n", args[0])
 		return 1
@@ -137,7 +141,7 @@ func executeBastard(args []string, stdin io.Reader, stdout io.Writer, stderr io.
 }
 
 func printUsage(stdout io.Writer) {
-	fmt.Fprintln(stdout, "usage: lazy [--skip-version-check] [--cmdpath <path>] [--viewpath <path>]")
+	fmt.Fprintln(stdout, "usage: lazy [--cmdpath <path>] [--viewpath <path>]")
 	fmt.Fprintln(stdout)
 	fmt.Fprintln(stdout, "commands:")
 	fmt.Fprintln(stdout, "  lazy")
@@ -150,23 +154,6 @@ func printUsage(stdout io.Writer) {
 	fmt.Fprintln(stdout, "  lazy js")
 	fmt.Fprintln(stdout, "  lazy tailwind")
 	fmt.Fprintln(stdout, "  lazy --version")
-}
-
-func removeSkipVersionCheckFlag(args []string) ([]string, bool) {
-	for index, arg := range args {
-		if arg != skipVersionCheckFlag {
-			continue
-		}
-		filtered := make([]string, 0, len(args)-1)
-		filtered = append(filtered, args[:index]...)
-		for _, laterArg := range args[index+1:] {
-			if laterArg != skipVersionCheckFlag {
-				filtered = append(filtered, laterArg)
-			}
-		}
-		return filtered, true
-	}
-	return args, false
 }
 
 func executeUpgrade(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
@@ -297,15 +284,16 @@ func executeDocs(args []string, stdout io.Writer, stderr io.Writer) int {
 	return code
 }
 
-func executeCommandCenter(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
+func executeCommandCenter(config envConfig, args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
 	if len(args) != 0 {
 		fmt.Fprintln(stderr, "lazy: command-center does not accept arguments")
 		return 1
 	}
 	code, err := (commandcenter.Command{
-		Stdin:  stdin,
-		Stdout: stdout,
-		Stderr: stderr,
+		Session: config.tmuxSession(),
+		Stdin:   stdin,
+		Stdout:  stdout,
+		Stderr:  stderr,
 	}).Execute()
 	if err != nil {
 		fmt.Fprintf(stderr, "lazy: %v\n", err)
@@ -313,7 +301,7 @@ func executeCommandCenter(args []string, stdin io.Reader, stdout io.Writer, stde
 	return code
 }
 
-func executeRun(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
+func executeRun(config envConfig, args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
 	flags := flag.NewFlagSet("lazy", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	cmdPath := flags.String("cmdpath", "", "application command path")
@@ -322,7 +310,7 @@ func executeRun(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writ
 		return 1
 	}
 	if flags.NArg() != 0 {
-		fmt.Fprintln(stderr, "lazy: usage: lazy [--skip-version-check] [--cmdpath <path>] [--viewpath <path>]")
+		fmt.Fprintln(stderr, "lazy: usage: lazy [--cmdpath <path>] [--viewpath <path>]")
 		return 1
 	}
 
@@ -336,8 +324,8 @@ func executeRun(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writ
 		return 1
 	}
 
-	if os.Getenv(lazytmux.InSessionEnv) != "1" {
-		config, ok, err := lazyconfig.LoadIfExists(".")
+	if !config.inLazyTmux() {
+		lazyToml, ok, err := lazyconfig.LoadIfExists(".")
 		if err != nil {
 			fmt.Fprintf(stderr, "lazy: %v\n", err)
 			return 1
@@ -347,7 +335,7 @@ func executeRun(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writ
 				Dir:      ".",
 				CmdPath:  *cmdPath,
 				ViewPath: *viewPath,
-				Config:   config,
+				Config:   lazyToml,
 				Stdin:    stdin,
 				Stdout:   stdout,
 				Stderr:   stderr,
@@ -362,6 +350,9 @@ func executeRun(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writ
 	code, err := (runcommand.Command{
 		CmdPath:  *cmdPath,
 		ViewPath: *viewPath,
+		Addr:     config.Addr,
+		Port:     config.Port,
+		GoWork:   config.GoWork,
 		Stdin:    stdin,
 		Stdout:   stdout,
 		Stderr:   stderr,

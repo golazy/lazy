@@ -68,7 +68,7 @@ func TestLazyCmdHandoffRunsConfiguredBinary(t *testing.T) {
 	if got, want := calls[0].args, []string{"--version"}; !slices.Equal(got, want) {
 		t.Fatalf("args = %#v, want %#v", got, want)
 	}
-	if got, want := calls[0].env, []string{noVersionCheckEnv + "=true"}; !slices.Equal(got, want) {
+	if got, want := calls[0].env, []string{lazyMultiversionEnv + "=" + lazyMultiversionOff}; !slices.Equal(got, want) {
 		t.Fatalf("env = %#v, want %#v", got, want)
 	}
 	if stdout.Len() != 0 {
@@ -153,6 +153,7 @@ func TestNewRejectsSourceDirWithVersion(t *testing.T) {
 }
 
 func TestRoutesRejectsArguments(t *testing.T) {
+	t.Setenv(lazyMultiversionEnv, lazyMultiversionOff)
 	var stderr bytes.Buffer
 
 	if code := execute([]string{"routes", "extra"}, nil, &bytes.Buffer{}, &stderr); code != 1 {
@@ -164,6 +165,7 @@ func TestRoutesRejectsArguments(t *testing.T) {
 }
 
 func TestJSRejectsArguments(t *testing.T) {
+	t.Setenv(lazyMultiversionEnv, lazyMultiversionOff)
 	var stderr bytes.Buffer
 
 	if code := execute([]string{"js", "extra"}, nil, &bytes.Buffer{}, &stderr); code != 1 {
@@ -175,6 +177,7 @@ func TestJSRejectsArguments(t *testing.T) {
 }
 
 func TestTailwindRejectsArguments(t *testing.T) {
+	t.Setenv(lazyMultiversionEnv, lazyMultiversionOff)
 	var stderr bytes.Buffer
 
 	if code := execute([]string{"tailwind", "extra"}, nil, &bytes.Buffer{}, &stderr); code != 1 {
@@ -218,7 +221,7 @@ func TestProjectVersionMatchDoesNotHandoff(t *testing.T) {
 	}
 
 	var stderr bytes.Buffer
-	handled, code := maybeExecuteProjectVersion([]string{"routes"}, nil, &bytes.Buffer{}, &stderr)
+	handled, code := maybeExecuteProjectVersion(envConfig{}, []string{"routes"}, nil, &bytes.Buffer{}, &stderr)
 	if handled {
 		t.Fatalf("handled = true, code = %d", code)
 	}
@@ -251,7 +254,7 @@ func TestProjectVersionMismatchRunsCachedLazy(t *testing.T) {
 	}
 
 	var stderr bytes.Buffer
-	handled, code := maybeExecuteProjectVersion([]string{"routes", "--cmdpath", "cmd/app"}, nil, &bytes.Buffer{}, &stderr)
+	handled, code := maybeExecuteProjectVersion(envConfig{}, []string{"routes", "--cmdpath", "cmd/app"}, nil, &bytes.Buffer{}, &stderr)
 	if !handled {
 		t.Fatalf("handled = false")
 	}
@@ -267,7 +270,7 @@ func TestProjectVersionMismatchRunsCachedLazy(t *testing.T) {
 	if got, want := calls[0].args, []string{"routes", "--cmdpath", "cmd/app"}; !slices.Equal(got, want) {
 		t.Fatalf("args = %#v, want %#v", got, want)
 	}
-	if got, want := calls[0].env, []string{noVersionCheckEnv + "=true"}; !slices.Equal(got, want) {
+	if got, want := calls[0].env, []string{lazyMultiversionEnv + "=" + lazyMultiversionOff}; !slices.Equal(got, want) {
 		t.Fatalf("env = %#v, want %#v", got, want)
 	}
 	if stderr.Len() != 0 {
@@ -293,7 +296,7 @@ func TestProjectVersionMismatchInstallsMissingLazy(t *testing.T) {
 	}
 
 	var stderr bytes.Buffer
-	handled, code := maybeExecuteProjectVersion([]string{"js"}, nil, &bytes.Buffer{}, &stderr)
+	handled, code := maybeExecuteProjectVersion(envConfig{}, []string{"js"}, nil, &bytes.Buffer{}, &stderr)
 	if !handled {
 		t.Fatalf("handled = false")
 	}
@@ -337,7 +340,7 @@ func TestProjectVersionMismatchReportsInstallFailure(t *testing.T) {
 	}
 
 	var stderr bytes.Buffer
-	handled, code := maybeExecuteProjectVersion([]string{"js"}, nil, &bytes.Buffer{}, &stderr)
+	handled, code := maybeExecuteProjectVersion(envConfig{}, []string{"js"}, nil, &bytes.Buffer{}, &stderr)
 	if !handled {
 		t.Fatalf("handled = false")
 	}
@@ -353,22 +356,26 @@ func TestProjectVersionCheckCanBeSkippedByEnvironment(t *testing.T) {
 	t.Chdir(t.TempDir())
 	writeGoMod(t, "v0.1.7")
 	restoreVersionHandoffTestHooks(t)
-	t.Setenv(noVersionCheckEnv, "true")
+	t.Setenv(lazyMultiversionEnv, lazyMultiversionOff)
 
 	runCommand = func(string, []string, commandOptions) (int, error) {
 		t.Fatalf("runCommand should not be called")
 		return 1, nil
 	}
 
-	handled, code := maybeExecuteProjectVersion([]string{"js"}, nil, &bytes.Buffer{}, &bytes.Buffer{})
+	config, err := loadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	handled, code := maybeExecuteProjectVersion(config, []string{"js"}, nil, &bytes.Buffer{}, &bytes.Buffer{})
 	if handled {
 		t.Fatalf("handled = true, code = %d", code)
 	}
 }
 
-func TestProjectVersionCheckCanBeSkippedByFlag(t *testing.T) {
+func TestSkipVersionCheckFlagIsRejected(t *testing.T) {
 	t.Chdir(t.TempDir())
-	writeGoMod(t, "v0.1.7")
+	writeGoMod(t, currentVersion())
 	restoreVersionHandoffTestHooks(t)
 
 	runCommand = func(string, []string, commandOptions) (int, error) {
@@ -376,20 +383,12 @@ func TestProjectVersionCheckCanBeSkippedByFlag(t *testing.T) {
 		return 1, nil
 	}
 
-	handled, code := maybeExecuteProjectVersion([]string{skipVersionCheckFlag, "js"}, nil, &bytes.Buffer{}, &bytes.Buffer{})
-	if handled {
-		t.Fatalf("handled = true, code = %d", code)
+	var stderr bytes.Buffer
+	if code := execute([]string{"--skip-version-check", "js"}, nil, &bytes.Buffer{}, &stderr); code != 1 {
+		t.Fatalf("exit code = %d, want 1", code)
 	}
-}
-
-func TestRemoveSkipVersionCheckFlag(t *testing.T) {
-	args, skipped := removeSkipVersionCheckFlag([]string{skipVersionCheckFlag, "routes", "--cmdpath", "cmd/app", skipVersionCheckFlag})
-
-	if !skipped {
-		t.Fatalf("skipped = false")
-	}
-	if got, want := args, []string{"routes", "--cmdpath", "cmd/app"}; !slices.Equal(got, want) {
-		t.Fatalf("args = %#v, want %#v", got, want)
+	if !strings.Contains(stderr.String(), "flag provided but not defined: -skip-version-check") {
+		t.Fatalf("stderr = %q", stderr.String())
 	}
 }
 
@@ -403,7 +402,7 @@ func TestProjectVersionCheckSkipsBastard(t *testing.T) {
 		return 1, nil
 	}
 
-	handled, code := maybeExecuteProjectVersion([]string{"bastard"}, nil, &bytes.Buffer{}, &bytes.Buffer{})
+	handled, code := maybeExecuteProjectVersion(envConfig{}, []string{"bastard"}, nil, &bytes.Buffer{}, &bytes.Buffer{})
 	if handled {
 		t.Fatalf("handled = true, code = %d", code)
 	}
@@ -419,7 +418,7 @@ func TestProjectVersionCheckSkipsUpgrade(t *testing.T) {
 		return 1, nil
 	}
 
-	handled, code := maybeExecuteProjectVersion([]string{"upgrade"}, nil, &bytes.Buffer{}, &bytes.Buffer{})
+	handled, code := maybeExecuteProjectVersion(envConfig{}, []string{"upgrade"}, nil, &bytes.Buffer{}, &bytes.Buffer{})
 	if handled {
 		t.Fatalf("handled = true, code = %d", code)
 	}

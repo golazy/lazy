@@ -9,15 +9,15 @@ import (
 
 	"golazy.dev/lazy/commands"
 	"golazy.dev/lazy/commands/lazyconfig"
-	"golazy.dev/lazy/commands/lazytmux"
 )
 
 type Command struct {
-	Dir    string
-	Stdin  io.Reader
-	Stdout io.Writer
-	Stderr io.Writer
-	Runner commands.Runner
+	Dir     string
+	Session string
+	Stdin   io.Reader
+	Stdout  io.Writer
+	Stderr  io.Writer
+	Runner  commands.Runner
 }
 
 func (c Command) Execute() (int, error) {
@@ -40,7 +40,7 @@ func (c Command) Execute() (int, error) {
 		stdout = io.Discard
 	}
 	fmt.Fprintln(stdout, "lazy command center")
-	if session := os.Getenv(lazytmux.SessionEnv); session != "" {
+	if session := strings.TrimSpace(c.Session); session != "" {
 		fmt.Fprintf(stdout, "session: %s\n", session)
 	}
 	printSummary(stdout, config)

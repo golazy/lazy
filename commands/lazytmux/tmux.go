@@ -141,7 +141,7 @@ func appCommand(session string, cmdPath string, viewPath string) string {
 		"env",
 		InSessionEnv + "=1",
 		SessionEnv + "=" + shellQuote(session),
-		"NO_VERSION_CHECK=true",
+		"LAZY_MULTIVERSION=off",
 		"lazy",
 	}
 	if cmdPath != "" {
@@ -158,7 +158,7 @@ func commandCenterCommand(session string) string {
 		"env",
 		InSessionEnv + "=1",
 		SessionEnv + "=" + shellQuote(session),
-		"NO_VERSION_CHECK=true",
+		"LAZY_MULTIVERSION=off",
 		"lazy",
 		"command-center",
 	}, " ")

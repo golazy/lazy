@@ -72,7 +72,7 @@ func (c Command) ExecuteDev() (int, error) {
 		"--addr", addr,
 		"--env", "ADDR=" + addr,
 		"--env", "LAZY_TMUX=1",
-		"--env", "NO_VERSION_CHECK=true",
+		"--env", "LAZY_MULTIVERSION=off",
 	}
 	if c.Title != "" {
 		args = append(args, "--title", c.Title)
@@ -83,7 +83,7 @@ func (c Command) ExecuteDev() (int, error) {
 	if c.Height > 0 {
 		args = append(args, "--height", strconv.Itoa(c.Height))
 	}
-	args = append(args, "--", lazyBinary, "--skip-version-check")
+	args = append(args, "--", lazyBinary)
 	if c.CmdPath != "" {
 		args = append(args, "--cmdpath", filepath.ToSlash(c.CmdPath))
 	}

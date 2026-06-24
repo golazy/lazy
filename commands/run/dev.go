@@ -42,6 +42,8 @@ type devRunner struct {
 	root        string
 	commandPath string
 	viewPath    string
+	listenAddr  string
+	goWork      string
 	stdin       io.Reader
 	stdout      io.Writer
 	stderr      io.Writer
@@ -67,6 +69,9 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 	if d.startupTimeout <= 0 {
 		d.startupTimeout = defaultStartupTimeout
 	}
+	if d.listenAddr == "" {
+		d.listenAddr = publicListenAddr("", "")
+	}
 
 	tmpDir, err := os.MkdirTemp("", "lazy-run-*")
 	if err != nil {
@@ -74,7 +79,7 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	proxy, err := reloadproxy.New(publicListenAddr())
+	proxy, err := reloadproxy.New(d.listenAddr)
 	if err != nil {
 		return 1, err
 	}
@@ -106,6 +111,7 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 		Root:           d.root,
 		CommandPath:    d.commandPath,
 		ViewPath:       d.viewPath,
+		GoWork:         d.goWork,
 		Stdin:          d.stdin,
 		Stdout:         d.stdout,
 		Stderr:         d.stderr,
@@ -416,11 +422,11 @@ func drainChanges(changeCh <-chan []string, changed []string) []string {
 	}
 }
 
-func publicListenAddr() string {
-	if addr := os.Getenv("ADDR"); addr != "" {
+func publicListenAddr(addr string, port string) string {
+	if addr != "" {
 		return normalizeListenAddr(addr)
 	}
-	if port := os.Getenv("PORT"); port != "" {
+	if port != "" {
 		return normalizeListenAddr(port)
 	}
 	return ":3000"

@@ -12,12 +12,16 @@ import (
 
 	"golazy.dev/lazy/commands"
 	"golazy.dev/lazy/commands/appcmd"
+	"golazy.dev/lazy/commands/gowork"
 )
 
 type Command struct {
 	Dir      string
 	CmdPath  string
 	ViewPath string
+	Addr     string
+	Port     string
+	GoWork   string
 	Stdin    io.Reader
 	Stdout   io.Writer
 	Stderr   io.Writer
@@ -55,6 +59,8 @@ func (c Command) Execute() (int, error) {
 		root:        dir,
 		commandPath: candidate,
 		viewPath:    c.ViewPath,
+		listenAddr:  publicListenAddr(c.Addr, c.Port),
+		goWork:      c.GoWork,
 		stdin:       c.Stdin,
 		stdout:      c.Stdout,
 		stderr:      c.Stderr,
@@ -66,11 +72,17 @@ func (c Command) executeDirect(dir string, candidate string, runner commands.Run
 	if err != nil {
 		return 1, err
 	}
-	if err := runner("go", []string{"mod", "tidy"}, commands.Options{
-		Dir:     dir,
-		Capture: true,
-	}); err != nil {
-		return 1, fmt.Errorf("go mod tidy: %w", err)
+	workspaceActive, err := gowork.Active(dir, c.GoWork)
+	if err != nil {
+		return 1, fmt.Errorf("inspect Go workspace: %w", err)
+	}
+	if !workspaceActive {
+		if err := runner("go", []string{"mod", "tidy"}, commands.Options{
+			Dir:     dir,
+			Capture: true,
+		}); err != nil {
+			return 1, fmt.Errorf("go mod tidy: %w", err)
+		}
 	}
 	err = runner("go", appcmd.GoRunArgs("lazydev", filepath.ToSlash(candidate)), commands.Options{
 		Dir:    dir,

@@ -13,12 +13,6 @@ import (
 	"golang.org/x/mod/modfile"
 )
 
-const (
-	noVersionCheckEnv    = "NO_VERSION_CHECK"
-	lazyCmdEnv           = "LAZYCMD"
-	skipVersionCheckFlag = "--skip-version-check"
-)
-
 var (
 	userCacheDir = os.UserCacheDir
 	executable   = os.Executable
@@ -27,8 +21,8 @@ var (
 	runCommand   = runExternalCommand
 )
 
-func maybeExecuteLazyCmd(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) (bool, int) {
-	target := strings.TrimSpace(os.Getenv(lazyCmdEnv))
+func maybeExecuteLazyCmd(config envConfig, args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) (bool, int) {
+	target := config.lazyCmdTarget()
 	if target == "" {
 		return false, 0
 	}
@@ -47,7 +41,7 @@ func maybeExecuteLazyCmd(args []string, stdin io.Reader, stdout io.Writer, stder
 		Stdin:  stdin,
 		Stdout: stdout,
 		Stderr: stderr,
-		Env:    []string{noVersionCheckEnv + "=true"},
+		Env:    []string{lazyMultiversionEnv + "=" + lazyMultiversionOff},
 	})
 	if err != nil {
 		fmt.Fprintf(stderr, "lazy: run %s: %v\n", targetPath, err)
@@ -90,8 +84,8 @@ func canonicalExecutablePath(path string) (string, error) {
 	return absolute, nil
 }
 
-func maybeExecuteProjectVersion(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) (bool, int) {
-	if skipProjectVersionCheck(args) {
+func maybeExecuteProjectVersion(config envConfig, args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) (bool, int) {
+	if skipProjectVersionCheck(config, args) {
 		return false, 0
 	}
 
@@ -129,14 +123,9 @@ func maybeExecuteProjectVersion(args []string, stdin io.Reader, stdout io.Writer
 	return true, code
 }
 
-func skipProjectVersionCheck(args []string) bool {
-	if os.Getenv(noVersionCheckEnv) == "true" {
+func skipProjectVersionCheck(config envConfig, args []string) bool {
+	if config.multiversionOff() {
 		return true
-	}
-	for _, arg := range args {
-		if arg == skipVersionCheckFlag {
-			return true
-		}
 	}
 	if len(args) == 0 {
 		return false
@@ -205,7 +194,7 @@ func runLazyVersion(binary string, args []string, stdin io.Reader, stdout io.Wri
 		Stdin:  stdin,
 		Stdout: stdout,
 		Stderr: stderr,
-		Env:    []string{noVersionCheckEnv + "=true"},
+		Env:    []string{lazyMultiversionEnv + "=" + lazyMultiversionOff},
 	})
 }
 

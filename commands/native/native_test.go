@@ -73,11 +73,11 @@ func TestDevRunsCachedNativeHelper(t *testing.T) {
 		"--addr", "127.0.0.1:4455",
 		"--env", "ADDR=127.0.0.1:4455",
 		"--env", "LAZY_TMUX=1",
-		"--env", "NO_VERSION_CHECK=true",
+		"--env", "LAZY_MULTIVERSION=off",
 		"--title", "Shop",
 		"--width", "1200",
 		"--height", "800",
-		"--", "/usr/local/bin/lazy", "--skip-version-check",
+		"--", "/usr/local/bin/lazy",
 		"--cmdpath", "cmd/web",
 		"--viewpath", "views",
 	}

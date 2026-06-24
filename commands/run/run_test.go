@@ -109,6 +109,42 @@ func TestUsesExplicitCommandPathAndViewPath(t *testing.T) {
 	}
 }
 
+func TestSkipsGoModTidyWhenWorkspaceModeIsActive(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "go.mod"), "module example.com/team/my_app\n")
+	writeFile(t, filepath.Join(dir, "app", "views", "layouts", "app.html.tpl"), "layout")
+	writeCommand(t, filepath.Join(dir, "cmd", "app"))
+
+	var calls []invocation
+	command := Command{
+		Dir:    dir,
+		GoWork: filepath.Join(dir, "go.work"),
+		Runner: func(name string, args []string, options commands.Options) error {
+			calls = append(calls, invocation{command: name, args: args, options: options})
+			return nil
+		},
+	}
+
+	code, err := command.Execute()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != 0 {
+		t.Fatalf("exit code = %d", code)
+	}
+	if len(calls) != 1 {
+		t.Fatalf("calls = %d, want 1", len(calls))
+	}
+	if got, want := calls[0].args, []string{
+		"run",
+		"-tags",
+		"lazydev",
+		"./cmd/app",
+	}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("args = %#v, want %#v", got, want)
+	}
+}
+
 func TestErrorsWhenCommandIsMissing(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "go.mod"), "module example.com/team/my_app\n")

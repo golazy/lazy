@@ -36,6 +36,7 @@ type Command struct {
 	CurrentVersion       string
 	SourceDir            string
 	Dir                  string
+	GoWork               string
 	SkipUpdateCheck      bool
 	LatestVersionURL     string
 	LatestVersionFetcher LatestVersionFetcher
@@ -123,7 +124,7 @@ func (c Command) Execute(modulePath string) error {
 		return err
 	}
 
-	commandEnv, goArgs, cleanupWorkfile, err := localValidation(destination)
+	commandEnv, goArgs, cleanupWorkfile, err := localValidation(destination, c.GoWork)
 	if err != nil {
 		return err
 	}
@@ -359,13 +360,13 @@ func copyTemplateDirectory(source, destination string) error {
 	return nil
 }
 
-func localValidation(destination string) ([]string, []string, func(), error) {
-	env, cleanup, err := localWorkspaceEnv(destination)
+func localValidation(destination string, goWork string) ([]string, []string, func(), error) {
+	env, cleanup, err := localWorkspaceEnv(destination, goWork)
 	return env, nil, cleanup, err
 }
 
-func localWorkspaceEnv(destination string) ([]string, func(), error) {
-	workspaceFile, workspaceRoot, found := findWorkspace(destination)
+func localWorkspaceEnv(destination string, goWork string) ([]string, func(), error) {
+	workspaceFile, workspaceRoot, found := findWorkspace(destination, goWork)
 	if !found {
 		return nil, func() {}, nil
 	}
@@ -416,9 +417,9 @@ func localWorkspaceEnv(destination string) ([]string, func(), error) {
 	return env, cleanup, nil
 }
 
-func findWorkspace(start string) (string, string, bool) {
-	if current := os.Getenv("GOWORK"); current != "" {
-		if current == "off" {
+func findWorkspace(start string, goWork string) (string, string, bool) {
+	if current := strings.TrimSpace(goWork); current != "" {
+		if strings.EqualFold(current, "off") {
 			return "", "", false
 		}
 		if info, err := os.Stat(current); err == nil && !info.IsDir() {

@@ -27,6 +27,12 @@ fi
 exit 1
 `)
 	writeTestFile(t, filepath.Join(fakeBin, "go"), `#!/bin/sh
+if [ "$1" = "env" ] && [ "$2" = "GOWORK" ]; then
+  if [ -n "$FAKE_GOWORK" ]; then
+    printf '%s\n' "$FAKE_GOWORK"
+  fi
+  exit 0
+fi
 printf '%s\n' "$*" >> "$GO_LOG"
 if [ "$1" = "mod" ] && [ "$2" = "tidy" ]; then
   exit 0
@@ -69,6 +75,59 @@ exit 1
 		t.Fatal(err)
 	}
 	want := "mod tidy\nbuild -tags lazydev -o " + result.Binary + " ./cmd/app\n"
+	if string(data) != want {
+		t.Fatalf("go log = %q, want %q", data, want)
+	}
+}
+
+func TestBuildSkipsGoModTidyWhenGoEnvGOWORKIsActive(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fake go command is POSIX-only")
+	}
+
+	dir := t.TempDir()
+	fakeBin := filepath.Join(dir, "bin")
+	logPath := filepath.Join(dir, "go.log")
+	writeTestFile(t, filepath.Join(fakeBin, "go"), `#!/bin/sh
+if [ "$1" = "env" ] && [ "$2" = "GOWORK" ]; then
+  printf '%s\n' "$FAKE_GOWORK"
+  exit 0
+fi
+printf '%s\n' "$*" >> "$GO_LOG"
+if [ "$1" = "build" ]; then
+  output=""
+  while [ "$#" -gt 0 ]; do
+    if [ "$1" = "-o" ]; then
+      shift
+      output=$1
+    fi
+    shift || true
+  done
+  printf 'built\n' > "$output"
+  exit 0
+fi
+exit 1
+`)
+	if err := os.Chmod(filepath.Join(fakeBin, "go"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("GO_LOG", logPath)
+	t.Setenv("FAKE_GOWORK", filepath.Join(dir, "go.work"))
+	t.Setenv("GOWORK", "")
+
+	result := (Config{
+		Root:        dir,
+		CommandPath: "cmd/app",
+	}).Build(context.Background(), dir, 1)
+	if result.Err != nil {
+		t.Fatalf("build failed: %v\n%s", result.Err, result.Output)
+	}
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "build -tags lazydev -o " + result.Binary + " ./cmd/app\n"
 	if string(data) != want {
 		t.Fatalf("go log = %q, want %q", data, want)
 	}
