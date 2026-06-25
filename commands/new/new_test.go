@@ -226,6 +226,36 @@ func TestNewStopsWhenNewerVersionIsAvailable(t *testing.T) {
 	}
 }
 
+func TestNewContinuesWhenLiveVersionIsOlder(t *testing.T) {
+	dir := t.TempDir()
+	var calls []invocation
+	command := Command{
+		Version:        "v0.1.16",
+		CurrentVersion: "v0.1.16",
+		Dir:            dir,
+		Stdout:         &bytes.Buffer{},
+		LatestVersionFetcher: func(context.Context, string) (string, error) {
+			return "v0.1.15\n", nil
+		},
+		Runner: func(name string, args []string, options commands.Options) error {
+			calls = append(calls, invocation{command: name, args: args, options: options})
+			if name == "git" && len(args) > 0 && args[0] == "clone" {
+				destination := args[len(args)-1]
+				writeFile(t, filepath.Join(destination, "go.mod"), "module sample_app\n")
+				writeFile(t, filepath.Join(destination, "main.go"), "package main\n")
+			}
+			return nil
+		},
+	}
+
+	if err := command.Execute("github.com/guillermo/my_app"); err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) == 0 || calls[0].command != "git" {
+		t.Fatalf("calls = %#v, want first git clone", calls)
+	}
+}
+
 func TestNewContinuesWhenLatestVersionCheckFails(t *testing.T) {
 	dir := t.TempDir()
 	var calls []invocation
