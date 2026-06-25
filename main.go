@@ -28,22 +28,16 @@ func main() {
 }
 
 func execute(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
-	config, err := loadConfig()
-	if err != nil {
-		fmt.Fprintf(stderr, "lazy: %v\n", err)
-		return 1
-	}
-
-	if handled, code := maybeExecuteLazyCmd(config, args, stdin, stdout, stderr); handled {
+	if handled, code := maybeExecuteLazyCmd(args, stdin, stdout, stderr); handled {
 		return code
 	}
 
-	if handled, code := maybeExecuteProjectVersion(config, args, stdin, stdout, stderr); handled {
+	if handled, code := maybeExecuteProjectVersion(args, stdin, stdout, stderr); handled {
 		return code
 	}
 
 	if len(args) == 0 {
-		return executeRun(config, args, stdin, stdout, stderr)
+		return executeRun(args, stdin, stdout, stderr)
 	}
 
 	switch args[0] {
@@ -94,7 +88,7 @@ func execute(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer)
 			Version:         version,
 			CurrentVersion:  currentVersion(),
 			SourceDir:       *sourceDir,
-			GoWork:          config.GoWork,
+			GoWork:          Config.GoWork,
 			SkipUpdateCheck: *skipUpdateCheck,
 			Stdout:          stdout,
 			Stderr:          stderr,
@@ -113,12 +107,12 @@ func execute(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer)
 	case "docs":
 		return executeDocs(args[1:], stdout, stderr)
 	case "command-center":
-		return executeCommandCenter(config, args[1:], stdin, stdout, stderr)
+		return executeCommandCenter(args[1:], stdin, stdout, stderr)
 	case "bastard":
 		return executeBastard(args[1:], stdin, stdout, stderr)
 	default:
 		if strings.HasPrefix(args[0], "-") {
-			return executeRun(config, args, stdin, stdout, stderr)
+			return executeRun(args, stdin, stdout, stderr)
 		}
 		fmt.Fprintf(stderr, "lazy: unknown command %q\n", args[0])
 		return 1
@@ -286,13 +280,13 @@ func executeDocs(args []string, stdout io.Writer, stderr io.Writer) int {
 	return code
 }
 
-func executeCommandCenter(config envConfig, args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
+func executeCommandCenter(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
 	if len(args) != 0 {
 		fmt.Fprintln(stderr, "lazy: command-center does not accept arguments")
 		return 1
 	}
 	code, err := (commandcenter.Command{
-		Session: config.tmuxSession(),
+		Session: Config.LazyTmuxSession,
 		Stdin:   stdin,
 		Stdout:  stdout,
 		Stderr:  stderr,
@@ -303,7 +297,7 @@ func executeCommandCenter(config envConfig, args []string, stdin io.Reader, stdo
 	return code
 }
 
-func executeRun(config envConfig, args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
+func executeRun(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
 	flags := flag.NewFlagSet("lazy", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	cmdPath := flags.String("cmdpath", "", "application command path")
@@ -327,7 +321,7 @@ func executeRun(config envConfig, args []string, stdin io.Reader, stdout io.Writ
 		return 1
 	}
 
-	if !config.inLazyTmux() {
+	if !Config.LazyTmux {
 		lazyToml, ok, err := lazyconfig.LoadIfExists(".")
 		if err != nil {
 			fmt.Fprintf(stderr, "lazy: %v\n", err)
@@ -355,9 +349,9 @@ func executeRun(config envConfig, args []string, stdin io.Reader, stdout io.Writ
 		CmdPath:    *cmdPath,
 		ViewPath:   *viewPath,
 		PublicPath: *publicPath,
-		Addr:       config.Addr,
-		Port:       config.Port,
-		GoWork:     config.GoWork,
+		Addr:       Config.Addr,
+		Port:       Config.Port,
+		GoWork:     Config.GoWork,
 		Stdin:      stdin,
 		Stdout:     stdout,
 		Stderr:     stderr,

@@ -25,6 +25,7 @@ const (
 	defaultPollInterval   = 500 * time.Millisecond
 	defaultDebounce       = 150 * time.Millisecond
 	defaultStartupTimeout = 10 * time.Second
+	defaultListenAddr     = "127.0.0.1:3000"
 	viewReloadTimeout     = 5 * time.Second
 	stopTimeout           = 2 * time.Second
 )
@@ -145,7 +146,7 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 		d.startupTimeout = defaultStartupTimeout
 	}
 	if d.listenAddr == "" {
-		d.listenAddr = publicListenAddr("", "")
+		d.listenAddr = publicListenAddr(defaultListenAddr, 0)
 	}
 
 	tmpDir, err := os.MkdirTemp("", "lazy-run-*")
@@ -691,14 +692,12 @@ func drainChanges(changeCh <-chan []string, changed []string) []string {
 	}
 }
 
-func publicListenAddr(addr string, port string) string {
-	if addr != "" {
-		return normalizeListenAddr(addr)
+func publicListenAddr(addr string, port int) string {
+	normalizedAddr := normalizeListenAddr(addr)
+	if port != 0 && (normalizedAddr == "" || normalizedAddr == defaultListenAddr) {
+		return ":" + strconv.Itoa(port)
 	}
-	if port != "" {
-		return normalizeListenAddr(port)
-	}
-	return ":3000"
+	return normalizedAddr
 }
 
 func normalizeListenAddr(addr string) string {

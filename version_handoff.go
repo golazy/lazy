@@ -21,8 +21,8 @@ var (
 	runCommand   = runExternalCommand
 )
 
-func maybeExecuteLazyCmd(config envConfig, args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) (bool, int) {
-	target := config.lazyCmdTarget()
+func maybeExecuteLazyCmd(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) (bool, int) {
+	target := Config.LazyCmd
 	if target == "" {
 		return false, 0
 	}
@@ -84,8 +84,8 @@ func canonicalExecutablePath(path string) (string, error) {
 	return absolute, nil
 }
 
-func maybeExecuteProjectVersion(config envConfig, args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) (bool, int) {
-	if skipProjectVersionCheck(config, args) {
+func maybeExecuteProjectVersion(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) (bool, int) {
+	if skipProjectVersionCheck(args) {
 		return false, 0
 	}
 
@@ -123,8 +123,8 @@ func maybeExecuteProjectVersion(config envConfig, args []string, stdin io.Reader
 	return true, code
 }
 
-func skipProjectVersionCheck(config envConfig, args []string) bool {
-	if config.multiversionOff() {
+func skipProjectVersionCheck(args []string) bool {
+	if !Config.LazyMultiversion {
 		return true
 	}
 	if len(args) == 0 {

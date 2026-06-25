@@ -27,13 +27,25 @@ func TestNormalizeListenAddr(t *testing.T) {
 }
 
 func TestPublicListenAddrPrefersADDR(t *testing.T) {
-	if got, want := publicListenAddr("127.0.0.1:4000", "5000"), "127.0.0.1:4000"; got != want {
+	if got, want := publicListenAddr("127.0.0.1:4000", 5000), "127.0.0.1:4000"; got != want {
 		t.Fatalf("publicListenAddr() = %q, want %q", got, want)
 	}
 }
 
 func TestPublicListenAddrUsesPORT(t *testing.T) {
-	if got, want := publicListenAddr("", "5000"), ":5000"; got != want {
+	if got, want := publicListenAddr("", 5000), ":5000"; got != want {
+		t.Fatalf("publicListenAddr() = %q, want %q", got, want)
+	}
+}
+
+func TestPublicListenAddrUsesPORTOverDefaultADDR(t *testing.T) {
+	if got, want := publicListenAddr(defaultListenAddr, 5000), ":5000"; got != want {
+		t.Fatalf("publicListenAddr() = %q, want %q", got, want)
+	}
+}
+
+func TestPublicListenAddrUsesDefaultADDRWhenPORTUnset(t *testing.T) {
+	if got, want := publicListenAddr(defaultListenAddr, 0), defaultListenAddr; got != want {
 		t.Fatalf("publicListenAddr() = %q, want %q", got, want)
 	}
 }

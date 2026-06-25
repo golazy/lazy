@@ -22,7 +22,7 @@ type Command struct {
 	ViewPath   string
 	PublicPath string
 	Addr       string
-	Port       string
+	Port       int
 	GoWork     string
 	Stdin      io.Reader
 	Stdout     io.Writer

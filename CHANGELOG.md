@@ -23,9 +23,10 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   testing, replacing the removed global `--skip-version-check` flag.
 - The default `lazy` development command now skips automatic `go mod tidy` when
   `GOWORK` or `go env GOWORK` points at an active Go workspace.
-- CLI-owned environment variables are now loaded through `lazy/config.go` using
-  `golazy.dev/lazyconfig` and passed into subcommands instead of being read
-  ad hoc throughout the command tree.
+- CLI-owned environment variables are now loaded once into the package-level
+  `Config` singleton in `lazy/config.go` using
+  `golazy.dev/lazyconfig.MustGetenv` instead of being read ad hoc throughout
+  the command tree.
 - The default `lazy` development command now uses `golazy.dev/lazytui/progress`
   for proxy startup, generated-asset work, Go builds, and application starts
   while leaving the running app's own output attached to the terminal.
