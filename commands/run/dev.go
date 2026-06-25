@@ -14,10 +14,12 @@ import (
 	"time"
 
 	"golazy.dev/lazy/commands/appcmd"
-	jscommand "golazy.dev/lazy/commands/js"
-	"golazy.dev/lazy/commands/run/devapp"
-	"golazy.dev/lazy/commands/run/reloadproxy"
-	"golazy.dev/lazy/commands/run/watcher"
+	appinit "golazy.dev/lazy/init"
+	"golazy.dev/lazy/services/buildservice"
+	"golazy.dev/lazy/services/devserver"
+	"golazy.dev/lazy/services/jsservice"
+	"golazy.dev/lazy/services/tailwindservice"
+	"golazy.dev/lazy/services/watchservice"
 	"golazy.dev/lazytui/progress"
 )
 
@@ -30,7 +32,7 @@ const (
 	stopTimeout           = 2 * time.Second
 )
 
-const lazyDevReloadViewsPath = "/_golazy/views/reload"
+const lazyDevReloadViewsPath = "/views"
 
 type javaScriptAssetMode int
 
@@ -70,6 +72,22 @@ type startupOutput struct {
 type startupOutputWriter struct {
 	output *startupOutput
 	stderr bool
+}
+
+type panelOutputWriter struct {
+	store  *buildservice.Store
+	stream string
+}
+
+func (w panelOutputWriter) Write(p []byte) (int, error) {
+	if w.store != nil && len(p) > 0 {
+		w.store.AddEvent(buildservice.Event{
+			Type:   buildservice.EventOutput,
+			Stream: w.stream,
+			Output: string(p),
+		})
+	}
+	return len(p), nil
 }
 
 func (o *startupOutput) Stdout() io.Writer {
@@ -155,23 +173,27 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	var proxy *reloadproxy.Proxy
+	store := buildservice.NewStore(300)
+	actions := buildservice.NewActions()
+	panel := appinit.App(appinit.Config{Store: store, Actions: actions})
+
+	var server *devserver.Server
 	if err := d.runProgress(progress.Tasks{
-		progress.Task("Start reload proxy", func(_ io.Reader, _ io.Writer, _ io.Writer) error {
-			next, err := reloadproxy.New(d.listenAddr)
-			if err != nil {
-				return err
-			}
-			next.UpdateStatus(reloadproxy.Status{
-				State:       reloadproxy.StateQueued,
+		progress.Task("Start development panel", func(_ io.Reader, _ io.Writer, _ io.Writer) error {
+			store.Update(buildservice.Snapshot{
+				State:       buildservice.StateQueued,
 				Message:     "Waiting for the first build.",
 				CommandPath: d.commandPath,
 				WatchedRoot: d.root,
 			})
+			next, err := devserver.New(d.listenAddr, panel, store)
+			if err != nil {
+				return err
+			}
 			if err := next.Start(); err != nil {
 				return err
 			}
-			proxy = next
+			server = next
 			return nil
 		}),
 	}); err != nil {
@@ -180,38 +202,48 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 	defer func() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), stopTimeout)
 		defer cancel()
-		_ = proxy.Shutdown(shutdownCtx)
+		_ = server.Shutdown(shutdownCtx)
 	}()
 
-	fmt.Fprintf(d.stderr, "lazy: serving %s with hot reload\n", displayListenAddr(proxy.Addr()))
+	fmt.Fprintf(d.stderr, "lazy: serving %s with development panel\n", displayListenAddr(server.Addr()))
 
-	fileWatcher := watcher.Watcher{
+	fileWatcher := watchservice.Watcher{
 		Root:     d.root,
 		Interval: d.pollInterval,
 		Debounce: d.debounce,
 	}
 	changeCh := fileWatcher.Watch(ctx)
 
-	app := devapp.Config{
+	stdout := d.stdout
+	if stdout == nil {
+		stdout = io.Discard
+	}
+	stderr := d.stderr
+	if stderr == nil {
+		stderr = io.Discard
+	}
+
+	app := buildservice.Config{
 		Root:           d.root,
 		CommandPath:    d.commandPath,
 		ViewPath:       d.viewPath,
 		PublicPath:     d.publicPath,
 		GoWork:         d.goWork,
 		Stdin:          d.stdin,
-		Stdout:         d.stdout,
-		Stderr:         d.stderr,
+		Stdout:         io.MultiWriter(stdout, panelOutputWriter{store: store, stream: "stdout"}),
+		Stderr:         io.MultiWriter(stderr, panelOutputWriter{store: store, stream: "stderr"}),
 		StartupTimeout: d.startupTimeout,
 		StopTimeout:    stopTimeout,
 	}
-	var current *devapp.Process
+	var current *buildservice.Process
 	var appDone <-chan error
+	lastBinary := ""
 	buildNumber := 0
 	rebuild := func(reason string, changed []string) {
 		buildNumber++
 		started := time.Now()
-		proxy.UpdateStatus(reloadproxy.Status{
-			State:       reloadproxy.StateBuilding,
+		store.Update(buildservice.Snapshot{
+			State:       buildservice.StateBuilding,
 			Message:     reason,
 			CommandPath: d.commandPath,
 			WatchedRoot: d.root,
@@ -219,8 +251,8 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 		})
 		assetMode := javaScriptAssetGenerationMode(d.root, changed)
 		var assets generatedAssetResult
-		var result devapp.BuildResult
-		var next *devapp.Process
+		var result buildservice.BuildResult
+		var next *buildservice.Process
 		var runOutput string
 		tasks := make(progress.Tasks, 0, 3)
 		if assetMode != javaScriptAssetNone {
@@ -244,8 +276,8 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 				startup := &startupOutput{}
 				startApp := app
 				startApp.Stdin = stdin
-				startApp.Stdout = startup.Stdout()
-				startApp.Stderr = startup.Stderr()
+				startApp.Stdout = io.MultiWriter(startup.Stdout(), panelOutputWriter{store: store, stream: "stdout"})
+				startApp.Stderr = io.MultiWriter(startup.Stderr(), panelOutputWriter{store: store, stream: "stderr"})
 				var err error
 				next, err = startApp.Start(ctx, result.Binary)
 				if err != nil {
@@ -262,36 +294,36 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 		duration := time.Since(started)
 		if err != nil {
 			if assets.Err != nil {
-				proxy.UpdateStatus(reloadproxy.Status{
-					State:       reloadproxy.StateBuildFailed,
+				store.Update(buildservice.Snapshot{
+					State:       buildservice.StateBuildFailed,
 					Message:     fmt.Sprintf("JavaScript generation failed after %s.", assets.Duration.Round(time.Millisecond)),
 					CommandPath: d.commandPath,
 					WatchedRoot: d.root,
 					BuildCount:  buildNumber,
-					Duration:    assets.Duration,
+					Duration:    assets.Duration.Round(time.Millisecond).String(),
 					Output:      assets.Output,
 				})
 				return
 			}
 			if result.Err != nil {
-				proxy.UpdateStatus(reloadproxy.Status{
-					State:       reloadproxy.StateBuildFailed,
+				store.Update(buildservice.Snapshot{
+					State:       buildservice.StateBuildFailed,
 					Message:     fmt.Sprintf("Build failed after %s.", duration.Round(time.Millisecond)),
 					CommandPath: d.commandPath,
 					WatchedRoot: d.root,
 					BuildCount:  buildNumber,
-					Duration:    duration,
+					Duration:    duration.Round(time.Millisecond).String(),
 					Output:      output,
 				})
 				return
 			}
-			proxy.UpdateStatus(reloadproxy.Status{
-				State:       reloadproxy.StateRunFailed,
+			store.Update(buildservice.Snapshot{
+				State:       buildservice.StateRunFailed,
 				Message:     err.Error(),
 				CommandPath: d.commandPath,
 				WatchedRoot: d.root,
 				BuildCount:  buildNumber,
-				Duration:    duration,
+				Duration:    duration.Round(time.Millisecond).String(),
 				Output:      runOutput,
 			})
 			if runOutput != "" {
@@ -303,22 +335,26 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 		old := current
 		current = next
 		appDone = next.Done()
-		proxy.SetTarget("http://" + next.Addr())
-		proxy.UpdateStatus(reloadproxy.Status{
-			State:       reloadproxy.StateRunning,
-			Message:     "Application is running.",
-			CommandPath: d.commandPath,
-			WatchedRoot: d.root,
-			BuildCount:  buildNumber,
-			Duration:    duration,
-			StartedAt:   time.Now(),
-			Changed:     changed,
+		lastBinary = result.Binary
+		server.SetTarget("http://" + next.Addr())
+		store.Update(buildservice.Snapshot{
+			State:            buildservice.StateRunning,
+			Message:          "Application is running.",
+			CommandPath:      d.commandPath,
+			WatchedRoot:      d.root,
+			BuildCount:       buildNumber,
+			Duration:         duration.Round(time.Millisecond).String(),
+			StartedAt:        time.Now(),
+			AppAddr:          next.Addr(),
+			ControlPlaneAddr: next.ControlPlaneAddr(),
+			Changed:          changed,
 		})
 		if old != nil {
 			old.Stop()
 		}
 		if buildNumber > 1 {
-			proxy.BroadcastReload()
+			server.BroadcastReload()
+			store.AddEvent(buildservice.Event{Type: buildservice.EventReload, Message: "Browser reload broadcast.", Build: buildNumber})
 		}
 		fmt.Fprintf(d.stderr, "lazy: application running after %s\n", duration.Round(time.Millisecond))
 	}
@@ -328,9 +364,9 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 	for {
 		select {
 		case <-ctx.Done():
-			proxy.ClearTarget()
-			proxy.UpdateStatus(reloadproxy.Status{
-				State:       reloadproxy.StateStopped,
+			server.ClearTarget()
+			store.Update(buildservice.Snapshot{
+				State:       buildservice.StateStopped,
 				Message:     "lazy is shutting down.",
 				CommandPath: d.commandPath,
 				WatchedRoot: d.root,
@@ -349,18 +385,59 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 			if onlyGeneratedJavaScriptOutputs(changed) {
 				continue
 			}
+			if onlyTailwindInputs(changed) && current != nil {
+				result := d.buildTailwind(ctx)
+				if result.Err != nil {
+					output := result.Output
+					if strings.TrimSpace(output) == "" {
+						output = result.Err.Error() + "\n"
+					}
+					store.Update(buildservice.Snapshot{
+						State:            buildservice.StateBuildFailed,
+						Message:          fmt.Sprintf("Tailwind build failed after %s.", result.Duration.Round(time.Millisecond)),
+						CommandPath:      d.commandPath,
+						WatchedRoot:      d.root,
+						BuildCount:       buildNumber,
+						Duration:         result.Duration.Round(time.Millisecond).String(),
+						Changed:          changed,
+						Output:           output,
+						AppAddr:          current.Addr(),
+						ControlPlaneAddr: current.ControlPlaneAddr(),
+					})
+					continue
+				}
+				store.Update(buildservice.Snapshot{
+					State:            buildservice.StateRunning,
+					Message:          "Application is running.",
+					CommandPath:      d.commandPath,
+					WatchedRoot:      d.root,
+					BuildCount:       buildNumber,
+					Duration:         result.Duration.Round(time.Millisecond).String(),
+					Changed:          changed,
+					Output:           result.Output,
+					AppAddr:          current.Addr(),
+					ControlPlaneAddr: current.ControlPlaneAddr(),
+				})
+				server.BroadcastReload()
+				store.AddEvent(buildservice.Event{Type: buildservice.EventReload, Message: "Tailwind rebuilt and browser reload broadcast.", Changed: changed, Build: buildNumber})
+				fmt.Fprintf(d.stderr, "lazy: Tailwind rebuilt after %s\n", result.Duration.Round(time.Millisecond))
+				continue
+			}
 			switch classifyDevelopmentChange(d.viewPath, d.publicPath, changed) {
 			case devChangeReloadBrowser:
 				if current != nil {
-					proxy.UpdateStatus(reloadproxy.Status{
-						State:       reloadproxy.StateRunning,
-						Message:     "Application is running.",
-						CommandPath: d.commandPath,
-						WatchedRoot: d.root,
-						BuildCount:  buildNumber,
-						Changed:     changed,
+					store.Update(buildservice.Snapshot{
+						State:            buildservice.StateRunning,
+						Message:          "Application is running.",
+						CommandPath:      d.commandPath,
+						WatchedRoot:      d.root,
+						BuildCount:       buildNumber,
+						Changed:          changed,
+						AppAddr:          current.Addr(),
+						ControlPlaneAddr: current.ControlPlaneAddr(),
 					})
-					proxy.BroadcastReload()
+					server.BroadcastReload()
+					store.AddEvent(buildservice.Event{Type: buildservice.EventReload, Message: "Browser reload broadcast.", Changed: changed, Build: buildNumber})
 					fmt.Fprintf(d.stderr, "lazy: browser reloaded after %d public file change(s)\n", len(changed))
 					continue
 				}
@@ -369,7 +446,7 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 					var result viewReloadResult
 					err := d.runProgress(progress.Tasks{
 						progress.Task("Reload views", func(_ io.Reader, _ io.Writer, stderr io.Writer) error {
-							result = reloadViews(ctx, current.Addr())
+							result = reloadViews(ctx, current.ControlPlaneAddr())
 							if result.Err != nil && result.Output != "" {
 								printOutput(stderr, result.Output)
 							}
@@ -381,43 +458,61 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 						if strings.TrimSpace(output) == "" {
 							output = err.Error() + "\n"
 						}
-						proxy.UpdateStatus(reloadproxy.Status{
-							State:       reloadproxy.StateReloadFailed,
-							Message:     fmt.Sprintf("Reload views failed after %s.", result.Duration.Round(time.Millisecond)),
-							CommandPath: d.commandPath,
-							WatchedRoot: d.root,
-							BuildCount:  buildNumber,
-							Duration:    result.Duration,
-							Changed:     changed,
-							Output:      output,
+						store.Update(buildservice.Snapshot{
+							State:            buildservice.StateReloadFailed,
+							Message:          fmt.Sprintf("Reload views failed after %s.", result.Duration.Round(time.Millisecond)),
+							CommandPath:      d.commandPath,
+							WatchedRoot:      d.root,
+							BuildCount:       buildNumber,
+							Duration:         result.Duration.Round(time.Millisecond).String(),
+							Changed:          changed,
+							Output:           output,
+							AppAddr:          current.Addr(),
+							ControlPlaneAddr: current.ControlPlaneAddr(),
 						})
 						continue
 					}
-					proxy.UpdateStatus(reloadproxy.Status{
-						State:       reloadproxy.StateRunning,
-						Message:     "Application is running.",
-						CommandPath: d.commandPath,
-						WatchedRoot: d.root,
-						BuildCount:  buildNumber,
-						Duration:    result.Duration,
-						Changed:     changed,
+					store.Update(buildservice.Snapshot{
+						State:            buildservice.StateRunning,
+						Message:          "Application is running.",
+						CommandPath:      d.commandPath,
+						WatchedRoot:      d.root,
+						BuildCount:       buildNumber,
+						Duration:         result.Duration.Round(time.Millisecond).String(),
+						Changed:          changed,
+						AppAddr:          current.Addr(),
+						ControlPlaneAddr: current.ControlPlaneAddr(),
 					})
-					proxy.BroadcastReload()
+					server.BroadcastReload()
+					store.AddEvent(buildservice.Event{Type: buildservice.EventReload, Message: "Views reloaded and browser reload broadcast.", Changed: changed, Build: buildNumber})
 					fmt.Fprintf(d.stderr, "lazy: views reloaded after %s\n", result.Duration.Round(time.Millisecond))
 					continue
 				}
 			}
 			rebuild(fmt.Sprintf("Rebuilding after %d changed file(s).", len(changed)), changed)
+		case request := <-actions:
+			var err error
+			switch request.Action {
+			case buildservice.ActionRebuild:
+				store.AddEvent(buildservice.Event{Type: buildservice.EventManual, Message: "Manual rebuild requested.", Build: buildNumber})
+				rebuild("Manual rebuild requested.", nil)
+			case buildservice.ActionRestart:
+				store.AddEvent(buildservice.Event{Type: buildservice.EventManual, Message: "Manual restart requested.", Build: buildNumber})
+				err = restartLatest(ctx, d, app, store, server, &current, &appDone, lastBinary, buildNumber)
+			default:
+				err = fmt.Errorf("unknown action %q", request.Action)
+			}
+			request.Reply <- err
 		case err := <-appDone:
 			appDone = nil
 			current = nil
-			proxy.ClearTarget()
+			server.ClearTarget()
 			message := "Application exited."
 			if err != nil {
 				message = fmt.Sprintf("Application exited: %v", err)
 			}
-			proxy.UpdateStatus(reloadproxy.Status{
-				State:       reloadproxy.StateRunFailed,
+			store.Update(buildservice.Snapshot{
+				State:       buildservice.StateRunFailed,
 				Message:     message,
 				CommandPath: d.commandPath,
 				WatchedRoot: d.root,
@@ -432,7 +527,76 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 }
 
 func shouldExitAfterApplicationDone(ctx context.Context, err error) bool {
-	return ctx.Err() != nil || err == nil || devapp.Interrupted(err)
+	return ctx.Err() != nil || err == nil || buildservice.Interrupted(err)
+}
+
+func restartLatest(ctx context.Context, d *devRunner, app buildservice.Config, store *buildservice.Store, server *devserver.Server, current **buildservice.Process, appDone *<-chan error, binary string, buildNumber int) error {
+	if binary == "" {
+		return fmt.Errorf("no successful build is available to restart")
+	}
+	started := time.Now()
+	store.Update(buildservice.Snapshot{
+		State:       buildservice.StateStarting,
+		Message:     "Restarting application.",
+		CommandPath: d.commandPath,
+		WatchedRoot: d.root,
+		BuildCount:  buildNumber,
+	})
+	var next *buildservice.Process
+	var runOutput string
+	err := d.runProgress(progress.Tasks{
+		progress.UITask("Restart application", func(ui *progress.UI) error {
+			return ui.Takeover(func(stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
+				startup := &startupOutput{}
+				startApp := app
+				startApp.Stdin = stdin
+				startApp.Stdout = io.MultiWriter(startup.Stdout(), panelOutputWriter{store: store, stream: "stdout"})
+				startApp.Stderr = io.MultiWriter(startup.Stderr(), panelOutputWriter{store: store, stream: "stderr"})
+				var err error
+				next, err = startApp.Start(ctx, binary)
+				if err != nil {
+					runOutput = startup.String()
+					return err
+				}
+				startup.Attach(stdout, stderr)
+				return nil
+			})
+		}),
+	})
+	duration := time.Since(started)
+	if err != nil {
+		store.Update(buildservice.Snapshot{
+			State:       buildservice.StateRunFailed,
+			Message:     err.Error(),
+			CommandPath: d.commandPath,
+			WatchedRoot: d.root,
+			BuildCount:  buildNumber,
+			Duration:    duration.Round(time.Millisecond).String(),
+			Output:      runOutput,
+		})
+		return err
+	}
+	old := *current
+	*current = next
+	*appDone = next.Done()
+	server.SetTarget("http://" + next.Addr())
+	store.Update(buildservice.Snapshot{
+		State:            buildservice.StateRunning,
+		Message:          "Application restarted.",
+		CommandPath:      d.commandPath,
+		WatchedRoot:      d.root,
+		BuildCount:       buildNumber,
+		Duration:         duration.Round(time.Millisecond).String(),
+		StartedAt:        time.Now(),
+		AppAddr:          next.Addr(),
+		ControlPlaneAddr: next.ControlPlaneAddr(),
+	})
+	if old != nil {
+		old.Stop()
+	}
+	server.BroadcastReload()
+	store.AddEvent(buildservice.Event{Type: buildservice.EventReload, Message: "Browser reload broadcast after restart.", Build: buildNumber})
+	return nil
 }
 
 func (d *devRunner) runProgress(tasks progress.Tasks) error {
@@ -481,28 +645,21 @@ func (d *devRunner) generateAssetsForMode(mode javaScriptAssetMode) generatedAss
 		return generatedAssetResult{}
 	}
 
-	started := time.Now()
 	switch mode {
 	case javaScriptAssetFull:
-		var output bytes.Buffer
-		code, err := (jscommand.Command{
-			Dir:    d.root,
-			Stdout: &output,
-			Stderr: &output,
-		}).Execute()
-		if err == nil && code != 0 {
-			err = fmt.Errorf("lazy js failed with exit code %d", code)
-		}
-		return generatedAssetResult{
-			Output:   output.String(),
-			Err:      err,
-			Duration: time.Since(started),
-		}
+		result := (jsservice.Service{Root: d.root}).Build(context.Background(), nil, nil)
+		return generatedAssetResult{Output: result.Output, Err: result.Err, Duration: result.Duration}
 	case javaScriptAssetBundle:
-		return bundleJavaScriptAssets(d.root, started)
+		result := (jsservice.Service{Root: d.root}).Bundle(context.Background())
+		return generatedAssetResult{Output: result.Output, Err: result.Err, Duration: result.Duration}
 	default:
 		return generatedAssetResult{}
 	}
+}
+
+func (d *devRunner) buildTailwind(ctx context.Context) generatedAssetResult {
+	result := (tailwindservice.Service{Root: d.root}).Build(ctx, nil, nil)
+	return generatedAssetResult{Output: result.Output, Err: result.Err, Duration: result.Duration}
 }
 
 func javaScriptAssetTaskName(mode javaScriptAssetMode) string {
@@ -514,20 +671,6 @@ func javaScriptAssetTaskName(mode javaScriptAssetMode) string {
 	default:
 		return "Generate JavaScript assets"
 	}
-}
-
-func bundleJavaScriptAssets(root string, started time.Time) generatedAssetResult {
-	const output = "* Bundling JavaScript\n"
-
-	manifest, err := jscommand.LoadManifest(root)
-	if err != nil {
-		return generatedAssetResult{Output: output, Err: err, Duration: time.Since(started)}
-	}
-	packageDir := filepath.Dir(resolveRootPath(root, manifest.Package))
-	if _, err := jscommand.Bundle(manifest, root, packageDir); err != nil {
-		return generatedAssetResult{Output: output, Err: err, Duration: time.Since(started)}
-	}
-	return generatedAssetResult{Output: output, Duration: time.Since(started)}
 }
 
 func javaScriptAssetGenerationMode(root string, changed []string) javaScriptAssetMode {
@@ -620,6 +763,27 @@ func onlyGeneratedJavaScriptOutputs(changed []string) bool {
 		}
 	}
 	return true
+}
+
+func onlyTailwindInputs(changed []string) bool {
+	if len(changed) == 0 {
+		return false
+	}
+	for _, path := range changed {
+		if !isTailwindInput(path) {
+			return false
+		}
+	}
+	return true
+}
+
+func isTailwindInput(path string) bool {
+	path = cleanWatchPath(path)
+	switch path {
+	case "tailwind.config.js":
+		return true
+	}
+	return strings.HasPrefix(path, "app/styles/") || strings.HasPrefix(path, "styles/")
 }
 
 func isGeneratedJavaScriptOutput(path string) bool {

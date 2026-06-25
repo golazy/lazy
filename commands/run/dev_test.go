@@ -143,7 +143,7 @@ func TestReloadViewsPostsToLazyDevControlPlane(t *testing.T) {
 		if r.Method != http.MethodPost {
 			t.Fatalf("method = %s, want POST", r.Method)
 		}
-		if r.URL.Path != "/_golazy/views/reload" {
+		if r.URL.Path != "/views" {
 			t.Fatalf("path = %s, want reload path", r.URL.Path)
 		}
 		_, _ = fmt.Fprint(w, "reload views ok\n")

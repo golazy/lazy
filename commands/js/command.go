@@ -129,3 +129,7 @@ func resolvePath(root, value string) string {
 	}
 	return filepath.Join(root, filepath.FromSlash(value))
 }
+
+func PackageDir(root string, manifest Manifest) string {
+	return filepath.Dir(resolvePath(root, manifest.Package))
+}
