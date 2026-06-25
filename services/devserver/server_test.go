@@ -65,3 +65,23 @@ func TestServerRoutesPanelPrefixBeforeProxy(t *testing.T) {
 		t.Fatalf("panel body = %q, want panel", got)
 	}
 }
+
+func TestServerNormalizesPanelRootSlash(t *testing.T) {
+	panel := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/_golazy" {
+			t.Fatalf("panel path = %q, want /_golazy", r.URL.Path)
+		}
+		_, _ = fmt.Fprint(w, "panel")
+	})
+	server, err := New("127.0.0.1:0", panel, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Shutdown(t.Context())
+
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/_golazy/", nil))
+	if got := response.Body.String(); got != "panel" {
+		t.Fatalf("panel body = %q, want panel", got)
+	}
+}

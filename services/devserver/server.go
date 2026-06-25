@@ -89,6 +89,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.broker.serveHTTP(w, r)
 		return
 	}
+	if r.URL.Path == PanelPrefix+"/" {
+		r = requestWithPath(r, PanelPrefix)
+	}
 	if isPanelPath(r.URL.Path) {
 		s.panel.ServeHTTP(w, r)
 		return
@@ -117,6 +120,15 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func isPanelPath(path string) bool {
 	return path == PanelPrefix || strings.HasPrefix(path, PanelPrefix+"/")
+}
+
+func requestWithPath(r *http.Request, path string) *http.Request {
+	clone := r.Clone(r.Context())
+	url := *clone.URL
+	url.Path = path
+	url.RawPath = ""
+	clone.URL = &url
+	return clone
 }
 
 func (s *Server) serveUnavailable(w http.ResponseWriter, r *http.Request) {
