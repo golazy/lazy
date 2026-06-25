@@ -436,7 +436,7 @@ func TestCopiesSourceDirectoryValidatesWithTemporaryWorkspace(t *testing.T) {
 	writeFile(
 		t,
 		filepath.Join(dir, "go.work"),
-		"go 1.26.0\n\nreplace golazy.dev v0.1.4 => ./golazy\n",
+		"go 1.26.2\n\nreplace golazy.dev v0.1.4 => ./golazy\n",
 	)
 	goWork := filepath.Join(dir, "go.work")
 
@@ -447,7 +447,7 @@ func TestCopiesSourceDirectoryValidatesWithTemporaryWorkspace(t *testing.T) {
 	writeFile(
 		t,
 		filepath.Join(source, "go.mod"),
-		"module sample_app\n\ngo 1.26.0\n\nrequire golazy.dev v0.1.4\n",
+		"module sample_app\n\ngo 1.26.2\n\nrequire golazy.dev v0.1.4\n",
 	)
 	writeFile(
 		t,

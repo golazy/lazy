@@ -11,7 +11,7 @@ import (
 func TestRemoveGoToolRemovesOnlyToolsGo(t *testing.T) {
 	input := []byte(strings.Join([]string{
 		"[tools]",
-		`go = "1.26.0"`,
+		`go = "1.26.2"`,
 		`node = "24"`,
 		`"aqua:getsops/sops" = "latest"`,
 		"",
@@ -25,7 +25,7 @@ func TestRemoveGoToolRemovesOnlyToolsGo(t *testing.T) {
 	if !ok {
 		t.Fatal("RemoveGoTool did not report a removal")
 	}
-	if strings.Contains(string(got), `go = "1.26.0"`) {
+	if strings.Contains(string(got), `go = "1.26.2"`) {
 		t.Fatalf("tools Go line was not removed: %s", got)
 	}
 	if !strings.Contains(string(got), `go = "kept"`) {
@@ -39,7 +39,7 @@ func TestRemoveGoToolRemovesOnlyToolsGo(t *testing.T) {
 func TestGoToolCheckPromptsAndRemovesGo(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "mise.toml")
-	if err := os.WriteFile(path, []byte("[tools]\ngo = \"1.26.0\"\nnode = \"24\"\n"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("[tools]\ngo = \"1.26.2\"\nnode = \"24\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -73,7 +73,7 @@ func TestGoToolCheckPromptsAndRemovesGo(t *testing.T) {
 func TestGoToolCheckDeclineLeavesFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "mise.toml")
-	original := "[tools]\ngo = \"1.26.0\"\n"
+	original := "[tools]\ngo = \"1.26.2\"\n"
 	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestGoToolCheckDeclineLeavesFile(t *testing.T) {
 func TestGoToolCheckDryRunDoesNotWrite(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "mise.toml")
-	original := "[tools]\ngo = \"1.26.0\"\n"
+	original := "[tools]\ngo = \"1.26.2\"\n"
 	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
 		t.Fatal(err)
 	}
