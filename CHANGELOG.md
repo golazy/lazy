@@ -12,7 +12,12 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `lazy upgrade` now migrates `v0.1.14 -> v0.1.15` application initializers by
   renaming `init/context.go` to `init/dependencies.go`, rewriting
   `lazyapp.Config.Context` to `lazyapp.Config.Dependencies`, and updating the
-  initializer signature.
+  initializer signature. It also moves inline `lazyapp.Config.SEO` option
+  slices into `init/seo.go` and wires `SEO: SEO`.
+- `lazy upgrade` file manifests now track sample-app additions, replacements,
+  and removals with SHA-256 hashes. Unchanged files are updated or removed
+  directly, new files are created directly, and customized conflicts prompt for
+  dated backups or explicit keep decisions.
 - `commands/lazycode` provides shared Go source rewrite helpers for upgrade
   migrations using `go/parser`, AST edits, `go/format`, and changed-file
   writes.

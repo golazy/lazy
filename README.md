@@ -181,11 +181,22 @@ This first implementation carries backfilled migrations for:
 - `v0.1.14 -> v0.1.15`: renames `init/context.go` to
   `init/dependencies.go`, rewrites `lazyapp.Config.Context` to
   `lazyapp.Config.Dependencies`, and updates simple initializer returns to the
-  new `func(*lazydeps.Scope) error` shape.
+  new `func(*lazydeps.Scope) error` shape. It also moves inline
+  `lazyapp.Config.SEO` option slices into `init/seo.go` and wires `SEO: SEO`.
 
-Template-owned files are hash-gated. If a file looks customized, `lazy upgrade`
-prints a diff, writes the proposed file under `.golazy/upgrade/conflicts`, and
-stops so the application code can be edited deliberately.
+Template-owned files are manifest-gated with SHA-256 hashes. New files are
+created directly. Replacements are applied directly only when the current file
+still matches the previous rendered sample-app version. Files removed from the
+new sample app are deleted directly only when the current file still matches
+the previous rendered sample-app version.
+
+If a replacement file looks customized, `lazy upgrade` prints a diff and asks
+whether to install the new version while backing up the current file next to it
+as `<filename>-YYYY-MM-DD`, or abort so you can merge manually. If a removed
+file looks customized, the command asks whether to delete it with a dated
+backup, keep it and continue, or abort. Keeping a removed file can create
+issues when the app still loads it. Non-interactive conflicts stop and write
+the proposed replacement under `.golazy/upgrade/conflicts`.
 
 After each successful step, `lazy upgrade` runs:
 
@@ -196,8 +207,8 @@ go vet ./...
 ```
 
 Use `--dry-run` to inspect planned writes and `--skip-commands` when you need
-to run verification manually. `--force` does not overwrite customized
-template-owned files; conflicts still stop with a diff and proposed file.
+to run verification manually. `--force` does not silently overwrite customized
+template-owned files; conflicts still require an explicit choice.
 
 ## Version
 

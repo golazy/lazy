@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"go/ast"
+	"go/format"
+	"go/printer"
 	"go/token"
 	"io"
 	"os"
@@ -260,6 +262,7 @@ func (c Command) runStepWithStreams(dir string, from string, to string, force bo
 		bootstrapFromOlder: force,
 		dryRun:             c.DryRun,
 		skipCommands:       c.SkipCommands,
+		stdin:              c.Stdin,
 		stdout:             stdout,
 		stderr:             stderr,
 		runner:             c.runner(),
@@ -417,6 +420,7 @@ type stepExecutor struct {
 	bootstrapFromOlder bool
 	dryRun             bool
 	skipCommands       bool
+	stdin              io.Reader
 	stdout             io.Writer
 	stderr             io.Writer
 	runner             commands.Runner
@@ -425,13 +429,7 @@ type stepExecutor struct {
 }
 
 func (e stepExecutor) upgradeTo011() error {
-	if err := e.replaceFileIfHash("mise.toml", v010MiseToml, v011MiseToml, 0o644); err != nil {
-		return err
-	}
-	if err := e.addFile(".mise/tasks/dev", v011DevTask, 0o755); err != nil {
-		return err
-	}
-	return e.addFile(".mise/tasks/test", v011TestTask, 0o755)
+	return e.applyFileManifest(upgradeTo011Manifest())
 }
 
 func (e stepExecutor) upgradeTo012() error {
@@ -446,7 +444,10 @@ func (e stepExecutor) upgradeTo013() error {
 }
 
 func (e stepExecutor) upgradeTo015() error {
-	return e.migrateContextToDependencies()
+	if err := e.migrateContextToDependencies(); err != nil {
+		return err
+	}
+	return e.migrateSEOToFunction()
 }
 
 func (e stepExecutor) updateGoMod() error {
@@ -866,6 +867,283 @@ func returnNilStmt() ast.Stmt {
 func isNilIdent(expr ast.Expr) bool {
 	ident, ok := expr.(*ast.Ident)
 	return ok && ident.Name == "nil"
+}
+
+type seoInitializerMigration struct {
+	PackageName       string
+	OptionsExpression string
+	OptionsPackage    string
+	Imports           []goImport
+}
+
+type goImport struct {
+	Name string
+	Path string
+}
+
+func (e stepExecutor) migrateSEOToFunction() error {
+	migration, changed, err := e.rewriteAppConfigSEO()
+	if err != nil {
+		return err
+	}
+	if !changed {
+		fmt.Fprintln(e.stdout, "  lazyapp.Config already uses SEO initializer")
+		return nil
+	}
+	if e.dryRun {
+		fmt.Fprintln(e.stdout, "  would add init/seo.go for lazyapp.Config SEO defaults")
+		return nil
+	}
+	if err := e.addFile("init/seo.go", migration.File(), 0o644); err != nil {
+		return err
+	}
+	fmt.Fprintln(e.stdout, "  moved lazyapp.Config SEO defaults to init/seo.go")
+	return nil
+}
+
+func (e stepExecutor) rewriteAppConfigSEO() (seoInitializerMigration, bool, error) {
+	path := filepath.Join(e.dir, "init", "app.go")
+	var migration seoInitializerMigration
+	changed, err := lazycode.RewriteFile(path, e.dryRun, func(fileSet *token.FileSet, file *ast.File) (bool, error) {
+		migration.PackageName = file.Name.Name
+		imports := importsByName(file)
+		changed := false
+		var rewriteErr error
+		var movedSelectorNames []string
+		ast.Inspect(file, func(node ast.Node) bool {
+			if changed || rewriteErr != nil {
+				return false
+			}
+			literal, ok := node.(*ast.CompositeLit)
+			if !ok || !isLazyappConfig(literal.Type) {
+				return true
+			}
+			for _, element := range literal.Elts {
+				keyValue, ok := element.(*ast.KeyValueExpr)
+				if !ok {
+					continue
+				}
+				key, ok := keyValue.Key.(*ast.Ident)
+				if !ok || key.Name != "SEO" {
+					continue
+				}
+				optionsPackage, ok := seoOptionsPackage(keyValue.Value)
+				if !ok {
+					continue
+				}
+				if !e.dryRun {
+					if _, err := os.Stat(filepath.Join(e.dir, "init", "seo.go")); err == nil {
+						rewriteErr = fmt.Errorf("cannot migrate lazyapp.Config SEO because init/seo.go already exists")
+						return false
+					} else if !errors.Is(err, os.ErrNotExist) {
+						rewriteErr = fmt.Errorf("inspect init/seo.go: %w", err)
+						return false
+					}
+				}
+				expression, err := goNodeString(fileSet, keyValue.Value)
+				if err != nil {
+					rewriteErr = err
+					return false
+				}
+				selectorNames := selectorPackageNames(keyValue.Value)
+				migration = seoInitializerMigration{
+					PackageName:       file.Name.Name,
+					OptionsExpression: expression,
+					OptionsPackage:    optionsPackage,
+					Imports:           seoInitializerImports(imports, optionsPackage, selectorNames),
+				}
+				movedSelectorNames = selectorNames
+				keyValue.Value = ast.NewIdent("SEO")
+				changed = true
+				return false
+			}
+			return true
+		})
+		if rewriteErr != nil {
+			return false, rewriteErr
+		}
+		if changed {
+			for _, name := range movedSelectorNames {
+				imported, ok := imports[name]
+				if !ok || lazycode.UsesSelector(file, name) {
+					continue
+				}
+				lazycode.RemoveImport(file, imported.Path)
+			}
+		}
+		return changed, nil
+	})
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			fmt.Fprintln(e.stdout, "  init/app.go not present; skipping lazyapp.Config SEO rewrite")
+			return migration, false, nil
+		}
+		return migration, false, err
+	}
+	switch {
+	case changed && e.dryRun:
+		fmt.Fprintln(e.stdout, "  would rewrite lazyapp.Config SEO field to SEO initializer")
+	case changed:
+		fmt.Fprintln(e.stdout, "  rewrote lazyapp.Config SEO field to SEO initializer")
+	}
+	return migration, changed, nil
+}
+
+func seoOptionsPackage(expr ast.Expr) (string, bool) {
+	literal, ok := expr.(*ast.CompositeLit)
+	if !ok {
+		return "", false
+	}
+	array, ok := literal.Type.(*ast.ArrayType)
+	if !ok {
+		return "", false
+	}
+	selector, ok := array.Elt.(*ast.SelectorExpr)
+	if !ok || selector.Sel.Name != "Option" {
+		return "", false
+	}
+	ident, ok := selector.X.(*ast.Ident)
+	if !ok || ident.Name == "" {
+		return "", false
+	}
+	return ident.Name, true
+}
+
+func importsByName(file *ast.File) map[string]goImport {
+	imports := make(map[string]goImport)
+	for _, spec := range file.Imports {
+		path, err := strconv.Unquote(spec.Path.Value)
+		if err != nil || path == "" {
+			continue
+		}
+		name := importName(spec, path)
+		if name == "" || name == "_" || name == "." {
+			continue
+		}
+		imports[name] = goImport{Name: importAlias(spec), Path: path}
+	}
+	return imports
+}
+
+func importName(spec *ast.ImportSpec, path string) string {
+	if spec.Name != nil {
+		return spec.Name.Name
+	}
+	base := path
+	if slash := strings.LastIndex(base, "/"); slash >= 0 {
+		base = base[slash+1:]
+	}
+	return strings.TrimSpace(base)
+}
+
+func importAlias(spec *ast.ImportSpec) string {
+	if spec.Name == nil {
+		return ""
+	}
+	return spec.Name.Name
+}
+
+func selectorPackageNames(expr ast.Expr) []string {
+	seen := make(map[string]struct{})
+	var names []string
+	ast.Inspect(expr, func(node ast.Node) bool {
+		selector, ok := node.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		ident, ok := selector.X.(*ast.Ident)
+		if !ok || ident.Name == "" {
+			return true
+		}
+		if _, ok := seen[ident.Name]; ok {
+			return true
+		}
+		seen[ident.Name] = struct{}{}
+		names = append(names, ident.Name)
+		return true
+	})
+	slices.Sort(names)
+	return names
+}
+
+func seoInitializerImports(imports map[string]goImport, optionsPackage string, selectorNames []string) []goImport {
+	seen := make(map[string]struct{})
+	var result []goImport
+	add := func(imported goImport) {
+		key := imported.Name + "\x00" + imported.Path
+		if imported.Path == "" {
+			return
+		}
+		if _, ok := seen[key]; ok {
+			return
+		}
+		seen[key] = struct{}{}
+		result = append(result, imported)
+	}
+	add(goImport{Path: "context"})
+	if imported, ok := imports[optionsPackage]; ok {
+		add(imported)
+	} else {
+		add(goImport{Path: "golazy.dev/lazyseo"})
+	}
+	for _, name := range selectorNames {
+		imported, ok := imports[name]
+		if !ok {
+			continue
+		}
+		add(imported)
+	}
+	slices.SortFunc(result, func(a goImport, b goImport) int {
+		if a.Path < b.Path {
+			return -1
+		}
+		if a.Path > b.Path {
+			return 1
+		}
+		if a.Name < b.Name {
+			return -1
+		}
+		if a.Name > b.Name {
+			return 1
+		}
+		return 0
+	})
+	return result
+}
+
+func goNodeString(fileSet *token.FileSet, node any) (string, error) {
+	var out bytes.Buffer
+	if err := printer.Fprint(&out, fileSet, node); err != nil {
+		return "", err
+	}
+	return out.String(), nil
+}
+
+func (m seoInitializerMigration) File() string {
+	if m.PackageName == "" {
+		m.PackageName = "appinit"
+	}
+	var out strings.Builder
+	fmt.Fprintf(&out, "package %s\n\n", m.PackageName)
+	if len(m.Imports) > 0 {
+		out.WriteString("import (\n")
+		for _, imported := range m.Imports {
+			if imported.Name != "" {
+				fmt.Fprintf(&out, "\t%s %q\n", imported.Name, imported.Path)
+			} else {
+				fmt.Fprintf(&out, "\t%q\n", imported.Path)
+			}
+		}
+		out.WriteString(")\n\n")
+	}
+	fmt.Fprintf(&out, "func SEO(ctx context.Context) []%s.Option {\n", m.OptionsPackage)
+	fmt.Fprintf(&out, "\treturn %s\n", m.OptionsExpression)
+	out.WriteString("}\n")
+	formatted, err := format.Source([]byte(out.String()))
+	if err != nil {
+		return out.String()
+	}
+	return string(formatted)
 }
 
 func (e stepExecutor) rewriteServiceImports() error {
