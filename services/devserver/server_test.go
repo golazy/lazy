@@ -85,3 +85,69 @@ func TestServerNormalizesPanelRootSlash(t *testing.T) {
 		t.Fatalf("panel body = %q, want panel", got)
 	}
 }
+
+func TestServerAddsRequestTraceHeadersToProxiedRequests(t *testing.T) {
+	headers := make(chan http.Header, 1)
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		headers <- r.Header.Clone()
+		_, _ = fmt.Fprint(w, "ok")
+	}))
+	defer backend.Close()
+
+	server, err := New("127.0.0.1:0", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Shutdown(t.Context())
+	server.SetTarget(backend.URL)
+
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/posts", nil))
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d", response.Code)
+	}
+	got := <-headers
+	if requestIDFromHeader(got.Get(requestIDHeader)) == "" {
+		t.Fatalf("X-Request-ID = %q, want generated request id", got.Get(requestIDHeader))
+	}
+	if !validTraceparent(got.Get("traceparent")) {
+		t.Fatalf("traceparent = %q, want generated traceparent", got.Get("traceparent"))
+	}
+}
+
+func TestServerPreservesExistingRequestTraceHeaders(t *testing.T) {
+	headers := make(chan http.Header, 1)
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		headers <- r.Header.Clone()
+		_, _ = fmt.Fprint(w, "ok")
+	}))
+	defer backend.Close()
+
+	server, err := New("127.0.0.1:0", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Shutdown(t.Context())
+	server.SetTarget(backend.URL)
+
+	traceparent := "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+	request := httptest.NewRequest(http.MethodGet, "/posts", nil)
+	request.Header.Set(requestIDHeader, "browser-req-1")
+	request.Header.Set("traceparent", traceparent)
+	request.Header.Set("tracestate", "vendor=value")
+	response := httptest.NewRecorder()
+
+	server.ServeHTTP(response, request)
+
+	got := <-headers
+	if got.Get(requestIDHeader) != "browser-req-1" {
+		t.Fatalf("X-Request-ID = %q, want browser-req-1", got.Get(requestIDHeader))
+	}
+	if got.Get("traceparent") != traceparent {
+		t.Fatalf("traceparent = %q, want %q", got.Get("traceparent"), traceparent)
+	}
+	if got.Get("tracestate") != "vendor=value" {
+		t.Fatalf("tracestate = %q, want vendor=value", got.Get("tracestate"))
+	}
+}

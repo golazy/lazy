@@ -3,6 +3,9 @@ package devserver
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"html"
 	"io"
@@ -22,6 +25,7 @@ import (
 const ReloadPath = "/__lazy/reload"
 const PanelPrefix = "/_golazy"
 const PanelClientPath = "/_golazy/assets/panel.js"
+const requestIDHeader = "X-Request-ID"
 
 var clientScript = []byte(`<script type="module" src="` + PanelClientPath + `"></script>`)
 
@@ -109,6 +113,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	reverseProxy := httputil.NewSingleHostReverseProxy(targetURL)
+	director := reverseProxy.Director
+	reverseProxy.Director = func(request *http.Request) {
+		director(request)
+		ensureRequestTraceHeaders(request)
+	}
 	reverseProxy.ModifyResponse = injectClient
 	reverseProxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
 		s.ClearTarget()
@@ -116,6 +125,87 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.serveUnavailable(w, r)
 	}
 	reverseProxy.ServeHTTP(w, r)
+}
+
+func ensureRequestTraceHeaders(r *http.Request) {
+	requestID := requestIDFromHeader(r.Header.Get(requestIDHeader))
+	if requestID == "" {
+		requestID = generateRequestID()
+		r.Header.Set(requestIDHeader, requestID)
+	}
+	if !validTraceparent(r.Header.Get("traceparent")) {
+		r.Header.Set("traceparent", generateTraceparent())
+		r.Header.Del("tracestate")
+	}
+}
+
+func requestIDFromHeader(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" || len(value) > 128 || strings.Contains(value, ",") {
+		return ""
+	}
+	for _, char := range value {
+		if char >= 'a' && char <= 'z' ||
+			char >= 'A' && char <= 'Z' ||
+			char >= '0' && char <= '9' ||
+			char == '_' || char == '-' || char == '.' || char == ':' || char == '/' {
+			continue
+		}
+		return ""
+	}
+	return value
+}
+
+func generateRequestID() string {
+	return base64.RawURLEncoding.EncodeToString(randomBytes(16))
+}
+
+func generateTraceparent() string {
+	return "00-" + hex.EncodeToString(randomBytes(16)) + "-" + hex.EncodeToString(randomBytes(8)) + "-01"
+}
+
+func validTraceparent(value string) bool {
+	parts := strings.Split(strings.TrimSpace(value), "-")
+	if len(parts) != 4 {
+		return false
+	}
+	version, traceID, spanID, flags := parts[0], strings.ToLower(parts[1]), strings.ToLower(parts[2]), strings.ToLower(parts[3])
+	if len(version) != 2 || len(traceID) != 32 || len(spanID) != 16 || len(flags) != 2 {
+		return false
+	}
+	return version != "ff" &&
+		isLowerHex(version) &&
+		isLowerHex(traceID) &&
+		isLowerHex(spanID) &&
+		isLowerHex(flags) &&
+		!allZero(traceID) &&
+		!allZero(spanID)
+}
+
+func randomBytes(size int) []byte {
+	data := make([]byte, size)
+	if _, err := rand.Read(data); err != nil {
+		panic(fmt.Errorf("devserver: generate trace identifiers: %w", err))
+	}
+	return data
+}
+
+func isLowerHex(value string) bool {
+	for _, char := range value {
+		if (char < '0' || char > '9') && (char < 'a' || char > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+func allZero(value string) bool {
+	for _, char := range value {
+		if char != '0' {
+			return false
+		}
+	}
+	return true
 }
 
 func isPanelPath(path string) bool {
