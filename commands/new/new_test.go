@@ -515,8 +515,8 @@ func TestCopiesSourceDirectoryValidatesWithTemporaryWorkspace(t *testing.T) {
 	if calls[2].command != "go" {
 		t.Fatalf("tidy command = %s, want go", calls[2].command)
 	}
-	if got, want := calls[2].args, []string{"mod", "tidy"}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("tidy args = %#v, want %#v", got, want)
+	if got, want := calls[2].args, []string{"work", "sync"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("sync args = %#v, want %#v", got, want)
 	}
 	if calls[3].command != "go" {
 		t.Fatalf("test command = %s, want go", calls[3].command)

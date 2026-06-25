@@ -1210,9 +1210,9 @@ run = "go test ./..."
 
 const v011MiseToml = `[tools]
 node = "24"
-"aqua:FiloSottile/age" = "latest"
-"aqua:getsops/sops" = "latest"
-"aqua:jdx/usage" = "latest"
+"aqua:FiloSottile/age" = "1.3.1"
+"aqua:getsops/sops" = "3.13.1"
+"aqua:jdx/usage" = "3.5.3"
 
 [env]
 _.file = ".secrets/development.env"

@@ -124,7 +124,7 @@ func (c Command) Execute(modulePath string) error {
 		return err
 	}
 
-	commandEnv, goArgs, cleanupWorkfile, err := localValidation(destination, c.GoWork)
+	commandEnv, workspaceValidation, cleanupWorkfile, err := localValidation(destination, c.GoWork)
 	if err != nil {
 		return err
 	}
@@ -149,15 +149,18 @@ func (c Command) Execute(modulePath string) error {
 	}
 
 	fmt.Fprintln(c.Stdout, "* Validating")
-	tidyArgs := append([]string{"mod", "tidy"}, goArgs...)
-	if err := runner("go", tidyArgs, commands.Options{
+	syncArgs := []string{"mod", "tidy"}
+	if workspaceValidation {
+		syncArgs = []string{"work", "sync"}
+	}
+	if err := runner("go", syncArgs, commands.Options{
 		Dir:     destination,
 		Env:     commandEnv,
 		Capture: true,
 	}); err != nil {
-		return fmt.Errorf("go mod tidy: %w", err)
+		return fmt.Errorf("%s: %w", strings.Join(append([]string{"go"}, syncArgs...), " "), err)
 	}
-	testArgs := append([]string{"test"}, goArgs...)
+	testArgs := []string{"test"}
 	testArgs = append(testArgs, "./...")
 	if err := runner("go", testArgs, commands.Options{
 		Dir:     destination,
@@ -360,9 +363,9 @@ func copyTemplateDirectory(source, destination string) error {
 	return nil
 }
 
-func localValidation(destination string, goWork string) ([]string, []string, func(), error) {
+func localValidation(destination string, goWork string) ([]string, bool, func(), error) {
 	env, cleanup, err := localWorkspaceEnv(destination, goWork)
-	return env, nil, cleanup, err
+	return env, len(env) != 0, cleanup, err
 }
 
 func localWorkspaceEnv(destination string, goWork string) ([]string, func(), error) {

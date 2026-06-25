@@ -658,7 +658,7 @@ APP_ENV = "development"
 		Tools: []upgradeMiseTool{
 			{Name: "go", Reason: "Go uses the go.mod go directive and toolchain selection"},
 			{Name: "node", Previous: "22", Target: "24"},
-			{Name: "aqua:getsops/sops", Target: "latest"},
+			{Name: "aqua:getsops/sops", Target: "3.13.1"},
 		},
 	})
 	if err != nil {
@@ -668,7 +668,7 @@ APP_ENV = "development"
 	for _, want := range []string{
 		`# go = "1.26.2" # not needed by GoLazy vNew`,
 		`node = "24"`,
-		`"aqua:getsops/sops" = "latest"`,
+		`"aqua:getsops/sops" = "3.13.1"`,
 		`APP_ENV = "development"`,
 	} {
 		if !strings.Contains(got, want) {

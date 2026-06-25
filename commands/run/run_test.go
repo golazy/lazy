@@ -20,6 +20,8 @@ type invocation struct {
 }
 
 func TestUsesFirstCommandUnderCmd(t *testing.T) {
+	t.Setenv("GOWORK", "off")
+
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "go.mod"), "module github.com/golazy/sample_app\n")
 	writeFile(t, filepath.Join(dir, "app", "views", "layouts", "app.html.tpl"), "layout")
@@ -77,6 +79,8 @@ func TestUsesFirstCommandUnderCmd(t *testing.T) {
 }
 
 func TestUsesExplicitCommandPathAndViewPath(t *testing.T) {
+	t.Setenv("GOWORK", "off")
+
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "go.mod"), "module example.com/team/my_app\n")
 	writeFile(t, filepath.Join(dir, "views", "layouts", "app.html.tpl"), "layout")
@@ -167,6 +171,8 @@ func TestSkipsGoModTidyWhenWorkspaceModeIsActive(t *testing.T) {
 }
 
 func TestExecuteDirectUsesProgressOutput(t *testing.T) {
+	t.Setenv("GOWORK", "off")
+
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "go.mod"), "module example.com/team/my_app\n")
 	writeFile(t, filepath.Join(dir, "app", "views", "layouts", "app.html.tpl"), "layout")
@@ -200,6 +206,8 @@ func TestExecuteDirectUsesProgressOutput(t *testing.T) {
 }
 
 func TestExecuteDirectReturnsApplicationExitCode(t *testing.T) {
+	t.Setenv("GOWORK", "off")
+
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "go.mod"), "module example.com/team/my_app\n")
 	writeFile(t, filepath.Join(dir, "app", "views", "layouts", "app.html.tpl"), "layout")

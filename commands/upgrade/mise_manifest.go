@@ -46,9 +46,9 @@ func upgradeTo011MiseManifest() upgradeMiseManifest {
 				Reason:   "Go uses the go.mod go directive and toolchain selection",
 			},
 			{Name: "node", Target: "24"},
-			{Name: "aqua:FiloSottile/age", Previous: "latest", Target: "latest"},
-			{Name: "aqua:getsops/sops", Previous: "latest", Target: "latest"},
-			{Name: "aqua:jdx/usage", Previous: "latest", Target: "latest"},
+			{Name: "aqua:FiloSottile/age", Previous: "latest", Target: "1.3.1"},
+			{Name: "aqua:getsops/sops", Previous: "latest", Target: "3.13.1"},
+			{Name: "aqua:jdx/usage", Previous: "latest", Target: "3.5.3"},
 		},
 		ObsoleteTasks: []upgradeMiseTask{
 			{Name: "tasks.dev", Replacement: ".mise/tasks/dev"},

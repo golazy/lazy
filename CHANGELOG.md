@@ -41,6 +41,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `go get` instead of rewriting `go.mod` directly. Its `mise.toml` manifests
   add or update required tools and comment obsolete tools or task tables with a
   reason instead of silently deleting them.
+- `lazy new` now validates generated apps in workspace mode with
+  `go work sync`, and generated app mise manifests pin helper tool versions
+  instead of using `latest`.
 
 ## [0.1.14] - 2026-06-23
 
