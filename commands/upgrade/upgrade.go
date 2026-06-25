@@ -18,7 +18,6 @@ import (
 	"golang.org/x/mod/modfile"
 	"golazy.dev/lazy/commands"
 	"golazy.dev/lazy/commands/lazycode"
-	"golazy.dev/lazy/commands/miseconfig"
 	"golazy.dev/lazytui/progress"
 )
 
@@ -94,8 +93,8 @@ func (c Command) Execute() (int, error) {
 	}
 	if len(steps) == 0 {
 		if err := c.runProgress(progress.Tasks{
-			progress.UITask("Check mise Go tool", func(ui *progress.UI) error {
-				return c.checkMiseGoTool(dir, ui)
+			progress.UITask("Check mise tools", func(ui *progress.UI) error {
+				return c.applyCurrentMiseManifest(dir, module.GoLazyVersion, ui)
 			}),
 		}); err != nil {
 			return 1, err
@@ -126,8 +125,8 @@ func (c Command) Execute() (int, error) {
 			return err
 		}))
 	}
-	tasks = append(tasks, progress.UITask("Check mise Go tool", func(ui *progress.UI) error {
-		return c.checkMiseGoTool(dir, ui)
+	tasks = append(tasks, progress.UITask("Check mise tools", func(ui *progress.UI) error {
+		return c.applyCurrentMiseManifest(dir, steps[len(steps)-1].To, ui)
 	}))
 	if err := c.runProgress(tasks); err != nil {
 		return 1, err
@@ -171,40 +170,20 @@ func (c Command) runner() commands.Runner {
 	return commands.Exec
 }
 
-func (c Command) checkMiseGoTool(dir string, ui *progress.UI) error {
-	run := func(stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
-		return (miseconfig.GoToolCheck{
-			Dir:    dir,
-			Stdin:  stdin,
-			Stdout: stdout,
-			Stderr: stderr,
-			DryRun: c.DryRun,
-		}).Execute()
+func (c Command) applyCurrentMiseManifest(dir string, version string, ui *progress.UI) error {
+	stdout := c.stdout()
+	stderr := c.stderr()
+	if ui != nil {
+		stdout = ui.Stdout()
+		stderr = ui.Stderr()
 	}
-	if ui == nil {
-		return run(c.Stdin, c.stdout(), c.stderr())
-	}
-	found, err := miseGoToolFound(dir)
-	if err != nil {
-		return err
-	}
-	if found {
-		return ui.Takeover(run)
-	}
-	return ui.Run(run)
-}
-
-func miseGoToolFound(dir string) (bool, error) {
-	path := filepath.Join(dir, "mise.toml")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return false, nil
-		}
-		return false, fmt.Errorf("read mise.toml: %w", err)
-	}
-	_, found := miseconfig.RemoveGoTool(data)
-	return found, nil
+	return (stepExecutor{
+		dir:    dir,
+		to:     version,
+		dryRun: c.DryRun,
+		stdout: stdout,
+		stderr: stderr,
+	}).applyMiseManifest(currentMiseCleanupManifest(version))
 }
 
 func upgradeTaskName(from string, to string) string {
@@ -285,7 +264,7 @@ func (c Command) runStepWithStreams(dir string, from string, to string, force bo
 	if err != nil {
 		return 1, err
 	}
-	if err := executor.updateGoMod(); err != nil {
+	if err := executor.applyGoModManifest(goModManifestFor(from, to)); err != nil {
 		return 1, err
 	}
 	if err := executor.runFollowups(); err != nil {
@@ -429,7 +408,10 @@ type stepExecutor struct {
 }
 
 func (e stepExecutor) upgradeTo011() error {
-	return e.applyFileManifest(upgradeTo011Manifest())
+	if err := e.applyFileManifest(upgradeTo011Manifest()); err != nil {
+		return err
+	}
+	return e.applyMiseManifest(upgradeTo011MiseManifest())
 }
 
 func (e stepExecutor) upgradeTo012() error {
@@ -448,38 +430,6 @@ func (e stepExecutor) upgradeTo015() error {
 		return err
 	}
 	return e.migrateSEOToFunction()
-}
-
-func (e stepExecutor) updateGoMod() error {
-	path := filepath.Join(e.dir, "go.mod")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("read go.mod: %w", err)
-	}
-	file, err := modfile.Parse(path, data, nil)
-	if err != nil {
-		return fmt.Errorf("parse go.mod: %w", err)
-	}
-	if err := file.AddRequire("golazy.dev", e.to); err != nil {
-		return fmt.Errorf("update golazy.dev requirement: %w", err)
-	}
-	formatted, err := file.Format()
-	if err != nil {
-		return fmt.Errorf("format go.mod: %w", err)
-	}
-	if bytes.Equal(data, formatted) {
-		fmt.Fprintf(e.stdout, "  go.mod already requires golazy.dev %s\n", e.to)
-		return nil
-	}
-	if e.dryRun {
-		fmt.Fprintf(e.stdout, "  would update go.mod to golazy.dev %s\n", e.to)
-		return nil
-	}
-	if err := os.WriteFile(path, formatted, 0o644); err != nil {
-		return fmt.Errorf("write go.mod: %w", err)
-	}
-	fmt.Fprintf(e.stdout, "  updated go.mod to golazy.dev %s\n", e.to)
-	return nil
 }
 
 func (e stepExecutor) replaceFileIfHash(relative string, previous string, target string, mode os.FileMode) error {

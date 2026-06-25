@@ -2,6 +2,7 @@ package upgrade
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -29,6 +30,7 @@ func TestUpgradeTo011AddsMiseTaskFiles(t *testing.T) {
 		Target:       "v0.1.11",
 		SkipCommands: true,
 		Stdout:       &stdout,
+		Runner:       goGetRunner(t, nil),
 	}).Execute()
 	if err != nil {
 		t.Fatal(err)
@@ -38,7 +40,11 @@ func TestUpgradeTo011AddsMiseTaskFiles(t *testing.T) {
 	}
 
 	assertUpgradeFileContains(t, filepath.Join(dir, "go.mod"), "golazy.dev v0.1.11")
-	assertUpgradeFileContent(t, filepath.Join(dir, "mise.toml"), v011MiseToml)
+	assertUpgradeFileContains(t, filepath.Join(dir, "mise.toml"), `# go = "1.26.0" # not needed by GoLazy v0.1.11`)
+	assertUpgradeFileContains(t, filepath.Join(dir, "mise.toml"), `node = "24"`)
+	assertUpgradeFileContains(t, filepath.Join(dir, "mise.toml"), "# GoLazy v0.1.11: [tasks.dev] is not needed; use .mise/tasks/dev.")
+	assertUpgradeFileContains(t, filepath.Join(dir, "mise.toml"), "# GoLazy v0.1.11: [tasks.test] is not needed; use .mise/tasks/test.")
+	assertUpgradeFileNotContains(t, filepath.Join(dir, "mise.toml"), "\ngo = ")
 	assertUpgradeFileContent(t, filepath.Join(dir, ".mise", "tasks", "dev"), v011DevTask)
 	assertUpgradeFileContent(t, filepath.Join(dir, ".mise", "tasks", "test"), v011TestTask)
 	assertExecutable(t, filepath.Join(dir, ".mise", "tasks", "dev"))
@@ -75,6 +81,7 @@ var _ = timeservice.Service{}
 		Target:       "v0.1.12",
 		SkipCommands: true,
 		Stdout:       &stdout,
+		Runner:       goGetRunner(t, nil),
 	}).Execute()
 	if err != nil {
 		t.Fatal(err)
@@ -131,6 +138,7 @@ func Context(ctx context.Context) (context.Context, error) {
 		Target:       "v0.1.15",
 		SkipCommands: true,
 		Stdout:       &stdout,
+		Runner:       goGetRunner(t, nil),
 	}).Execute()
 	if err != nil {
 		t.Fatal(err)
@@ -182,6 +190,7 @@ func App() *lazyapp.App {
 		Target:       "v0.1.15",
 		SkipCommands: true,
 		Stdout:       &stdout,
+		Runner:       goGetRunner(t, nil),
 	}).Execute()
 	if err != nil {
 		t.Fatal(err)
@@ -219,14 +228,7 @@ var _ = postservice.Service{}
 	code, err := (Command{
 		Dir:    dir,
 		Target: "v0.1.12",
-		Runner: func(command string, args []string, options commands.Options) error {
-			calls = append(calls, upgradeInvocation{
-				command: command,
-				args:    slices.Clone(args),
-				dir:     options.Dir,
-			})
-			return nil
-		},
+		Runner: goGetRunner(t, &calls),
 	}).Execute()
 	if err != nil {
 		t.Fatal(err)
@@ -234,22 +236,27 @@ var _ = postservice.Service{}
 	if code != 0 {
 		t.Fatalf("code = %d, want 0", code)
 	}
-	if len(calls) != 6 {
-		t.Fatalf("calls = %#v, want six follow-up commands", calls)
+	if len(calls) != 8 {
+		t.Fatalf("calls = %#v, want two go get calls plus six follow-up commands", calls)
 	}
 	for _, call := range calls {
 		if call.command != "go" || call.dir != dir {
 			t.Fatalf("call = %#v", call)
 		}
 	}
-	wantCycle := [][]string{
+	wantCalls := [][]string{
+		{"get", "golazy.dev@v0.1.11"},
+		{"mod", "tidy"},
+		{"test", "./..."},
+		{"vet", "./..."},
+		{"get", "golazy.dev@v0.1.12"},
 		{"mod", "tidy"},
 		{"test", "./..."},
 		{"vet", "./..."},
 	}
 	for index, call := range calls {
-		if !slices.Equal(call.args, wantCycle[index%len(wantCycle)]) {
-			t.Fatalf("call %d args = %#v, want %#v", index, call.args, wantCycle[index%len(wantCycle)])
+		if !slices.Equal(call.args, wantCalls[index]) {
+			t.Fatalf("call %d args = %#v, want %#v", index, call.args, wantCalls[index])
 		}
 	}
 	assertUpgradeFileContains(t, filepath.Join(dir, "go.mod"), "golazy.dev v0.1.12")
@@ -272,7 +279,8 @@ func TestUpgradeForceRunsSpecificStepRegardlessCurrentVersion(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code = %d, want 0", code)
 	}
-	assertUpgradeFileContent(t, filepath.Join(dir, "mise.toml"), v011MiseToml)
+	assertUpgradeFileContains(t, filepath.Join(dir, "mise.toml"), `# go = "1.26.0" # not needed by GoLazy v0.1.11`)
+	assertUpgradeFileContains(t, filepath.Join(dir, "mise.toml"), `node = "24"`)
 	assertUpgradeFileContent(t, filepath.Join(dir, ".mise", "tasks", "dev"), v011DevTask)
 	assertUpgradeFileContains(t, filepath.Join(dir, "go.mod"), "golazy.dev v0.1.11")
 }
@@ -332,7 +340,7 @@ func TestUpgradeRejectsUnimplementedNextVersion(t *testing.T) {
 	}
 }
 
-func TestUpgradeAlreadyCurrentPromptsToRemoveMiseGoTool(t *testing.T) {
+func TestUpgradeAlreadyCurrentCommentsObsoleteMiseGoTool(t *testing.T) {
 	dir := t.TempDir()
 	writeUpgradeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n\ngo 1.26.0\n\nrequire golazy.dev v0.1.15\n")
 	writeUpgradeFile(t, filepath.Join(dir, "mise.toml"), "[tools]\ngo = \"1.26.0\"\nnode = \"24\"\n")
@@ -341,7 +349,6 @@ func TestUpgradeAlreadyCurrentPromptsToRemoveMiseGoTool(t *testing.T) {
 	var stderr bytes.Buffer
 	code, err := (Command{
 		Dir:    dir,
-		Stdin:  strings.NewReader("y\n"),
 		Stdout: &stdout,
 		Stderr: &stderr,
 	}).Execute()
@@ -351,8 +358,8 @@ func TestUpgradeAlreadyCurrentPromptsToRemoveMiseGoTool(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code = %d, want 0", code)
 	}
-	assertUpgradeFileContent(t, filepath.Join(dir, "mise.toml"), "[tools]\nnode = \"24\"\n")
-	if !strings.Contains(stderr.String(), "Go already bundles multi-version support") {
+	assertUpgradeFileContent(t, filepath.Join(dir, "mise.toml"), "[tools]\n# go = \"1.26.0\" # not needed by GoLazy v0.1.15; Go uses the go.mod go directive and toolchain selection.\nnode = \"24\"\n")
+	if stderr.Len() != 0 {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
 	if !strings.Contains(stdout.String(), "already at v0.1.15") {
@@ -360,19 +367,20 @@ func TestUpgradeAlreadyCurrentPromptsToRemoveMiseGoTool(t *testing.T) {
 	}
 }
 
-func TestUpgradeTo013UpdatesGoModAndPromptsToRemoveMiseGoTool(t *testing.T) {
+func TestUpgradeTo013UpdatesGoModWithGoGetAndCommentsObsoleteMiseGoTool(t *testing.T) {
 	dir := t.TempDir()
 	writeUpgradeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n\ngo 1.26.0\n\nrequire golazy.dev v0.1.12\n")
 	writeUpgradeFile(t, filepath.Join(dir, "mise.toml"), "[tools]\ngo = \"1.26.0\"\nnode = \"24\"\n")
 
+	var calls []upgradeInvocation
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code, err := (Command{
 		Dir:          dir,
-		Stdin:        strings.NewReader("y\n"),
 		Stdout:       &stdout,
 		Stderr:       &stderr,
 		SkipCommands: true,
+		Runner:       goGetRunner(t, &calls),
 	}).Execute()
 	if err != nil {
 		t.Fatal(err)
@@ -382,11 +390,14 @@ func TestUpgradeTo013UpdatesGoModAndPromptsToRemoveMiseGoTool(t *testing.T) {
 	}
 
 	assertUpgradeFileContains(t, filepath.Join(dir, "go.mod"), "golazy.dev v0.1.13")
-	assertUpgradeFileContent(t, filepath.Join(dir, "mise.toml"), "[tools]\nnode = \"24\"\n")
+	assertUpgradeFileContent(t, filepath.Join(dir, "mise.toml"), "[tools]\n# go = \"1.26.0\" # not needed by GoLazy v0.1.13; Go uses the go.mod go directive and toolchain selection.\nnode = \"24\"\n")
+	if len(calls) != 1 || !slices.Equal(calls[0].args, []string{"get", "golazy.dev@v0.1.13"}) {
+		t.Fatalf("calls = %#v, want go get golazy.dev@v0.1.13", calls)
+	}
 	if !strings.Contains(stdout.String(), "* Upgrade v0.1.12 -> v0.1.13 ... DONE") {
 		t.Fatalf("stdout = %q", stdout.String())
 	}
-	if !strings.Contains(stderr.String(), "Go already bundles multi-version support") {
+	if stderr.Len() != 0 {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
 }
@@ -424,7 +435,7 @@ var _ = postservice.Service{}
 	if _, err := os.Stat(filepath.Join(dir, "services")); !os.IsNotExist(err) {
 		t.Fatalf("services exists after dry-run: %v", err)
 	}
-	if !strings.Contains(stdout.String(), "would update go.mod to golazy.dev v0.1.12") {
+	if !strings.Contains(stdout.String(), "would run go get golazy.dev@v0.1.12") {
 		t.Fatalf("stdout = %q", stdout.String())
 	}
 }
@@ -432,7 +443,8 @@ var _ = postservice.Service{}
 func TestUpgradeConflictWritesProposedFileAndLeavesCurrentFile(t *testing.T) {
 	dir := t.TempDir()
 	writeUpgradeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n\ngo 1.26.0\n\nrequire golazy.dev v0.1.10\n")
-	writeUpgradeFile(t, filepath.Join(dir, "mise.toml"), "[tools]\ngo = \"1.26.0\"\n# custom task layout\n")
+	writeUpgradeFile(t, filepath.Join(dir, "mise.toml"), v010MiseToml)
+	writeUpgradeFile(t, filepath.Join(dir, ".mise", "tasks", "dev"), "#!/usr/bin/env bash\ncustom\n")
 
 	var stderr bytes.Buffer
 	code, err := (Command{
@@ -447,22 +459,23 @@ func TestUpgradeConflictWritesProposedFileAndLeavesCurrentFile(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("code = %d, want 1", code)
 	}
-	assertUpgradeFileContent(t, filepath.Join(dir, "mise.toml"), "[tools]\ngo = \"1.26.0\"\n# custom task layout\n")
-	assertUpgradeFileContent(t, filepath.Join(dir, ".golazy", "upgrade", "conflicts", "v0.1.11", "mise.toml"), v011MiseToml)
+	assertUpgradeFileContent(t, filepath.Join(dir, "mise.toml"), v010MiseToml)
+	assertUpgradeFileContent(t, filepath.Join(dir, ".golazy", "upgrade", "conflicts", "v0.1.11", ".mise", "tasks", "dev"), v011DevTask)
 	assertUpgradeFileContains(t, filepath.Join(dir, "go.mod"), "golazy.dev v0.1.10")
-	if !strings.Contains(stderr.String(), "--- mise.toml") || !strings.Contains(stderr.String(), "+++ proposed/mise.toml") {
+	if !strings.Contains(stderr.String(), "--- .mise/tasks/dev") || !strings.Contains(stderr.String(), "+++ proposed/.mise/tasks/dev") {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
-	if !strings.Contains(err.Error(), "upgrade conflict in mise.toml") {
+	if !strings.Contains(err.Error(), "upgrade conflict in .mise/tasks/dev") {
 		t.Fatalf("err = %v", err)
 	}
 }
 
 func TestUpgradeConflictCanInstallNewVersionWithDatedBackup(t *testing.T) {
 	dir := t.TempDir()
-	customMise := "[tools]\ngo = \"1.26.0\"\n# custom task layout\n"
+	customDevTask := "#!/usr/bin/env bash\ncustom\n"
 	writeUpgradeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n\ngo 1.26.0\n\nrequire golazy.dev v0.1.10\n")
-	writeUpgradeFile(t, filepath.Join(dir, "mise.toml"), customMise)
+	writeUpgradeFile(t, filepath.Join(dir, "mise.toml"), v010MiseToml)
+	writeUpgradeFile(t, filepath.Join(dir, ".mise", "tasks", "dev"), customDevTask)
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -473,6 +486,7 @@ func TestUpgradeConflictCanInstallNewVersionWithDatedBackup(t *testing.T) {
 		Stdin:        strings.NewReader("i\n"),
 		Stdout:       &stdout,
 		Stderr:       &stderr,
+		Runner:       goGetRunner(t, nil),
 	}).Execute()
 	if err != nil {
 		t.Fatal(err)
@@ -481,11 +495,12 @@ func TestUpgradeConflictCanInstallNewVersionWithDatedBackup(t *testing.T) {
 		t.Fatalf("code = %d, want 0", code)
 	}
 
-	backupPath := filepath.Join(dir, "mise.toml-"+time.Now().Format("2006-01-02"))
-	assertUpgradeFileContent(t, filepath.Join(dir, "mise.toml"), v011MiseToml)
-	assertUpgradeFileContent(t, backupPath, customMise)
+	backupPath := filepath.Join(dir, ".mise", "tasks", "dev-"+time.Now().Format("2006-01-02"))
+	assertUpgradeFileContains(t, filepath.Join(dir, "mise.toml"), `# go = "1.26.0" # not needed by GoLazy v0.1.11`)
+	assertUpgradeFileContains(t, filepath.Join(dir, "mise.toml"), `node = "24"`)
+	assertUpgradeFileContent(t, backupPath, customDevTask)
 	assertUpgradeFileContains(t, filepath.Join(dir, "go.mod"), "golazy.dev v0.1.11")
-	assertUpgradeFileContains(t, filepath.Join(dir, ".mise", "tasks", "dev"), "lazy\n")
+	assertUpgradeFileContent(t, filepath.Join(dir, ".mise", "tasks", "dev"), v011DevTask)
 	if !strings.Contains(stderr.String(), "install the new version") {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
@@ -584,6 +599,87 @@ func TestUpgradeFileManifestCanKeepChangedRemovedFile(t *testing.T) {
 	}
 }
 
+func TestGoModManifestUsesGoGetForAddModifyAndRemove(t *testing.T) {
+	dir := t.TempDir()
+	writeUpgradeFile(t, filepath.Join(dir, "go.mod"), `module example.com/app
+
+go 1.26.0
+
+require (
+	change.example.com/pkg v0.1.0
+	remove.example.com/pkg v0.1.0
+)
+`)
+
+	var calls []upgradeInvocation
+	err := (stepExecutor{
+		dir:    dir,
+		from:   "vOld",
+		to:     "vNew",
+		stdout: io.Discard,
+		runner: goGetRunner(t, &calls),
+	}).applyGoModManifest(upgradeGoModManifest{
+		From: "vOld",
+		To:   "vNew",
+		Requirements: []upgradeGoModRequirement{
+			{Path: "add.example.com/pkg", Target: "v1.2.3"},
+			{Path: "change.example.com/pkg", Previous: "v0.1.0", Target: "v0.2.0"},
+			{Path: "remove.example.com/pkg", Previous: "v0.1.0"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantCalls := [][]string{
+		{"get", "add.example.com/pkg@v1.2.3"},
+		{"get", "change.example.com/pkg@v0.2.0"},
+		{"get", "remove.example.com/pkg@none"},
+	}
+	if len(calls) != len(wantCalls) {
+		t.Fatalf("calls = %#v, want %#v", calls, wantCalls)
+	}
+	for index, call := range calls {
+		if !slices.Equal(call.args, wantCalls[index]) {
+			t.Fatalf("call %d args = %#v, want %#v", index, call.args, wantCalls[index])
+		}
+	}
+}
+
+func TestMiseManifestUpdatesAddsAndCommentsTools(t *testing.T) {
+	input := []byte(`[tools]
+go = "1.26.2"
+node = "22"
+
+[env]
+APP_ENV = "development"
+`)
+	result, err := updateMiseToml(input, upgradeMiseManifest{
+		To: "vNew",
+		Tools: []upgradeMiseTool{
+			{Name: "go", Reason: "Go uses the go.mod go directive and toolchain selection"},
+			{Name: "node", Previous: "22", Target: "24"},
+			{Name: "aqua:getsops/sops", Target: "latest"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(result.Data)
+	for _, want := range []string{
+		`# go = "1.26.2" # not needed by GoLazy vNew`,
+		`node = "24"`,
+		`"aqua:getsops/sops" = "latest"`,
+		`APP_ENV = "development"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("mise.toml = %q, want substring %q", got, want)
+		}
+	}
+	if strings.Contains(got, "\ngo = ") {
+		t.Fatalf("mise.toml still has active go tool: %q", got)
+	}
+}
+
 func TestUpgradeStartsAtFirstAwareVersionForOlderApps(t *testing.T) {
 	dir := t.TempDir()
 	writeUpgradeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n\ngo 1.26.0\n\nrequire golazy.dev v0.1.5\n")
@@ -601,6 +697,7 @@ var _ = postservice.Service{}
 		Target:       "v0.1.12",
 		SkipCommands: true,
 		Stdout:       &stdout,
+		Runner:       goGetRunner(t, nil),
 	}).Execute()
 	if err != nil {
 		t.Fatal(err)
@@ -677,5 +774,66 @@ func assertExecutable(t *testing.T, path string) {
 	}
 	if info.Mode()&0o111 == 0 {
 		t.Fatalf("%s mode = %v, want executable", path, info.Mode())
+	}
+}
+
+func goGetRunner(t *testing.T, calls *[]upgradeInvocation) commands.Runner {
+	t.Helper()
+	return func(command string, args []string, options commands.Options) error {
+		if calls != nil {
+			*calls = append(*calls, upgradeInvocation{
+				command: command,
+				args:    slices.Clone(args),
+				dir:     options.Dir,
+			})
+		}
+		if command == "go" && len(args) == 2 && args[0] == "get" {
+			applyFakeGoGet(t, options.Dir, args[1])
+		}
+		return nil
+	}
+}
+
+func applyFakeGoGet(t *testing.T, dir string, spec string) {
+	t.Helper()
+	modulePath, version, ok := strings.Cut(spec, "@")
+	if !ok {
+		t.Fatalf("go get spec = %q, want module@version", spec)
+	}
+	path := filepath.Join(dir, "go.mod")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := splitPhysicalLines(data)
+	found := false
+	var out []string
+	for _, line := range lines {
+		fields := strings.Fields(line)
+		switch {
+		case len(fields) >= 2 && fields[0] == modulePath:
+			found = true
+			if version == "none" {
+				continue
+			}
+			out = append(out, strings.Replace(line, fields[1], version, 1))
+		case len(fields) >= 3 && fields[0] == "require" && fields[1] == modulePath:
+			found = true
+			if version == "none" {
+				continue
+			}
+			out = append(out, strings.Replace(line, fields[2], version, 1))
+		default:
+			out = append(out, line)
+		}
+	}
+	if !found && version != "none" {
+		if len(out) > 0 && !strings.HasSuffix(out[len(out)-1], "\n") {
+			out[len(out)-1] += "\n"
+		}
+		out = append(out, "require "+modulePath+" "+version+"\n")
+	}
+	if err := os.WriteFile(path, []byte(strings.Join(out, "")), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }

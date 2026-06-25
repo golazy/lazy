@@ -46,13 +46,6 @@ func upgradeTo011Manifest() upgradeFileManifest {
 		To:   "v0.1.11",
 		Files: []upgradeFileOperation{
 			{
-				Action:   upgradeFileUpdate,
-				Path:     "mise.toml",
-				Mode:     0o644,
-				Previous: upgradeManifestContent(v010MiseToml),
-				Target:   upgradeManifestContent(v011MiseToml),
-			},
-			{
 				Action: upgradeFileAdd,
 				Path:   ".mise/tasks/dev",
 				Mode:   0o755,

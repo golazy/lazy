@@ -7,6 +7,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.15] - 2026-06-25
+
 ### Added
 
 - `lazy upgrade` now migrates `v0.1.14 -> v0.1.15` application initializers by
@@ -35,6 +37,10 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The default `lazy` development command now uses `golazy.dev/lazytui/progress`
   for proxy startup, generated-asset work, Go builds, and application starts
   while leaving the running app's own output attached to the terminal.
+- `lazy upgrade` now applies versioned `go.mod` requirement manifests through
+  `go get` instead of rewriting `go.mod` directly. Its `mise.toml` manifests
+  add or update required tools and comment obsolete tools or task tables with a
+  reason instead of silently deleting them.
 
 ## [0.1.14] - 2026-06-23
 
@@ -290,7 +296,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The CLI version now comes from the checked-in `VERSION` file embedded into
   the binary at build time.
 
-[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.14...HEAD
+[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.15...HEAD
+[0.1.15]: https://github.com/golazy/lazy/compare/v0.1.14...v0.1.15
 [0.1.14]: https://github.com/golazy/lazy/compare/v0.1.13...v0.1.14
 [0.1.13]: https://github.com/golazy/lazy/compare/v0.1.12...v0.1.13
 [0.1.12]: https://github.com/golazy/lazy/compare/v0.1.11...v0.1.12
