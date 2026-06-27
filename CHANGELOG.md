@@ -7,6 +7,19 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- The development panel now renders Requests, Console, App Logs, Traces,
+  Routes, Assets, and Actions tabs in a DevTools-style shell, with the existing
+  build/run output, event stream, cache controls, rebuild, restart, and open-app
+  actions carried into that shell.
+
+### Changed
+
+- Proxied app pages now embed the GoLazy development panel as a fixed bottom
+  iframe that survives Turbo navigation instead of showing only a floating
+  activator button.
+
 ## [0.1.15] - 2026-06-25
 
 ### Added

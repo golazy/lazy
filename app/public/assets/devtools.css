@@ -1,0 +1,171 @@
+/*
+ * Portions Copyright 2013-2025 The Chromium Authors
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in LICENSE.chromium-bsd.txt.
+ *
+ * Adapted for the GoLazy development panel from Chrome DevTools frontend CSS.
+ */
+
+:root {
+  color-scheme: light;
+
+  --color-background: rgb(255 255 255);
+  --color-background-elevation-1: rgb(241 243 244);
+  --color-background-elevation-2: rgb(222 225 230);
+  --color-text-primary: rgb(32 33 36);
+  --color-text-secondary: rgb(95 99 104);
+  --color-text-disabled: rgb(128 134 139);
+
+  --sys-color-cdt-base-container: var(--color-background);
+  --sys-color-surface: var(--color-background);
+  --sys-color-surface1: var(--color-background-elevation-1);
+  --sys-color-surface2: var(--color-background-elevation-2);
+  --sys-color-surface-variant: rgb(247 248 250);
+  --sys-color-state-hover-on-subtle: rgb(32 33 36 / 6%);
+  --sys-color-tonal-container: rgb(211 227 253);
+  --sys-color-on-tonal-container: rgb(4 30 73);
+  --sys-color-divider: rgb(218 220 224);
+  --sys-color-divider-on-tonal-container: rgb(168 199 250);
+  --sys-color-neutral-outline: rgb(189 193 198);
+  --sys-color-on-surface: var(--color-text-primary);
+  --sys-color-token-subtle: var(--color-text-secondary);
+  --sys-color-state-focus-ring: rgb(11 87 208);
+  --sys-color-state-focus-select: rgb(168 199 250);
+  --sys-color-primary: rgb(11 87 208);
+  --sys-color-primary-bright: rgb(27 110 243);
+  --sys-color-yellow: rgb(151 103 0);
+  --sys-color-error: rgb(179 38 30);
+  --sys-color-green: rgb(20 108 46);
+  --sys-color-surface-yellow: rgb(254 246 213);
+  --sys-color-surface-yellow-high: rgb(253 240 185);
+  --sys-color-surface-error: rgb(252 235 235);
+  --sys-color-on-surface-error: rgb(140 29 24);
+  --app-color-toolbar-background: var(--sys-color-surface1);
+  --text-link: var(--sys-color-primary);
+  --icon-default: var(--sys-color-token-subtle);
+
+  --color-grid-stripe: var(--sys-color-surface1);
+  --color-grid-default: var(--sys-color-surface);
+  --color-grid-focus-selected: var(--sys-color-tonal-container);
+  --color-grid-selected: var(--sys-color-surface-variant);
+  --color-grid-hovered: var(--sys-color-state-hover-on-subtle);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --color-background: rgb(32 33 36);
+    --color-background-elevation-1: rgb(41 42 45);
+    --color-background-elevation-2: rgb(53 54 58);
+    --color-text-primary: rgb(232 234 237);
+    --color-text-secondary: rgb(154 160 166);
+    --color-text-disabled: rgb(128 134 139);
+
+    --sys-color-cdt-base-container: var(--color-background);
+    --sys-color-surface: var(--color-background);
+    --sys-color-surface1: var(--color-background-elevation-1);
+    --sys-color-surface2: var(--color-background-elevation-2);
+    --sys-color-surface-variant: rgb(36 37 40);
+    --sys-color-state-hover-on-subtle: rgb(253 252 251 / 10%);
+    --sys-color-tonal-container: rgb(0 74 119);
+    --sys-color-on-tonal-container: rgb(211 227 253);
+    --sys-color-divider: rgb(60 64 67);
+    --sys-color-divider-on-tonal-container: rgb(71 71 71);
+    --sys-color-neutral-outline: rgb(95 99 104);
+    --sys-color-on-surface: var(--color-text-primary);
+    --sys-color-token-subtle: rgb(189 193 198);
+    --sys-color-state-focus-ring: rgb(168 199 250);
+    --sys-color-state-focus-select: rgb(0 74 119);
+    --sys-color-primary: rgb(168 199 250);
+    --sys-color-primary-bright: rgb(124 172 248);
+    --sys-color-yellow: rgb(253 224 71);
+    --sys-color-error: rgb(242 184 181);
+    --sys-color-green: rgb(109 213 140);
+    --sys-color-surface-yellow: rgb(65 60 38);
+    --sys-color-surface-yellow-high: rgb(76 68 37);
+    --sys-color-surface-error: rgb(78 53 52);
+    --sys-color-on-surface-error: rgb(249 222 220);
+    --app-color-toolbar-background: var(--sys-color-surface1);
+    --text-link: rgb(138 180 248);
+    --icon-default: var(--sys-color-token-subtle);
+
+    --color-grid-stripe: var(--sys-color-surface1);
+    --color-grid-default: var(--sys-color-surface);
+    --color-grid-focus-selected: var(--sys-color-tonal-container);
+    --color-grid-selected: var(--sys-color-surface-variant);
+    --color-grid-hovered: var(--sys-color-state-hover-on-subtle);
+  }
+}
+
+.network-toolbar-container {
+  align-items: flex-start;
+  background-color: var(--sys-color-cdt-base-container);
+  border-bottom: 1px solid var(--sys-color-divider);
+  display: flex;
+}
+
+.data-grid {
+  border: 1px solid var(--sys-color-divider);
+  color: var(--sys-color-on-surface);
+  line-height: 120%;
+  position: relative;
+}
+
+.data-grid th,
+.data-grid td {
+  border-left: 1px solid var(--sys-color-divider);
+  height: 18px;
+  line-height: 18px;
+  overflow: hidden;
+  padding: 1px 4px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.data-grid th:first-child,
+.data-grid td:first-child {
+  border-left-width: 0;
+}
+
+.data-grid th {
+  background-color: var(--sys-color-surface1);
+  border-bottom: 1px solid var(--sys-color-divider);
+  font-weight: normal;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.data-grid td {
+  background-color: var(--color-grid-default);
+  user-select: text;
+  vertical-align: top;
+}
+
+.data-grid tr:nth-child(even) td {
+  background-color: var(--color-grid-stripe);
+}
+
+.data-grid tr:hover td {
+  background-color: var(--color-grid-hovered);
+}
+
+.data-grid tr.is-selected td,
+.data-grid tr.selected td {
+  background-color: var(--color-grid-focus-selected);
+  color: var(--sys-color-on-tonal-container);
+}
+
+.network-log-grid.data-grid {
+  border: 0;
+  flex: auto;
+}
+
+.tabbed-pane-header {
+  background-color: var(--app-color-toolbar-background);
+  border-bottom: 1px solid var(--sys-color-divider);
+  display: flex;
+  flex: 0 0 27px;
+  overflow: visible;
+  width: 100%;
+}
