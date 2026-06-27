@@ -7,18 +7,25 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.16] - 2026-06-27
+
 ### Added
 
 - The development panel now renders Requests, Console, App Logs, Traces,
   Routes, Assets, and Actions tabs in a DevTools-style shell, with the existing
   build/run output, event stream, cache controls, rebuild, restart, and open-app
   actions carried into that shell.
+- `lazy upgrade` now recognizes `v0.1.16` and advances `v0.1.15` applications
+  by updating their `golazy.dev` module requirement through the versioned
+  `go.mod` manifest.
 
 ### Changed
 
 - Proxied app pages now embed the GoLazy development panel as a fixed bottom
   iframe that survives Turbo navigation instead of showing only a floating
   activator button.
+- The `lazy` development proxy now forwards request IDs and trace context to
+  the child app so lazydev request artifacts line up with framework telemetry.
 
 ## [0.1.15] - 2026-06-25
 
@@ -312,7 +319,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The CLI version now comes from the checked-in `VERSION` file embedded into
   the binary at build time.
 
-[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.15...HEAD
+[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.16...HEAD
+[0.1.16]: https://github.com/golazy/lazy/compare/v0.1.15...v0.1.16
 [0.1.15]: https://github.com/golazy/lazy/compare/v0.1.14...v0.1.15
 [0.1.14]: https://github.com/golazy/lazy/compare/v0.1.13...v0.1.14
 [0.1.13]: https://github.com/golazy/lazy/compare/v0.1.12...v0.1.13

@@ -38,6 +38,7 @@ var releaseVersions = []string{
 	"v0.1.13",
 	"v0.1.14",
 	"v0.1.15",
+	"v0.1.16",
 }
 
 const firstUpgradeAwareVersion = "v0.1.10"
@@ -258,6 +259,8 @@ func (c Command) runStepWithStreams(dir string, from string, to string, force bo
 		err = executor.upgradeTo013()
 	case from == "v0.1.14" && to == "v0.1.15":
 		err = executor.upgradeTo015()
+	case from == "v0.1.15" && to == "v0.1.16":
+		err = executor.upgradeTo016()
 	default:
 		err = fmt.Errorf("upgrade from %s to %s is not implemented; use the versioned upgrade guide", from, to)
 	}
@@ -386,6 +389,8 @@ func hasBuiltInStep(from string, to string) bool {
 		return true
 	case from == "v0.1.14" && to == "v0.1.15":
 		return true
+	case from == "v0.1.15" && to == "v0.1.16":
+		return true
 	default:
 		return false
 	}
@@ -429,7 +434,14 @@ func (e stepExecutor) upgradeTo015() error {
 	if err := e.migrateContextToDependencies(); err != nil {
 		return err
 	}
-	return e.migrateSEOToFunction()
+	if err := e.migrateSEOToFunction(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (e stepExecutor) upgradeTo016() error {
+	return nil
 }
 
 func (e stepExecutor) replaceFileIfHash(relative string, previous string, target string, mode os.FileMode) error {
