@@ -18,9 +18,10 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- The development panel now renders top-level tabs and the status bar through
-  resource-owned Turbo Frames, uses the generated importmap for its iframe app,
-  and streams Turbo Stream updates alongside the existing event JSON.
+- The development panel now visits one resource-backed page per top-level tab,
+  keeps the status bar mounted as a permanent Turbo Frame, uses the generated
+  importmap for its iframe app, and streams Turbo Stream updates alongside the
+  existing event JSON.
 - `lazy docs --json` includes package, value, function, type, and method source
   file and line metadata from `golazy.dev/lazydoc`.
 - The default `lazy` command now discovers local services from `lazy.toml` or

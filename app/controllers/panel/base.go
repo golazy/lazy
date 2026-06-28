@@ -105,6 +105,17 @@ func (b *Base) RenderPanelFrame(r *http.Request, id string, controller string, p
 	return frame.Body, nil
 }
 
+func (b *Base) RenderPermanentPanelFrame(r *http.Request, id string, controller string, partial string, variables map[string]any) (string, error) {
+	body, err := b.RenderPanelPartial(r, controller, partial, variables)
+	if err != nil {
+		return "", err
+	}
+	if err := lazyturbo.ValidateFrameID(id); err != nil {
+		return "", err
+	}
+	return `<turbo-frame id="` + html.EscapeString(id) + `" data-turbo-permanent>` + body + `</turbo-frame>`, nil
+}
+
 func (b *Base) RenderPanelPartial(r *http.Request, controller string, partial string, variables map[string]any) (string, error) {
 	return b.renderPanelPartial(r, controller, partial, variables, nil)
 }

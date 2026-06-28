@@ -1,4 +1,4 @@
-<section class="tool-view" data-view="assets">
+<section id="assets" class="tool-view is-active" data-view="assets">
   <div class="filter-toolbar">
     <label class="filter-toggle">
       <input type="checkbox" checked disabled>

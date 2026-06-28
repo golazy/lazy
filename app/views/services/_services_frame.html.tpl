@@ -1,4 +1,4 @@
-<section class="tool-view services-view" data-view="services">
+<section id="services" class="tool-view is-active services-view" data-view="services">
   <div class="filter-toolbar">
     <span>Services</span>
     <span class="toolbar-divider"></span>

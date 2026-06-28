@@ -1,4 +1,4 @@
-<section class="tool-view" data-view="console">
+<section id="console" class="tool-view is-active" data-view="console">
   <div class="filter-toolbar">
     <button type="button" class="toolbar-button" disabled>Clear</button>
     <input class="filter-input" type="search" placeholder="Filter console" disabled>

@@ -23,8 +23,8 @@ func New(ctx context.Context) (*Controller, error) {
 	return &Controller{Base: base}, err
 }
 
-func (c *Controller) Index(_ http.ResponseWriter, _ *http.Request) error {
-	c.SetState()
+func (c *Controller) Index(w http.ResponseWriter, r *http.Request) error {
+	http.Redirect(w, r, "/_golazy/logs", http.StatusSeeOther)
 	return nil
 }
 
@@ -101,7 +101,7 @@ func (c *Controller) turboStreamForEvent(r *http.Request, event buildservice.Eve
 	snapshot := c.Snapshot()
 	variables := map[string]any{"state": snapshot}
 
-	status, err := c.RenderPanelFrame(r, "status_bar", "status", "status_bar_frame", variables)
+	status, err := c.RenderPermanentPanelFrame(r, "status_bar", "status", "status_bar_frame", variables)
 	if err != nil {
 		return "", err
 	}
@@ -114,7 +114,7 @@ func (c *Controller) turboStreamForEvent(r *http.Request, event buildservice.Eve
 	stream += TurboStream("append", "panel_events", item)
 
 	if event.Type != buildservice.EventOutput {
-		logs, err := c.RenderPanelFrame(r, "logs", "logs", "logs_frame", variables)
+		logs, err := c.RenderPanelPartial(r, "logs", "logs_frame", variables)
 		if err != nil {
 			return "", err
 		}

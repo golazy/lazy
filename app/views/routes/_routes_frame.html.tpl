@@ -1,4 +1,4 @@
-<section class="tool-view" data-view="routes">
+<section id="routes" class="tool-view is-active" data-view="routes">
   <div class="filter-toolbar">
     <input class="filter-input" type="search" placeholder="Filter routes" disabled>
     <span class="toolbar-spacer"></span>

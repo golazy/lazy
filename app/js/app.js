@@ -6,12 +6,16 @@ const embeddedPanelID = "golazy-dev-panel"
 const embeddedPanelHeight = "320px"
 const embeddedPanelClosedKey = "golazy:devpanel:closed"
 let selectedService = ""
-let selectedPanelTab = "logs"
 let currentPanelState = null
+let stateSource = null
+let serviceNavigationInstalled = false
+let cacheActionsInstalled = false
 
 installEmbeddedPanel()
 installTurboPersistence()
 installEmbeddedPanelMessages()
+bootPanelPage()
+document.addEventListener("turbo:load", bootPanelPage)
 
 const reloadSource = window.__lazyReloadSource || new EventSource("/__lazy/reload")
 window.__lazyReloadSource = reloadSource
@@ -21,17 +25,24 @@ reloadSource.addEventListener("reload", () => {
   }
 })
 
-const panel = document.querySelector("[data-panel]")
-if (panel) {
-  installPanelTabs()
+function bootPanelPage() {
+  if (!panelElement()) return
   installServiceNavigation()
   installCacheActions()
   installPanelClose()
   refreshPanelState()
   refreshCache()
   refreshJobs()
+  startPanelEvents()
+}
 
-  const stateSource = new EventSource("/_golazy/events")
+function panelElement() {
+  return document.querySelector("[data-panel]")
+}
+
+function startPanelEvents() {
+  if (stateSource) return
+  stateSource = new EventSource("/_golazy/events")
   stateSource.addEventListener("turbo-stream", renderTurboStream)
   stateSource.addEventListener("state", refreshState)
   stateSource.addEventListener("output", updateFromOutputEvent)
@@ -160,31 +171,6 @@ function installPanelClose() {
   })
 }
 
-function installPanelTabs() {
-  const selected = document.querySelector("[data-tab][aria-selected='true']")
-  if (selected?.dataset.tab) {
-    selectPanelTab(selected.dataset.tab)
-  }
-  for (const button of document.querySelectorAll("[data-tab]")) {
-    button.addEventListener("click", () => selectPanelTab(button.dataset.tab))
-  }
-  document.addEventListener("turbo:frame-load", () => selectPanelTab(selectedPanelTab))
-  document.addEventListener("turbo:before-stream-render", () => {
-    window.queueMicrotask(() => selectPanelTab(selectedPanelTab))
-  })
-}
-
-function selectPanelTab(tab) {
-  if (!tab) return
-  selectedPanelTab = tab
-  for (const button of document.querySelectorAll("[data-tab]")) {
-    button.setAttribute("aria-selected", String(button.dataset.tab === tab))
-  }
-  for (const view of document.querySelectorAll("[data-view]")) {
-    view.classList.toggle("is-active", view.dataset.view === tab)
-  }
-}
-
 async function refreshState(event) {
   await refreshPanelState()
   refreshCache()
@@ -196,7 +182,6 @@ function renderTurboStream(event) {
   const turbo = window.Turbo
   if (!turbo?.renderStreamMessage) return
   turbo.renderStreamMessage(event.data)
-  window.queueMicrotask(() => selectPanelTab(selectedPanelTab))
 }
 
 async function refreshPanelState() {
@@ -207,7 +192,10 @@ async function refreshPanelState() {
 
 function renderState(state) {
   currentPanelState = state || {}
-  panel.dataset.state = state.state || ""
+  const panel = panelElement()
+  if (panel) {
+    panel.dataset.state = state.state || ""
+  }
   for (const chip of document.querySelectorAll("[data-state-chip]")) {
     chip.dataset.stateValue = state.state || ""
   }
@@ -229,14 +217,26 @@ function renderState(state) {
 }
 
 function installServiceNavigation() {
+  if (serviceNavigationInstalled) return
+  serviceNavigationInstalled = true
   document.addEventListener("click", event => {
     const target = event.target.closest("[data-service-select], [data-service-status]")
     if (!target) return
     const service = target.getAttribute("data-service-select") || target.getAttribute("data-service-name")
     if (!service) return
     selectService(service)
-    selectPanelTab("services")
+    if (!location.pathname.startsWith("/_golazy/services")) {
+      visitPanelPath("/_golazy/services")
+    }
   })
+}
+
+function visitPanelPath(path) {
+  if (window.Turbo?.visit) {
+    window.Turbo.visit(path)
+    return
+  }
+  window.location.href = path
 }
 
 function renderServices(services, events) {
@@ -355,8 +355,11 @@ function serviceOutputRow(event) {
 }
 
 function installCacheActions() {
-  for (const button of document.querySelectorAll("[data-cache-action]")) {
-    button.addEventListener("click", async () => {
+  if (cacheActionsInstalled) return
+  cacheActionsInstalled = true
+  document.addEventListener("click", async event => {
+    const button = event.target.closest("[data-cache-action]")
+    if (!button) return
       const path = button.getAttribute("data-cache-action")
       if (!path) return
       button.disabled = true
@@ -373,8 +376,7 @@ function installCacheActions() {
       } finally {
         button.disabled = false
       }
-    })
-  }
+  })
 }
 
 async function refreshCache() {

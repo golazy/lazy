@@ -1,4 +1,4 @@
-<section class="tool-view" data-view="jobs">
+<section id="jobs" class="tool-view is-active" data-view="jobs">
   <div class="filter-toolbar">
     <input class="filter-input" type="search" placeholder="Filter jobs" disabled>
     <span class="toolbar-spacer"></span>

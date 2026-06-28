@@ -1,4 +1,4 @@
-<section class="tool-view" data-view="actions">
+<section id="actions" class="tool-view is-active" data-view="actions">
   <div class="filter-toolbar">
     <form method="post" action="/_golazy/rebuild">
       <button type="submit" class="toolbar-button">Rebuild</button>

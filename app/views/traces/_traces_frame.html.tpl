@@ -1,4 +1,4 @@
-<section class="tool-view" data-view="traces">
+<section id="traces" class="tool-view is-active" data-view="traces">
   <div class="filter-toolbar">
     <button type="button" class="toolbar-button" disabled>Capture trace</button>
     <input class="filter-input" type="search" placeholder="Filter traces" disabled>

@@ -10,6 +10,15 @@
     <script type="module">import "/js/app.js"</script>
   </head>
   <body>
-    {{.content}}
+    <main class="devtools-panel" data-panel data-state="{{.state.State}}">
+      <header class="top-toolbar panel-header">
+        <div class="panel-title">GoLazy</div>
+        <button type="button" class="panel-close-button" data-panel-close hidden aria-label="Close GoLazy development panel" title="Close GoLazy development panel"></button>
+      </header>
+      <div class="panel-main">
+        {{.content}}
+      </div>
+      <turbo-frame id="status_bar" src="{{path_for "status"}}" data-turbo-permanent></turbo-frame>
+    </main>
   </body>
 </html>

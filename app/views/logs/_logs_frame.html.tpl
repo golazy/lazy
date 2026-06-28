@@ -1,4 +1,4 @@
-<section class="tool-view is-active" data-view="logs">
+<section id="logs" class="tool-view is-active" data-view="logs">
   <div class="filter-toolbar">
     <span class="state-chip" data-state-chip data-state-value="{{.state.State}}">
       <span class="state-dot"></span>

@@ -1,1 +1,4 @@
-{{ turbo_frame "services" . }}
+{{ partial "nav" . }}
+<div class="panel-page-body">
+  {{ partial "services_frame" . }}
+</div>

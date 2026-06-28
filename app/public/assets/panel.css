@@ -67,6 +67,26 @@ pre {
   width: 100%;
 }
 
+.panel-main {
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.panel-header {
+  border-bottom: 1px solid var(--border);
+  min-width: 0;
+}
+
+.panel-title {
+  color: var(--text-muted);
+  font-weight: 650;
+  overflow: hidden;
+  padding: 0 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .top-toolbar,
 .network-controls,
 .filter-row,
@@ -86,30 +106,42 @@ pre {
 
 .panel-tabs {
   align-self: stretch;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
   display: flex;
   flex: 1 1 auto;
+  height: 27px;
   min-width: 0;
   overflow: auto hidden;
 }
 
-.panel-tabs button {
+.panel-tab {
+  align-items: center;
   background: transparent;
   border: 0;
   border-bottom: 2px solid transparent;
   border-radius: 0;
   color: var(--text);
-  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
   height: 27px;
   min-width: 0;
   padding: 0 12px;
   white-space: nowrap;
 }
 
-.panel-tabs button:hover {
+.panel-tab a {
+  align-items: center;
+  color: inherit;
+  display: inline-flex;
+  height: 100%;
+}
+
+.panel-tab:has(a:hover) {
   background: var(--row-hover);
 }
 
-.panel-tabs button[aria-selected="true"] {
+.panel-tab:not(:has(a)) {
   border-bottom-color: var(--sys-color-primary);
   color: var(--text);
   font-weight: 500;
@@ -167,6 +199,29 @@ pre {
 
 .tool-view.is-active {
   display: grid;
+}
+
+.panel-page-body {
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+}
+
+.panel-page-body > .tool-view {
+  height: 100%;
+}
+
+#status_bar {
+  display: block;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.status-bar {
+  border-bottom: 0;
+  border-top: 1px solid var(--border);
+  height: 24px;
 }
 
 .tool-view[data-view="requests"] {

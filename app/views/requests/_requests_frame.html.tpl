@@ -1,4 +1,4 @@
-<section class="tool-view" data-view="requests">
+<section id="requests" class="tool-view is-active" data-view="requests">
   <div class="network-toolbar network-toolbar-container">
     <div class="network-controls">
       <button type="button" class="icon-button record-button" disabled title="Request capture is not wired yet">
