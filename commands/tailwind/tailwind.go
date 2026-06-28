@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"golazy.dev/lazy/commands"
+	"golazy.dev/lazy/commands/mise"
 )
 
 const (
@@ -30,6 +31,7 @@ type Command struct {
 	Stdout io.Writer
 	Stderr io.Writer
 	Runner commands.Runner
+	Mise   commands.OutputRunner
 }
 
 func (c Command) Execute() (int, error) {
@@ -90,8 +92,8 @@ func (c Command) Execute() (int, error) {
 		runner = commands.Exec
 	}
 
-	packageManager, installArgs := detectPackageManager(root)
-	installCommand, installExecArgs, installEnv := commands.MiseExecRunnerCommand(c.Runner, packageManager, installArgs)
+	packageManager := mise.DetectNodePackageManager(root, mise.QueryRunner(c.Runner, c.Mise))
+	installCommand, installExecArgs, installEnv := packageManager.InstallCommand(c.Runner)
 	fmt.Fprintln(stdout, "* Installing Tailwind dependencies")
 	if err := runner(installCommand, installExecArgs, commands.Options{
 		Dir:    root,
@@ -107,7 +109,7 @@ func (c Command) Execute() (int, error) {
 	}
 
 	runCommand, runArgs := tailwindRunCommand(packageManager, root, inputPath, outputPath, c.Watch)
-	tailwindCommand, tailwindArgs, tailwindEnv := commands.MiseExecRunnerCommand(c.Runner, runCommand, runArgs)
+	tailwindCommand, tailwindArgs, tailwindEnv := packageManager.RunCommand(c.Runner, runCommand, runArgs)
 	if c.Watch {
 		fmt.Fprintln(stdout, "* Watching Tailwind stylesheet")
 	} else {
@@ -167,7 +169,7 @@ func ensureInput(inputPath string, outputPath string) error {
 	return nil
 }
 
-func tailwindRunCommand(packageManager string, root string, inputPath string, outputPath string, watch bool) (string, []string) {
+func tailwindRunCommand(packageManager mise.NodePackageManager, root string, inputPath string, outputPath string, watch bool) (string, []string) {
 	args := []string{
 		"-i", slashRel(root, inputPath),
 		"-o", slashRel(root, outputPath),
@@ -176,11 +178,13 @@ func tailwindRunCommand(packageManager string, root string, inputPath string, ou
 		args = append(args, "--watch")
 	}
 
-	switch packageManager {
+	switch packageManager.Command() {
 	case "pnpm":
 		return "pnpm", append([]string{"exec", "tailwindcss"}, args...)
 	case "yarn":
 		return "yarn", append([]string{"tailwindcss"}, args...)
+	case "bun":
+		return "bun", append([]string{"x", "tailwindcss"}, args...)
 	default:
 		return "npx", append([]string{"@tailwindcss/cli"}, args...)
 	}
@@ -293,16 +297,6 @@ func findAppRoot(start string) (string, error) {
 		}
 		current = parent
 	}
-}
-
-func detectPackageManager(dir string) (string, []string) {
-	if fileExists(filepath.Join(dir, "pnpm-lock.yaml")) {
-		return "pnpm", []string{"install"}
-	}
-	if fileExists(filepath.Join(dir, "yarn.lock")) {
-		return "yarn", []string{"install"}
-	}
-	return "npm", []string{"install"}
 }
 
 func fileExists(path string) bool {

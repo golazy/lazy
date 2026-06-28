@@ -21,6 +21,7 @@ type ManifestEditor struct {
 	closed           bool
 
 	Runner  commands.Runner
+	Mise    commands.OutputRunner
 	Bundler Bundler
 }
 
@@ -178,6 +179,7 @@ func (e *ManifestEditor) Close() error {
 		Stdout:  &output,
 		Stderr:  &output,
 		Runner:  e.Runner,
+		Mise:    e.Mise,
 		Bundler: e.Bundler,
 	}
 	code, err := command.Execute()
@@ -263,6 +265,8 @@ func managedManifestPaths(root string, manifestPath string, manifests ...Manifes
 			"npm-shrinkwrap.json",
 			"pnpm-lock.yaml",
 			"yarn.lock",
+			"bun.lock",
+			"bun.lockb",
 		} {
 			add(filepath.Join(packageDir, name))
 		}

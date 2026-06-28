@@ -3,6 +3,7 @@ package tailwindcommand
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -44,16 +45,16 @@ func TestCommandPreparesInstallsAndBuilds(t *testing.T) {
 	if len(calls) != 2 {
 		t.Fatalf("calls = %d, want 2", len(calls))
 	}
-	if calls[0].command != "mise" || !reflect.DeepEqual(calls[0].args, []string{"exec", "--", "npm", "install"}) {
+	if calls[0].command != "npm" || !reflect.DeepEqual(calls[0].args, []string{"install"}) {
 		t.Fatalf("install call = %s %#v", calls[0].command, calls[0].args)
 	}
 	if calls[0].options.Dir != dir {
 		t.Fatalf("install dir = %q, want %q", calls[0].options.Dir, dir)
 	}
-	if calls[1].command != "mise" {
-		t.Fatalf("tailwind command = %q, want mise", calls[1].command)
+	if calls[1].command != "npx" {
+		t.Fatalf("tailwind command = %q, want npx", calls[1].command)
 	}
-	wantArgs := []string{"exec", "--", "npx", "@tailwindcss/cli", "-i", "app/styles/application.css", "-o", "app/public/styles.css"}
+	wantArgs := []string{"@tailwindcss/cli", "-i", "app/styles/application.css", "-o", "app/public/styles.css"}
 	if !reflect.DeepEqual(calls[1].args, wantArgs) {
 		t.Fatalf("tailwind args = %#v, want %#v", calls[1].args, wantArgs)
 	}
@@ -103,7 +104,7 @@ func TestCommandUsesExplicitPathsAndWatch(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code = %d, want 0", code)
 	}
-	wantArgs := []string{"exec", "--", "npx", "@tailwindcss/cli", "-i", "assets/tailwind.css", "-o", "public/tailwind.css", "--watch"}
+	wantArgs := []string{"@tailwindcss/cli", "-i", "assets/tailwind.css", "-o", "public/tailwind.css", "--watch"}
 	if !reflect.DeepEqual(calls[1].args, wantArgs) {
 		t.Fatalf("tailwind args = %#v, want %#v", calls[1].args, wantArgs)
 	}
@@ -130,7 +131,7 @@ func TestCommandDefaultsToRootPublicWhenAppPublicIsMissing(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code = %d, want 0", code)
 	}
-	wantArgs := []string{"exec", "--", "npx", "@tailwindcss/cli", "-i", "styles/application.css", "-o", "public/styles.css"}
+	wantArgs := []string{"@tailwindcss/cli", "-i", "styles/application.css", "-o", "public/styles.css"}
 	if !reflect.DeepEqual(calls[1].args, wantArgs) {
 		t.Fatalf("tailwind args = %#v, want %#v", calls[1].args, wantArgs)
 	}
@@ -139,14 +140,14 @@ func TestCommandDefaultsToRootPublicWhenAppPublicIsMissing(t *testing.T) {
 	}
 }
 
-func TestCommandDetectsPnpm(t *testing.T) {
+func TestCommandUsesMisePnpm(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n")
-	writeFile(t, filepath.Join(dir, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n")
 
 	var calls []invocation
 	command := Command{
-		Dir: dir,
+		Dir:  dir,
+		Mise: fakeMiseTools("pnpm"),
 		Runner: func(name string, args []string, options commands.Options) error {
 			calls = append(calls, invocation{command: name, args: args, options: options})
 			return nil
@@ -165,6 +166,53 @@ func TestCommandDetectsPnpm(t *testing.T) {
 	}
 	if got, want := calls[0].args, []string{"exec", "--", "pnpm", "install"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("install args = %#v, want %#v", got, want)
+	}
+	if got, want := calls[1].args, []string{"exec", "--", "pnpm", "exec", "tailwindcss", "-i", "styles/application.css", "-o", "public/styles.css"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("tailwind args = %#v, want %#v", got, want)
+	}
+}
+
+func TestCommandUsesMiseBun(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n")
+
+	var calls []invocation
+	command := Command{
+		Dir:  dir,
+		Mise: fakeMiseTools("bun"),
+		Runner: func(name string, args []string, options commands.Options) error {
+			calls = append(calls, invocation{command: name, args: args, options: options})
+			return nil
+		},
+	}
+
+	code, err := command.Execute()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != 0 {
+		t.Fatalf("code = %d, want 0", code)
+	}
+	if got, want := calls[0].args, []string{"exec", "--", "bun", "install"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("install args = %#v, want %#v", got, want)
+	}
+	if got, want := calls[1].args, []string{"exec", "--", "bun", "x", "tailwindcss", "-i", "styles/application.css", "-o", "public/styles.css"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("tailwind args = %#v, want %#v", got, want)
+	}
+}
+
+func fakeMiseTools(names ...string) commands.OutputRunner {
+	return func(string, []string, commands.Options) ([]byte, error) {
+		var out bytes.Buffer
+		out.WriteByte('{')
+		for index, name := range names {
+			if index > 0 {
+				out.WriteByte(',')
+			}
+			fmt.Fprintf(&out, "%q:[{\"installed\":true,\"active\":true}]", name)
+		}
+		out.WriteByte('}')
+		return out.Bytes(), nil
 	}
 }
 

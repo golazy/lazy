@@ -27,10 +27,10 @@ module = "@hotwired/turbo"
 
 	var installDir string
 	editor.Runner = func(name string, args []string, options commands.Options) error {
-		if name != "mise" {
-			t.Fatalf("install command = %q, want mise", name)
+		if name != "npm" {
+			t.Fatalf("install command = %q, want npm", name)
 		}
-		if got, want := args, []string{"exec", "--", "npm", "install"}; !reflect.DeepEqual(got, want) {
+		if got, want := args, []string{"install"}; !reflect.DeepEqual(got, want) {
 			t.Fatalf("install args = %#v, want %#v", got, want)
 		}
 		installDir = options.Dir
@@ -112,6 +112,7 @@ module = "@hotwired/turbo"
 	}
 	editor.Runner = func(name string, args []string, options commands.Options) error {
 		fmt.Fprintln(options.Stdout, "install output")
+		writeFile(t, filepath.Join(options.Dir, "bun.lock"), "lockfile\n")
 		return nil
 	}
 	editor.Bundler = func(Manifest, string, string) (BuildResult, error) {
@@ -149,6 +150,7 @@ module = "@hotwired/turbo"
 	assertFileContent(t, filepath.Join(dir, "package.json"), originalPackage)
 	assertFileContent(t, filepath.Join(dir, "app", "public", "assets", "importmap.json"), originalImportmap)
 	assertFileContent(t, filepath.Join(dir, "app", "public", "assets", "lazyshaft", "turbo-old.js"), originalBundle)
+	assertFileMissing(t, filepath.Join(dir, "bun.lock"))
 }
 
 func assertFileContent(t *testing.T, path, want string) {
@@ -159,5 +161,14 @@ func assertFileContent(t *testing.T, path, want string) {
 	}
 	if string(data) != want {
 		t.Fatalf("%s = %q, want %q", path, data, want)
+	}
+}
+
+func assertFileMissing(t *testing.T, path string) {
+	t.Helper()
+	if _, err := os.Stat(path); err == nil {
+		t.Fatalf("%s exists, want missing", path)
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("stat %s: %v", path, err)
 	}
 }

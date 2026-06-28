@@ -2,6 +2,7 @@ package jscommand
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -55,7 +56,7 @@ module = "@hotwired/turbo"
 	if len(calls) != 1 {
 		t.Fatalf("calls = %d, want 1", len(calls))
 	}
-	if calls[0].command != "mise" || !reflect.DeepEqual(calls[0].args, []string{"exec", "--", "npm", "install"}) {
+	if calls[0].command != "npm" || !reflect.DeepEqual(calls[0].args, []string{"install"}) {
 		t.Fatalf("install call = %s %#v", calls[0].command, calls[0].args)
 	}
 	if calls[0].options.Dir != dir {
@@ -78,20 +79,20 @@ module = "@hotwired/turbo"
 	}
 }
 
-func TestCommandDetectsPnpm(t *testing.T) {
+func TestCommandUsesMisePnpm(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n")
 	writeFile(t, filepath.Join(dir, "js.toml"), `
 [entrypoint.turbo]
 module = "@hotwired/turbo"
 `)
-	writeFile(t, filepath.Join(dir, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n")
 
 	var calls []invocation
 	command := Command{
 		Dir:    dir,
 		Stdout: &bytes.Buffer{},
 		Stderr: &bytes.Buffer{},
+		Mise:   fakeMiseTools("pnpm"),
 		Runner: func(name string, args []string, options commands.Options) error {
 			calls = append(calls, invocation{command: name, args: args, options: options})
 			return nil
@@ -113,6 +114,21 @@ module = "@hotwired/turbo"
 	}
 	if got, want := calls[0].args, []string{"exec", "--", "pnpm", "install"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("args = %#v, want %#v", got, want)
+	}
+}
+
+func fakeMiseTools(names ...string) commands.OutputRunner {
+	return func(string, []string, commands.Options) ([]byte, error) {
+		var out bytes.Buffer
+		out.WriteByte('{')
+		for index, name := range names {
+			if index > 0 {
+				out.WriteByte(',')
+			}
+			fmt.Fprintf(&out, "%q:[{\"installed\":true,\"active\":true}]", name)
+		}
+		out.WriteByte('}')
+		return out.Bytes(), nil
 	}
 }
 

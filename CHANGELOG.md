@@ -7,6 +7,13 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- `lazy js` and `lazy tailwind` now choose Node package managers from active
+  installed mise tools in `pnpm`, `yarn`, `bun`, `node` order. Managers found
+  through mise run with `mise exec`; apps without a usable mise package-manager
+  tool fall back to direct `npm` / `npx`.
+
 ## [0.1.16] - 2026-06-27
 
 ### Added

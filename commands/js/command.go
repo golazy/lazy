@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"golazy.dev/lazy/commands"
+	"golazy.dev/lazy/commands/mise"
 )
 
 type Bundler func(manifest Manifest, root, packageDir string) (BuildResult, error)
@@ -17,6 +18,7 @@ type Command struct {
 	Stdout  io.Writer
 	Stderr  io.Writer
 	Runner  commands.Runner
+	Mise    commands.OutputRunner
 	Bundler Bundler
 }
 
@@ -60,8 +62,8 @@ func (c Command) Execute() (int, error) {
 	if runner == nil {
 		runner = commands.Exec
 	}
-	installCommand, installArgs := detectPackageManager(packageDir)
-	runCommand, runArgs, runEnv := commands.MiseExecRunnerCommand(c.Runner, installCommand, installArgs)
+	packageManager := mise.DetectNodePackageManager(packageDir, mise.QueryRunner(c.Runner, c.Mise))
+	runCommand, runArgs, runEnv := packageManager.InstallCommand(c.Runner)
 	fmt.Fprintln(stdout, "* Installing JavaScript dependencies")
 	if err := runner(runCommand, runArgs, commands.Options{
 		Dir:    packageDir,
@@ -106,16 +108,6 @@ func findAppRoot(start string) (string, error) {
 		}
 		current = parent
 	}
-}
-
-func detectPackageManager(dir string) (string, []string) {
-	if fileExists(filepath.Join(dir, "pnpm-lock.yaml")) {
-		return "pnpm", []string{"install"}
-	}
-	if fileExists(filepath.Join(dir, "yarn.lock")) {
-		return "yarn", []string{"install"}
-	}
-	return "npm", []string{"install"}
 }
 
 func fileExists(path string) bool {
