@@ -64,7 +64,7 @@
       </div>
     </div>
 
-    <div class="split-view" data-controller="panel-resize" data-panel-resize-axis-value="horizontal" data-panel-resize-min-value="240">
+    <div class="split-view" data-controller="panel-resize" data-panel-resize-direction-value="right" data-panel-resize-min-value="240px" data-panel-resize-max-value="70%">
       <section class="request-table-pane" aria-label="Request log" data-panel-resize-target="primary">
         <table class="data-grid network-log-grid">
           <thead>
@@ -118,7 +118,7 @@
       <span class="toolbar-count">Build <span data-panel-build>{{.state.BuildCount}}</span></span>
     </div>
 
-    <div class="runtime-grid">
+    <div class="runtime-grid" data-controller="panel-resize" data-panel-resize-direction-value="left" data-panel-resize-min-value="280px" data-panel-resize-max-value="72%">
       <section class="runtime-pane">
         <h2>Status</h2>
         <dl class="detail-list">
@@ -150,7 +150,9 @@
         </ul>
       </section>
 
-      <section class="runtime-pane output-pane">
+      <div class="split-resize-handle runtime-output-resize" data-panel-resize-target="handle" data-action="pointerdown->panel-resize#start keydown->panel-resize#nudge" aria-label="Resize latest output pane"></div>
+
+      <section class="runtime-pane output-pane" data-panel-resize-target="primary">
         <h2>Latest Output</h2>
         <pre class="panel-output" data-panel-output>{{.state.Output}}</pre>
       </section>

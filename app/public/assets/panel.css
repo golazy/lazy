@@ -418,14 +418,23 @@ button:disabled:hover {
   background: var(--surface);
   border-left: 1px solid var(--border);
   border-right: 1px solid var(--border);
-  cursor: col-resize;
   min-height: 0;
   min-width: 6px;
   touch-action: none;
 }
 
+[data-panel-resize-direction-value="left"] > .split-resize-handle,
+[data-panel-resize-direction-value="right"] > .split-resize-handle {
+  cursor: col-resize;
+}
+
+[data-panel-resize-direction-value="top"] > .split-resize-handle,
+[data-panel-resize-direction-value="bottom"] > .split-resize-handle {
+  cursor: row-resize;
+}
+
 .split-resize-handle:hover,
-.split-view.is-resizing .split-resize-handle {
+.is-resizing > .split-resize-handle {
   background: var(--row-hover);
 }
 
@@ -519,7 +528,7 @@ button:disabled:hover {
 
 .runtime-grid {
   display: grid;
-  grid-template-columns: minmax(17rem, 24rem) minmax(16rem, 22rem) minmax(0, 1fr);
+  grid-template-columns: minmax(17rem, 24rem) minmax(16rem, 22rem) 6px var(--panel-resize-primary-size, minmax(0, 1fr));
   grid-template-rows: minmax(12rem, 1fr) minmax(10rem, 0.85fr);
   min-height: 0;
   min-width: 0;
@@ -544,9 +553,14 @@ button:disabled:hover {
 }
 
 .output-pane {
-  grid-column: 3;
+  grid-column: 4;
   grid-row: 1 / span 2;
   padding: 0;
+}
+
+.runtime-output-resize {
+  grid-column: 3;
+  grid-row: 1 / span 2;
 }
 
 .output-pane h2,

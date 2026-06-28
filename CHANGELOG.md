@@ -20,9 +20,10 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `:start` mise tasks, starts them in tmux panes, and runs service
   `check`, `create`, and `migrate` tasks before starting the app pane when
   those tasks are present.
-- The embedded development panel can now be closed from its toolbar, and
-  request/detail panes inside the panel can be resized with a Stimulus
-  controller.
+- The embedded development panel can now be closed from its toolbar. Panel
+  split panes use a reusable Stimulus resize controller with `left`, `right`,
+  `top`, and `bottom` directions plus pixel or percentage `min`, `max`, and
+  `size` values.
 - `lazy js` and `lazy tailwind` now choose Node package managers from active
   installed mise tools in `pnpm`, `yarn`, `bun`, `node` order. Managers found
   through mise run with `mise exec`; apps without a usable mise package-manager

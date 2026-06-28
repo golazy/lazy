@@ -3,19 +3,21 @@ import { Controller } from "/_golazy/assets/lazyshaft/stimulus-FNW3RRR2.js"
 export default class extends Controller {
   static targets = ["handle", "primary"]
   static values = {
-    axis: { type: String, default: "horizontal" },
-    max: Number,
-    min: { type: Number, default: 220 },
-    size: Number,
+    direction: { type: String, default: "right" },
+    max: String,
+    min: { type: String, default: "220px" },
+    size: String,
   }
 
   connect() {
     this.boundMove = event => this.move(event)
     this.boundStop = event => this.stop(event)
     this.configureHandle()
-    if (this.hasSizeValue) {
-      this.updateSize(this.sizeValue)
-    } else if (this.hasPrimaryTarget) {
+    if (!this.hasPrimaryTarget) return
+
+    if (this.hasSizeValue && this.sizeValue.trim() !== "") {
+      this.updateSize(this.parseSize(this.sizeValue, this.currentSize()))
+    } else if (this.boundsSize() > 0) {
       this.updateSize(this.currentSize())
     }
   }
@@ -43,7 +45,7 @@ export default class extends Controller {
   move(event) {
     if (!this.dragging) return
     event.preventDefault()
-    this.updateSize(this.startSize + this.coordinate(event) - this.startPoint)
+    this.updateSize(this.startSize + (this.coordinate(event) - this.startPoint) * this.directionMultiplier())
   }
 
   stop() {
@@ -57,18 +59,20 @@ export default class extends Controller {
 
   nudge(event) {
     const direction = this.keyboardDirection(event.key)
-    if (direction === 0 && event.key !== "Home" && event.key !== "End") return
+    if (direction === 0 && event.key !== "Home" && event.key !== "End") {
+      return
+    }
 
     event.preventDefault()
     if (event.key === "Home") {
-      this.updateSize(this.minValue)
+      this.updateSize(this.minSize())
       return
     }
     if (event.key === "End") {
       this.updateSize(this.maxSize())
       return
     }
-    this.updateSize(this.currentSize() + direction * (event.shiftKey ? 40 : 10))
+    this.updateSize(this.currentSize() + direction * this.directionMultiplier() * (event.shiftKey ? 40 : 10))
   }
 
   configureHandle() {
@@ -76,12 +80,12 @@ export default class extends Controller {
     this.handleTarget.setAttribute("role", "separator")
     this.handleTarget.setAttribute("tabindex", "0")
     this.handleTarget.setAttribute("aria-orientation", this.horizontal() ? "vertical" : "horizontal")
-    this.handleTarget.setAttribute("aria-valuemin", String(this.minValue))
+    this.handleTarget.setAttribute("aria-valuemin", String(Math.round(this.minSize())))
   }
 
   updateSize(value) {
     const size = Math.round(this.clamp(value))
-    this.sizeValue = size
+    this.sizeValue = `${size}px`
     this.element.style.setProperty("--panel-resize-primary-size", `${size}px`)
     if (this.hasHandleTarget) {
       this.handleTarget.setAttribute("aria-valuenow", String(size))
@@ -91,6 +95,11 @@ export default class extends Controller {
 
   currentSize() {
     const rect = this.primaryTarget.getBoundingClientRect()
+    return this.horizontal() ? rect.width : rect.height
+  }
+
+  boundsSize() {
+    const rect = this.element.getBoundingClientRect()
     return this.horizontal() ? rect.width : rect.height
   }
 
@@ -109,18 +118,45 @@ export default class extends Controller {
     return 0
   }
 
+  minSize() {
+    return Math.max(0, this.parseSize(this.minValue, 0))
+  }
+
   maxSize() {
-    if (this.hasMaxValue) return Math.max(this.minValue, this.maxValue)
-    const rect = this.element.getBoundingClientRect()
-    const total = this.horizontal() ? rect.width : rect.height
-    return Math.max(this.minValue, total - this.minValue)
+    const min = this.minSize()
+    const total = this.boundsSize()
+    if (this.hasMaxValue && this.maxValue.trim() !== "") {
+      return Math.max(min, this.parseSize(this.maxValue, total))
+    }
+    return Math.max(min, total - min)
   }
 
   clamp(value) {
-    return Math.min(Math.max(value, this.minValue), this.maxSize())
+    return Math.min(Math.max(value, this.minSize()), this.maxSize())
+  }
+
+  parseSize(value, fallback) {
+    const text = String(value ?? "").trim()
+    if (text === "") return fallback
+
+    if (text.endsWith("%")) {
+      const percent = Number.parseFloat(text.slice(0, -1))
+      return Number.isFinite(percent) ? this.boundsSize() * percent / 100 : fallback
+    }
+    if (text.endsWith("px")) {
+      const pixels = Number.parseFloat(text.slice(0, -2))
+      return Number.isFinite(pixels) ? pixels : fallback
+    }
+
+    const pixels = Number.parseFloat(text)
+    return Number.isFinite(pixels) ? pixels : fallback
   }
 
   horizontal() {
-    return this.axisValue !== "vertical"
+    return this.directionValue === "left" || this.directionValue === "right"
+  }
+
+  directionMultiplier() {
+    return this.directionValue === "left" || this.directionValue === "top" ? -1 : 1
   }
 }
