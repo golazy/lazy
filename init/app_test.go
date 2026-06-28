@@ -112,6 +112,8 @@ func TestPanelAssetsAndJobsJSON(t *testing.T) {
 		"window.__golazyDevPanelClient",
 		"window.__lazyReloadSource",
 		"EventSource.CLOSED",
+		"Resize GoLazy development panel",
+		"golazy:devpanel:height",
 		`location.pathname.startsWith("/_golazy")`,
 	} {
 		if !strings.Contains(panelScript.Body.String(), want) {

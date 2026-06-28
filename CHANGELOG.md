@@ -52,6 +52,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   split panes use a reusable Stimulus resize controller with `left`, `right`,
   `top`, and `bottom` directions plus pixel or percentage `min`, `max`, and
   `size` values.
+- Embedded development panels can now be resized from their top edge, and the
+  proxied page's bottom padding follows the selected panel height.
 - `lazy js` and `lazy tailwind` now choose Node package managers from active
   installed mise tools in `pnpm`, `yarn`, `bun`, `node` order. Managers found
   through mise run with `mise exec`; apps without a usable mise package-manager

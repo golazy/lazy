@@ -27,6 +27,9 @@ generated-asset work, builds, and app starts use compact progress lines.
 Successful task output stays hidden, failed task output is printed, and the
 application process still writes directly to the terminal. If the app is not
 running, the HTTPS proxy serves a status page with the latest build state.
+When the development panel is embedded in proxied app pages, drag its top edge
+to resize it; `lazy` adjusts the page's bottom padding with the panel height so
+app content remains visible.
 
 The local certificate authority is created on demand under the user's data
 directory in a `lazy` directory, with strict file permissions. The setup page
