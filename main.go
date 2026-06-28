@@ -13,14 +13,11 @@ import (
 	datasetscommand "golazy.dev/lazy/commands/datasets"
 	docscommand "golazy.dev/lazy/commands/docs"
 	jscommand "golazy.dev/lazy/commands/js"
-	"golazy.dev/lazy/commands/lazyconfig"
-	"golazy.dev/lazy/commands/lazytmux"
 	"golazy.dev/lazy/commands/miseconfig"
 	nativecommand "golazy.dev/lazy/commands/native"
 	newcommand "golazy.dev/lazy/commands/new"
 	routescommand "golazy.dev/lazy/commands/routes"
 	runcommand "golazy.dev/lazy/commands/run"
-	servicescommand "golazy.dev/lazy/commands/services"
 	tailwindcommand "golazy.dev/lazy/commands/tailwind"
 	upgradecommand "golazy.dev/lazy/commands/upgrade"
 )
@@ -329,58 +326,6 @@ func executeRun(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writ
 		return 1
 	}
 
-	if !Config.LazyTmux {
-		lazyToml, ok, err := lazyconfig.LoadIfExists(".")
-		if err != nil {
-			fmt.Fprintf(stderr, "lazy: %v\n", err)
-			return 1
-		}
-		useTmux := ok
-		inventory, err := servicescommand.Inspect(".", lazyToml)
-		if err != nil {
-			fmt.Fprintf(stderr, "lazy: %v\n", err)
-			return 1
-		}
-		if len(lazyToml.Services) == 0 && len(inventory.Services) > 0 {
-			lazyToml.Services = serviceConfigs(inventory.Services)
-			useTmux = true
-		}
-		if useTmux {
-			code, err := (lazytmux.Command{
-				Dir:        ".",
-				CmdPath:    *cmdPath,
-				ViewPath:   *viewPath,
-				PublicPath: *publicPath,
-				Config:     lazyToml,
-				Stdin:      stdin,
-				Stdout:     stdout,
-				Stderr:     stderr,
-			}).Execute()
-			if err != nil {
-				fmt.Fprintf(stderr, "lazy: %v\n", err)
-			}
-			return code
-		}
-	}
-
-	if Config.LazyTmux {
-		lazyToml, _, err := lazyconfig.LoadIfExists(".")
-		if err != nil {
-			fmt.Fprintf(stderr, "lazy: %v\n", err)
-			return 1
-		}
-		if err := (servicescommand.Preparer{
-			Dir:    ".",
-			Config: lazyToml,
-			Stdin:  stdin,
-			Stdout: stdout,
-			Stderr: stderr,
-		}).Execute(); err != nil {
-			fmt.Fprintf(stderr, "lazy: %v\n", err)
-			return 1
-		}
-	}
-
 	code, err := (runcommand.Command{
 		CmdPath:    *cmdPath,
 		ViewPath:   *viewPath,
@@ -396,14 +341,6 @@ func executeRun(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writ
 		fmt.Fprintf(stderr, "lazy: %v\n", err)
 	}
 	return code
-}
-
-func serviceConfigs(names []string) []lazyconfig.Service {
-	services := make([]lazyconfig.Service, 0, len(names))
-	for _, name := range names {
-		services = append(services, lazyconfig.Service{Name: name})
-	}
-	return services
 }
 
 func executeDatasetDump(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {

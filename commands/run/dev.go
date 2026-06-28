@@ -14,10 +14,12 @@ import (
 	"time"
 
 	"golazy.dev/lazy/commands/appcmd"
+	"golazy.dev/lazy/commands/lazyconfig"
 	appinit "golazy.dev/lazy/init"
 	"golazy.dev/lazy/services/buildservice"
 	"golazy.dev/lazy/services/devserver"
 	"golazy.dev/lazy/services/jsservice"
+	"golazy.dev/lazy/services/lifecycleservice"
 	"golazy.dev/lazy/services/tailwindservice"
 	"golazy.dev/lazy/services/watchservice"
 	"golazy.dev/lazytui/progress"
@@ -132,15 +134,17 @@ func (w startupOutputWriter) Write(p []byte) (int, error) {
 }
 
 type devRunner struct {
-	root        string
-	commandPath string
-	viewPath    string
-	publicPath  string
-	listenAddr  string
-	goWork      string
-	stdin       io.Reader
-	stdout      io.Writer
-	stderr      io.Writer
+	root          string
+	commandPath   string
+	viewPath      string
+	publicPath    string
+	listenAddr    string
+	goWork        string
+	serviceConfig lazyconfig.Config
+	stdin         io.Reader
+	stdout        io.Writer
+	stderr        io.Writer
+	forceKill     <-chan struct{}
 
 	pollInterval   time.Duration
 	debounce       time.Duration
@@ -207,13 +211,6 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 
 	fmt.Fprintf(d.stderr, "lazy: serving %s with development panel\n", displayListenAddr(server.Addr()))
 
-	fileWatcher := watchservice.Watcher{
-		Root:     d.root,
-		Interval: d.pollInterval,
-		Debounce: d.debounce,
-	}
-	changeCh := fileWatcher.Watch(ctx)
-
 	stdout := d.stdout
 	if stdout == nil {
 		stdout = io.Discard
@@ -222,6 +219,47 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 	if stderr == nil {
 		stderr = io.Discard
 	}
+
+	lifecycle, err := (lifecycleservice.Service{
+		Dir:    d.root,
+		Config: d.serviceConfig,
+		Stdin:  nil,
+		Stdout: io.MultiWriter(stdout, panelOutputWriter{store: store, stream: "stdout"}),
+		Stderr: io.MultiWriter(stderr, panelOutputWriter{store: store, stream: "stderr"}),
+	}).Start(ctx)
+	if err != nil {
+		return 1, err
+	}
+	defer stopLifecycleWithEscalation(lifecycle, d.forceKill)
+	if lifecycle.Len() > 0 {
+		store.Update(buildservice.Snapshot{
+			State:       buildservice.StateStarting,
+			Message:     "Starting development services.",
+			CommandPath: d.commandPath,
+			WatchedRoot: d.root,
+		})
+		if err := waitForLifecycle(ctx, lifecycle); err != nil {
+			if ctx.Err() != nil {
+				stopLifecycleWithEscalation(lifecycle, d.forceKill)
+				return 0, nil
+			}
+			store.Update(buildservice.Snapshot{
+				State:       buildservice.StateRunFailed,
+				Message:     err.Error(),
+				CommandPath: d.commandPath,
+				WatchedRoot: d.root,
+			})
+			return 1, err
+		}
+		store.AddEvent(buildservice.Event{Type: buildservice.EventManual, Message: "Development services are ready."})
+	}
+
+	fileWatcher := watchservice.Watcher{
+		Root:     d.root,
+		Interval: d.pollInterval,
+		Debounce: d.debounce,
+	}
+	changeCh := fileWatcher.Watch(ctx)
 
 	app := buildservice.Config{
 		Root:           d.root,
@@ -373,7 +411,7 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 				BuildCount:  buildNumber,
 			})
 			if current != nil {
-				current.Stop()
+				stopProcessWithEscalation(current, d.forceKill)
 			}
 			return 0, nil
 		case changed, ok := <-changeCh:
@@ -528,6 +566,49 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 
 func shouldExitAfterApplicationDone(ctx context.Context, err error) bool {
 	return ctx.Err() != nil || err == nil || buildservice.Interrupted(err)
+}
+
+func waitForLifecycle(ctx context.Context, lifecycle *lifecycleservice.Manager) error {
+	select {
+	case err := <-lifecycle.Ready():
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func stopProcessWithEscalation(process *buildservice.Process, forceKill <-chan struct{}) {
+	if process == nil {
+		return
+	}
+	done := make(chan struct{})
+	go func() {
+		process.Stop()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-forceKill:
+		process.Kill()
+		<-done
+	}
+}
+
+func stopLifecycleWithEscalation(lifecycle *lifecycleservice.Manager, forceKill <-chan struct{}) {
+	if lifecycle == nil {
+		return
+	}
+	done := make(chan struct{})
+	go func() {
+		lifecycle.Stop()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-forceKill:
+		lifecycle.Kill()
+		<-done
+	}
 }
 
 func restartLatest(ctx context.Context, d *devRunner, app buildservice.Config, store *buildservice.Store, server *devserver.Server, current **buildservice.Process, appDone *<-chan error, binary string, buildNumber int) error {

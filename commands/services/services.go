@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -88,11 +89,48 @@ func DiscoverTasks(dir string) (TaskSet, error) {
 	})
 	if err != nil {
 		if os.IsNotExist(err) {
+			discoverListedTasks(dir, tasks)
 			return tasks, nil
 		}
 		return nil, fmt.Errorf("inspect mise tasks: %w", err)
 	}
+	discoverListedTasks(dir, tasks)
 	return tasks, nil
+}
+
+func discoverListedTasks(dir string, tasks TaskSet) {
+	command, env := commands.ResolveMiseCommand()
+	cmd := exec.Command(command, "tasks", "ls", "--all")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), env...)
+	cmd.Env = append(cmd.Env, "MISE_NO_ENV=1")
+	output, err := cmd.Output()
+	if err != nil {
+		return
+	}
+	for _, line := range strings.Split(string(output), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		name := fields[0]
+		if !visibleTaskName(name) {
+			continue
+		}
+		tasks[name] = struct{}{}
+	}
+}
+
+func visibleTaskName(name string) bool {
+	if name == "" || strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_") {
+		return false
+	}
+	for _, part := range strings.Split(name, ":") {
+		if part == "" || strings.HasPrefix(part, ".") || strings.HasPrefix(part, "_") {
+			return false
+		}
+	}
+	return true
 }
 
 func HasTask(tasks TaskSet, service string, action string) bool {
@@ -118,6 +156,10 @@ func RunTask(runner commands.Runner, dir string, task string, args []string, std
 		Env:     env,
 		Capture: capture,
 	})
+}
+
+func TaskCommand(task string, args []string) (string, []string, []string) {
+	return miseRunCommand(false, task, args)
 }
 
 func (p Preparer) Execute() error {

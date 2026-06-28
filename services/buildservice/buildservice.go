@@ -365,6 +365,13 @@ func (p *Process) Stop() {
 	}
 }
 
+func (p *Process) Kill() {
+	if p == nil || p.command == nil || p.command.Process == nil {
+		return
+	}
+	_ = p.command.Process.Kill()
+}
+
 func waitForTCP(ctx context.Context, addr string, done <-chan error, timeout time.Duration) error {
 	deadline := time.NewTimer(timeout)
 	defer deadline.Stop()

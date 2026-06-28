@@ -19,9 +19,10 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `lazy docs --json` includes package, value, function, type, and method source
   file and line metadata from `golazy.dev/lazydoc`.
 - The default `lazy` command now discovers local services from `lazy.toml` or
-  `:start` mise tasks, starts them in tmux panes, and runs service
-  `check`, `create`, and `migrate` tasks before starting the app pane when
-  those tasks are present.
+  `:start` mise tasks, starts them as managed subprocesses in parallel, records
+  their stdout and stderr, waits on service `check` tasks before running
+  `create` and `migrate`, and stops the app before stopping services on
+  interrupt.
 - The embedded development panel can now be closed from its toolbar. Panel
   split panes use a reusable Stimulus resize controller with `left`, `right`,
   `top`, and `bottom` directions plus pixel or percentage `min`, `max`, and

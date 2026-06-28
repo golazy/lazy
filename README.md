@@ -24,29 +24,16 @@ hidden, failed task output is printed, and the application process still writes
 directly to the terminal. If the app is not running, the proxy serves a status
 page with the latest build state.
 
-When an application has `lazy.toml`, `lazy` opens the configured development
-workspace in tmux through mise. Service panes run `mise run <service>:start`,
-runner panes run their configured commands, the app pane runs the normal
-development loop, and a `lazy command-center` pane stays open for local
-inspection. The app pane receives `LAZY_TMUX=1` so it runs the development loop
-instead of opening another tmux session.
+When an application declares or exposes local services, `lazy` starts those
+services as managed subprocesses after the development proxy is already
+serving its status page. Service commands are ordinary non-interactive
+processes; their stdout and stderr stay attached to the terminal and are
+recorded by the development panel.
 
 Example `lazy.toml`:
 
 ```toml
 services = ["postgres", "s3"]
-
-[tmux]
-session = "my-app"
-
-[[runners]]
-name = "tailwind"
-command = "lazy tailwind --watch"
-
-[[programs]]
-name = "editor"
-command = "nvim"
-window = "workspace"
 ```
 
 Each service is implemented as mise tasks named `{service}:{action}`. For a
@@ -55,14 +42,20 @@ stateful service such as PostgreSQL, define `postgres:start`,
 `postgres:load FILE`, and `postgres:migrate`. `postgres:start` is mandatory
 and must run in the foreground so SIGINT stops it. `postgres:check` should
 return status 0 only when the service is active and ready for dependent
-processes; the `lazy` command polls it before running create, migrate, or the
-app when the task exists. Add `postgres:kill` only as an escape hatch for stale
-local processes.
+processes; the `lazy` command polls it every 500ms before running create,
+migrate, or the app when the task exists. If the check is still failing after
+five seconds, `lazy` reports that the user should inspect the service output
+and keeps checking. Add `postgres:kill` only as an escape hatch for stale local
+processes.
 
 When `lazy.toml` lists services, `lazy` uses that list. Otherwise, it
-discovers service names from `.mise/tasks` entries ending in `:start`. The app
-pane runs `check`, `create`, and `migrate` for each service when those tasks
-exist, in that order, before starting the Go app.
+discovers service names from `.mise/tasks` entries ending in `:start`. Services
+start in parallel. After a service check succeeds, `lazy` runs that service's
+`create` and `migrate` tasks when they exist. Create and migrate failures are
+reported, and `lazy` continues preparing the remaining services. The Go app
+starts after all discovered services have finished their startup preparation.
+On Ctrl-C, `lazy` stops the app first and then stops the services; a second
+Ctrl-C escalates to killing child processes.
 
 Use direct Go commands when you want to run without the development proxy or
 watcher:
@@ -277,17 +270,16 @@ LAZY_MULTIVERSION=off lazy js
 - `VERSION`: build version embedded into the binary.
 - `version_handoff.go`: app framework version detection and CLI re-exec.
 - `commands/run`: application discovery, hot reload, proxying, and execution.
-- `commands/services`: mise service discovery and lifecycle task execution.
+- `commands/services`: mise service discovery and one-shot task execution.
 - `commands/datasets`: dataset dump and load coordination.
 - `commands/lazyconfig`: `lazy.toml` parsing.
-- `commands/lazytmux`: tmux session construction for configured workspaces.
-- `commands/commandcenter`: interactive tmux command-center pane.
 - `commands/routes`: route-table inspection.
 - `commands/upgrade`: one-step application upgrades and migration helpers.
 - `commands/lazycode`: Go source rewrite helpers used by upgrade migrations.
 - `commands/js`: JavaScript library and app-module bundling, directive
   expansion, and importmap generation.
 - `commands/tailwind`: Tailwind CLI setup and stylesheet compilation.
+- `services/lifecycleservice`: managed local service subprocess lifecycle.
 - `commands/appcmd`: shared application command discovery.
 - `commands/new`: tagged template cloning, renaming, and validation.
 - `commands`: shared subprocess execution.

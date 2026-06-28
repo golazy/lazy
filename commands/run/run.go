@@ -8,11 +8,13 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sync"
 	"syscall"
 
 	"golazy.dev/lazy/commands"
 	"golazy.dev/lazy/commands/appcmd"
 	"golazy.dev/lazy/commands/gowork"
+	"golazy.dev/lazy/commands/lazyconfig"
 	"golazy.dev/lazytui/progress"
 )
 
@@ -51,23 +53,71 @@ func (c Command) Execute() (int, error) {
 		return c.executeDirect(dir, candidate, runner)
 	}
 
+	serviceConfig, _, err := lazyconfig.LoadIfExists(dir)
+	if err != nil {
+		return 1, err
+	}
+
 	ctx := c.Context
-	var stop context.CancelFunc
+	var stop func()
+	var forceKill <-chan struct{}
 	if ctx == nil {
-		ctx, stop = signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		ctx, stop, forceKill = interruptContext()
 		defer stop()
 	}
 	return (&devRunner{
-		root:        dir,
-		commandPath: candidate,
-		viewPath:    c.ViewPath,
-		publicPath:  c.PublicPath,
-		listenAddr:  publicListenAddr(c.Addr, c.Port),
-		goWork:      c.GoWork,
-		stdin:       c.Stdin,
-		stdout:      c.Stdout,
-		stderr:      c.Stderr,
+		root:          dir,
+		commandPath:   candidate,
+		viewPath:      c.ViewPath,
+		publicPath:    c.PublicPath,
+		listenAddr:    publicListenAddr(c.Addr, c.Port),
+		goWork:        c.GoWork,
+		serviceConfig: serviceConfig,
+		stdin:         c.Stdin,
+		stdout:        c.Stdout,
+		stderr:        c.Stderr,
+		forceKill:     forceKill,
 	}).run(ctx)
+}
+
+func interruptContext() (context.Context, func(), <-chan struct{}) {
+	ctx, cancel := context.WithCancel(context.Background())
+	signals := make(chan os.Signal, 2)
+	done := make(chan struct{})
+	forceKill := make(chan struct{})
+	var doneOnce sync.Once
+	var killOnce sync.Once
+	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		interrupted := false
+		for {
+			select {
+			case <-done:
+				return
+			case <-signals:
+				if !interrupted {
+					interrupted = true
+					cancel()
+					continue
+				}
+				killOnce.Do(func() {
+					close(forceKill)
+				})
+				signal.Stop(signals)
+				return
+			}
+		}
+	}()
+
+	stop := func() {
+		doneOnce.Do(func() {
+			close(done)
+			signal.Stop(signals)
+			cancel()
+		})
+	}
+	return ctx, stop, forceKill
 }
 
 func (c Command) executeDirect(dir string, candidate string, runner commands.Runner) (int, error) {
