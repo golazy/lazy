@@ -55,8 +55,9 @@ stateful service such as PostgreSQL, define `postgres:start`,
 `postgres:load FILE`, and `postgres:migrate`. `postgres:start` is mandatory
 and must run in the foreground so SIGINT stops it. `postgres:check` should
 return status 0 only when the service is active and ready for dependent
-processes; the `lazy` command may poll it before starting the app. Add
-`postgres:kill` only as an escape hatch for stale local processes.
+processes; the `lazy` command polls it before running create, migrate, or the
+app when the task exists. Add `postgres:kill` only as an escape hatch for stale
+local processes.
 
 When `lazy.toml` lists services, `lazy` uses that list. Otherwise, it
 discovers service names from `.mise/tasks` entries ending in `:start`. The app

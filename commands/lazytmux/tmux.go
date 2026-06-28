@@ -102,7 +102,7 @@ func (c Command) panes(session string) []pane {
 	}
 	panes = append(panes, pane{
 		Title:   "app",
-		Command: appCommand(session, c.CmdPath, c.ViewPath, c.PublicPath),
+		Command: servicePreparedAppCommand(c.Config.Services, session, c.CmdPath, c.ViewPath, c.PublicPath),
 	})
 	panes = append(panes, pane{
 		Title:   "command-center",
@@ -155,6 +155,36 @@ func appCommand(session string, cmdPath string, viewPath string, publicPath stri
 		parts = append(parts, "--publicpath", shellQuote(filepath.ToSlash(publicPath)))
 	}
 	return strings.Join(parts, " ")
+}
+
+func servicePreparedAppCommand(services []lazyconfig.Service, session string, cmdPath string, viewPath string, publicPath string) string {
+	app := appCommand(session, cmdPath, viewPath, publicPath)
+	setup := serviceSetupCommand(services)
+	if setup == "" {
+		return app
+	}
+	return setup + "; exec " + app
+}
+
+func serviceSetupCommand(services []lazyconfig.Service) string {
+	if len(services) == 0 {
+		return ""
+	}
+	parts := []string{
+		"set -e",
+		"lazy_service_task_exists() { mise tasks ls --all 2>/dev/null | awk '{print $1}' | grep -qx \"$1\"; }",
+		"lazy_service_wait_if_present() { task=\"$1:check\"; if lazy_service_task_exists \"$task\"; then until mise run \"$task\"; do sleep 1; done; fi; }",
+		"lazy_service_run_if_present() { if lazy_service_task_exists \"$1\"; then mise run \"$1\"; fi; }",
+	}
+	for _, service := range services {
+		name := shellQuote(service.Name)
+		parts = append(parts,
+			"lazy_service_wait_if_present "+name,
+			"lazy_service_run_if_present "+shellQuote(service.Name+":create"),
+			"lazy_service_run_if_present "+shellQuote(service.Name+":migrate"),
+		)
+	}
+	return strings.Join(parts, "; ")
 }
 
 func commandCenterCommand(session string) string {
