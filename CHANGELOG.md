@@ -17,6 +17,10 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   lazyjobs control-plane state.
 - The development panel now includes a Services tab with per-service output and
   status-bar service indicators.
+- The `lazy` development proxy now accepts HTTP and HTTPS on the same port.
+  Plain HTTP serves the local certificate authority setup and download page,
+  while HTTPS serves the development panel and proxied app traffic with HTTP/2
+  available after the browser trusts the generated local CA.
 
 ### Changed
 

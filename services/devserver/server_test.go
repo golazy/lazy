@@ -2,10 +2,17 @@ package devserver
 
 import (
 	"bytes"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
+	"strings"
 	"testing"
+
+	"golazy.dev/lazy/services/customcertservice"
 )
 
 func TestInjectScriptAddsExternalPanelClientBeforeBodyClose(t *testing.T) {
@@ -60,7 +67,7 @@ func TestServerRoutesPanelPrefixBeforeProxy(t *testing.T) {
 	defer server.Shutdown(t.Context())
 
 	response := httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/_golazy/", nil))
+	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "https://lazy.test/_golazy/", nil))
 	if got := response.Body.String(); got != "panel" {
 		t.Fatalf("panel body = %q, want panel", got)
 	}
@@ -80,7 +87,7 @@ func TestServerNormalizesPanelRootSlash(t *testing.T) {
 	defer server.Shutdown(t.Context())
 
 	response := httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/_golazy/", nil))
+	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "https://lazy.test/_golazy/", nil))
 	if got := response.Body.String(); got != "panel" {
 		t.Fatalf("panel body = %q, want panel", got)
 	}
@@ -102,7 +109,7 @@ func TestServerAddsRequestTraceHeadersToProxiedRequests(t *testing.T) {
 	server.SetTarget(backend.URL)
 
 	response := httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/posts", nil))
+	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "https://lazy.test/posts", nil))
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d", response.Code)
@@ -138,6 +145,8 @@ func TestServerPreservesExistingRequestTraceHeaders(t *testing.T) {
 	request.Header.Set("tracestate", "vendor=value")
 	response := httptest.NewRecorder()
 
+	request.URL.Scheme = "https"
+	request.TLS = &tls.ConnectionState{}
 	server.ServeHTTP(response, request)
 
 	got := <-headers
@@ -149,5 +158,126 @@ func TestServerPreservesExistingRequestTraceHeaders(t *testing.T) {
 	}
 	if got.Get("tracestate") != "vendor=value" {
 		t.Fatalf("tracestate = %q, want vendor=value", got.Get("tracestate"))
+	}
+}
+
+func TestServerServesCertificateWelcomeOnHTTP(t *testing.T) {
+	paths := testCertificatePaths(t)
+	server, err := New("127.0.0.1:0", nil, nil, WithCertificatePaths(paths))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Shutdown(t.Context())
+
+	request := httptest.NewRequest(http.MethodGet, "http://dev.local:3000/posts?filter=all", nil)
+	request.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)")
+	response := httptest.NewRecorder()
+
+	server.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d", response.Code)
+	}
+	body := response.Body.String()
+	for _, want := range []string{
+		"Welcome to GoLazy local HTTPS",
+		"Install on macOS",
+		"Download certificate authority",
+		"dev.local",
+		"Do not share these files",
+		paths.Certificate,
+		paths.PrivateKey,
+		"https://dev.local:3000/posts?filter=all",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("welcome page missing %q:\n%s", want, body)
+		}
+	}
+}
+
+func TestServerServesCertificateDownloadOnHTTP(t *testing.T) {
+	paths := testCertificatePaths(t)
+	server, err := New("127.0.0.1:0", nil, nil, WithCertificatePaths(paths))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Shutdown(t.Context())
+
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "http://lazy.test"+CertificateDownloadPath, nil))
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d", response.Code)
+	}
+	if got := response.Header().Get("Content-Type"); got != "application/x-x509-ca-cert" {
+		t.Fatalf("Content-Type = %q", got)
+	}
+	if !strings.Contains(response.Body.String(), "BEGIN CERTIFICATE") {
+		t.Fatalf("certificate download did not contain PEM: %q", response.Body.String())
+	}
+	if _, err := customcertservice.LoadOrCreate(paths); err != nil {
+		t.Fatalf("download did not create reusable authority: %v", err)
+	}
+}
+
+func TestServerServesHTTPAndHTTPSOnSamePort(t *testing.T) {
+	paths := testCertificatePaths(t)
+	panel := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprint(w, "panel")
+	})
+	server, err := New("127.0.0.1:0", panel, nil, WithCertificatePaths(paths))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := server.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer server.Shutdown(t.Context())
+
+	httpResponse, err := http.Get("http://" + server.Addr() + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	httpBody, err := io.ReadAll(httpResponse.Body)
+	_ = httpResponse.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(httpBody, []byte("Welcome to GoLazy local HTTPS")) {
+		t.Fatalf("HTTP body = %q, want certificate welcome page", string(httpBody))
+	}
+
+	authority, err := customcertservice.LoadOrCreate(paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rootCAs := x509.NewCertPool()
+	if !rootCAs.AppendCertsFromPEM(authority.CertificatePEM()) {
+		t.Fatal("failed to append generated CA")
+	}
+	client := &http.Client{Transport: &http.Transport{
+		ForceAttemptHTTP2: true,
+		TLSClientConfig:   &tls.Config{RootCAs: rootCAs},
+	}}
+	httpsResponse, err := client.Get("https://" + server.Addr() + HTTPSProbePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = httpsResponse.Body.Close()
+	if httpsResponse.StatusCode != http.StatusNoContent {
+		t.Fatalf("HTTPS probe status = %d, want 204", httpsResponse.StatusCode)
+	}
+	if httpsResponse.ProtoMajor != 2 {
+		t.Fatalf("HTTPS protocol = %s, want HTTP/2", httpsResponse.Proto)
+	}
+}
+
+func testCertificatePaths(t *testing.T) customcertservice.Paths {
+	t.Helper()
+	dir := t.TempDir()
+	return customcertservice.Paths{
+		Dir:         dir,
+		Certificate: filepath.Join(dir, customcertservice.CertificateFileName),
+		PrivateKey:  filepath.Join(dir, customcertservice.PrivateKeyFileName),
 	}
 }

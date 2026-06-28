@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"html"
 	"io"
@@ -18,30 +20,80 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"golazy.dev/lazy/services/buildservice"
+	"golazy.dev/lazy/services/customcertservice"
 )
 
 const ReloadPath = "/__lazy/reload"
 const PanelPrefix = "/_golazy"
 const PanelClientPath = "/_golazy/assets/panel.js"
+const HTTPSProbePath = "/_golazy/https-ready"
+const CertificateDownloadPath = "/_golazy/local-development-ca.pem"
 const requestIDHeader = "X-Request-ID"
 
 var clientScript = []byte(`<script type="module" src="` + PanelClientPath + `"></script>`)
 
 type Server struct {
-	listener net.Listener
-	server   *http.Server
-	target   atomic.Value
-	panel    http.Handler
-	store    *buildservice.Store
-	broker   *reloadBroker
+	listener   net.Listener
+	server     *http.Server
+	target     atomic.Value
+	panel      http.Handler
+	store      *buildservice.Store
+	broker     *reloadBroker
+	localHTTPS bool
+
+	certPaths     customcertservice.Paths
+	certAuthority *customcertservice.Authority
+	certOnce      sync.Once
+	certErr       error
 }
 
-func New(listenAddr string, panel http.Handler, store *buildservice.Store) (*Server, error) {
+type Option func(*options)
+
+type options struct {
+	localHTTPS    bool
+	certPaths     customcertservice.Paths
+	certAuthority *customcertservice.Authority
+}
+
+func WithCertificatePaths(paths customcertservice.Paths) Option {
+	return func(options *options) {
+		options.certPaths = paths
+	}
+}
+
+func WithCertificateAuthority(authority *customcertservice.Authority) Option {
+	return func(options *options) {
+		options.certAuthority = authority
+	}
+}
+
+func WithLocalHTTPS(enabled bool) Option {
+	return func(options *options) {
+		options.localHTTPS = enabled
+	}
+}
+
+func New(listenAddr string, panel http.Handler, store *buildservice.Store, opts ...Option) (*Server, error) {
+	config := options{localHTTPS: true}
+	for _, option := range opts {
+		option(&config)
+	}
 	listener, err := net.Listen("tcp", listenAddr)
 	if err != nil {
 		return nil, fmt.Errorf("listen on %s: %w", listenAddr, err)
+	}
+	paths := config.certPaths
+	if config.certAuthority != nil {
+		paths = config.certAuthority.Paths()
+	} else if config.localHTTPS && paths.Certificate == "" && paths.PrivateKey == "" && paths.Dir == "" {
+		paths, err = customcertservice.DefaultPaths()
+		if err != nil {
+			_ = listener.Close()
+			return nil, err
+		}
 	}
 	if panel == nil {
 		panel = http.NotFoundHandler()
@@ -50,18 +102,34 @@ func New(listenAddr string, panel http.Handler, store *buildservice.Store) (*Ser
 		store = buildservice.NewStore(200)
 	}
 	server := &Server{
-		listener: listener,
-		panel:    panel,
-		store:    store,
-		broker:   newReloadBroker(),
+		listener:      listener,
+		panel:         panel,
+		store:         store,
+		broker:        newReloadBroker(),
+		certPaths:     paths,
+		certAuthority: config.certAuthority,
+		localHTTPS:    config.localHTTPS,
 	}
 	server.server = &http.Server{Handler: server}
 	return server, nil
 }
 
 func (s *Server) Start() error {
+	listener := s.listener
+	if s.localHTTPS {
+		authority, err := s.certificateAuthority()
+		if err != nil {
+			return err
+		}
+		tlsConfig, err := authority.TLSConfig(s.Addr())
+		if err != nil {
+			return err
+		}
+		s.server.TLSConfig = tlsConfig
+		listener = mixedProtocolListener{Listener: s.listener, TLSConfig: tlsConfig}
+	}
 	go func() {
-		if err := s.server.Serve(s.listener); err != nil && err != http.ErrServerClosed {
+		if err := s.server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) && !errors.Is(err, net.ErrClosed) {
 			s.store.AddEvent(buildservice.Event{Type: buildservice.EventState, Message: err.Error()})
 		}
 	}()
@@ -89,6 +157,14 @@ func (s *Server) BroadcastReload() {
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if s.localHTTPS && r.TLS == nil {
+		s.serveHTTP(w, r)
+		return
+	}
+	if r.URL.Path == HTTPSProbePath {
+		serveHTTPSProbe(w, r)
+		return
+	}
 	if r.URL.Path == ReloadPath {
 		s.broker.serveHTTP(w, r)
 		return
@@ -125,6 +201,124 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.serveUnavailable(w, r)
 	}
 	reverseProxy.ServeHTTP(w, r)
+}
+
+func (s *Server) certificateAuthority() (*customcertservice.Authority, error) {
+	s.certOnce.Do(func() {
+		if s.certAuthority != nil {
+			return
+		}
+		s.certAuthority, s.certErr = customcertservice.LoadOrCreate(s.certPaths)
+	})
+	return s.certAuthority, s.certErr
+}
+
+func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request) {
+	switch {
+	case r.URL.Path == CertificateDownloadPath:
+		s.serveCertificateDownload(w, r)
+	case isHTTPWelcomeAsset(r.URL.Path):
+		s.panel.ServeHTTP(w, r)
+	default:
+		s.serveCertificateWelcome(w, r)
+	}
+}
+
+func isHTTPWelcomeAsset(path string) bool {
+	switch path {
+	case "/_golazy/assets/golazy-mark.svg", "/_golazy/assets/golazy-horizontal.svg":
+		return true
+	default:
+		return false
+	}
+}
+
+func serveHTTPSProbe(w http.ResponseWriter, r *http.Request) {
+	if origin := strings.TrimSpace(r.Header.Get("Origin")); origin != "" {
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+		w.Header().Set("Vary", "Origin")
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) serveCertificateDownload(w http.ResponseWriter, r *http.Request) {
+	authority, err := s.certificateAuthority()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	body := authority.CertificatePEM()
+	w.Header().Set("Content-Type", "application/x-x509-ca-cert")
+	w.Header().Set("Content-Disposition", `attachment; filename="golazy-local-development-ca.pem"`)
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+	if r.Method != http.MethodHead {
+		_, _ = w.Write(body)
+	}
+}
+
+func (s *Server) serveCertificateWelcome(w http.ResponseWriter, r *http.Request) {
+	variant := instructionVariantForRequest(r)
+	body := certificateWelcomePage(certificateWelcomeData{
+		Variant:          variant,
+		Host:             customcertservice.NormalizeHost(r.Host),
+		HTTPSURL:         httpsURLForRequest(r),
+		HTTPSProbeURL:    httpsProbeURLForRequest(r),
+		CertificateURL:   CertificateDownloadPath,
+		CertificatePath:  s.certPaths.Certificate,
+		PrivateKeyPath:   s.certPaths.PrivateKey,
+		InstructionLinks: instructionLinksForRequest(r),
+		RequestedVariant: strings.TrimSpace(r.URL.Query().Get("os")),
+		CertificateDir:   s.certPaths.Dir,
+	})
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+	if r.Method != http.MethodHead {
+		_, _ = w.Write(body)
+	}
+}
+
+type mixedProtocolListener struct {
+	net.Listener
+	TLSConfig *tls.Config
+}
+
+func (l mixedProtocolListener) Accept() (net.Conn, error) {
+	for {
+		conn, err := l.Listener.Accept()
+		if err != nil {
+			return nil, err
+		}
+		var first [1]byte
+		_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		n, err := conn.Read(first[:])
+		_ = conn.SetReadDeadline(time.Time{})
+		if err != nil || n == 0 {
+			_ = conn.Close()
+			continue
+		}
+		peeked := &peekedConn{Conn: conn, prefix: first[:n]}
+		if first[0] == 0x16 {
+			return tls.Server(peeked, l.TLSConfig), nil
+		}
+		return peeked, nil
+	}
+}
+
+type peekedConn struct {
+	net.Conn
+	prefix []byte
+}
+
+func (c *peekedConn) Read(p []byte) (int, error) {
+	if len(c.prefix) > 0 {
+		n := copy(p, c.prefix)
+		c.prefix = c.prefix[n:]
+		return n, nil
+	}
+	return c.Conn.Read(p)
 }
 
 func ensureRequestTraceHeaders(r *http.Request) {

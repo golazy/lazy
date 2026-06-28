@@ -257,7 +257,7 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 		_ = server.Shutdown(shutdownCtx)
 	}()
 
-	fmt.Fprintf(d.stderr, "lazy: serving %s with development panel\n", displayListenAddr(server.Addr()))
+	fmt.Fprintf(d.stderr, "lazy: serving %s for local HTTPS setup; development panel at %s after certificate trust\n", displayListenAddr(server.Addr()), displayHTTPSListenAddr(server.Addr()))
 
 	stdout := d.stdout
 	if stdout == nil {
@@ -1035,4 +1035,14 @@ func displayListenAddr(addr string) string {
 		return "http://localhost" + addr
 	}
 	return "http://" + addr
+}
+
+func displayHTTPSListenAddr(addr string) string {
+	if strings.HasPrefix(addr, "[::]:") {
+		return "https://localhost:" + strings.TrimPrefix(addr, "[::]:")
+	}
+	if strings.HasPrefix(addr, ":") {
+		return "https://localhost" + addr
+	}
+	return "https://" + addr
 }

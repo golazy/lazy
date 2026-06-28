@@ -18,11 +18,19 @@ The command reads the module path from `go.mod` and first looks for
 not active, builds the app command into a temporary binary, serves the public
 `ADDR` or `PORT` through a local proxy, runs the app on an internal loopback
 port, watches application files, rebuilds and restarts on changes, and injects
-a small reload client into HTML responses. Proxy startup, generated-asset work,
-builds, and app starts use compact progress lines. Successful task output stays
-hidden, failed task output is printed, and the application process still writes
-directly to the terminal. If the app is not running, the proxy serves a status
-page with the latest build state.
+a small reload client into HTML responses. The public proxy accepts HTTP and
+HTTPS on the same port. Plain HTTP serves a GoLazy local HTTPS setup page with
+the custom certificate authority download; after the browser trusts that CA,
+the page redirects to the HTTPS version and the development panel can use
+HTTP/2 multiplexing for its streams and app requests. Proxy startup,
+generated-asset work, builds, and app starts use compact progress lines.
+Successful task output stays hidden, failed task output is printed, and the
+application process still writes directly to the terminal. If the app is not
+running, the HTTPS proxy serves a status page with the latest build state.
+
+The local certificate authority is created on demand under the user's data
+directory in a `lazy` directory, with strict file permissions. The setup page
+prints the exact paths. Never share that directory or the private key.
 
 When an application declares or exposes local services, `lazy` starts those
 services as managed subprocesses after the development proxy is already
