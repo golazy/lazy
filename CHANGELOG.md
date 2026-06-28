@@ -31,6 +31,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the right, app and service status chips in the permanent status bar, a
   full-height Services page, and an App Logs split resize that expands the left
   detail stack while the output pane fills the remaining width.
+- The status bar app chip now opens App Logs, and selected service chips keep
+  the same background as the rest of the status bar.
 - `lazy docs --json` includes package, value, function, type, and method source
   file and line metadata from `golazy.dev/lazydoc`.
 - The default `lazy` command now discovers local services from `lazy.toml` or

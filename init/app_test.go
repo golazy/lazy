@@ -68,7 +68,7 @@ func TestPanelFrameRoutes(t *testing.T) {
 		{path: "/_golazy/console", frame: "console", want: `data-view="console"`},
 		{path: "/_golazy/logs", frame: "logs", want: `data-view="logs"`},
 		{path: "/_golazy/services", frame: "services", want: `data-view="services"`},
-		{path: "/_golazy/status", frame: "status_bar", want: `class="app-status-chip"`},
+		{path: "/_golazy/status", frame: "status_bar", want: `<a class="app-status-chip" href="/_golazy/logs" data-turbo-frame="_top" data-app-status="running">`},
 	} {
 		request := httptest.NewRequest(http.MethodGet, test.path, nil)
 		request.Header.Set("Turbo-Frame", test.frame)
@@ -83,6 +83,9 @@ func TestPanelFrameRoutes(t *testing.T) {
 		}
 		if !strings.Contains(body, test.want) {
 			t.Fatalf("%s body missing %q:\n%s", test.path, test.want, body)
+		}
+		if test.path == "/_golazy/status" && !strings.Contains(body, `class="service-status-button" data-service-status data-service-name="postgres" data-service-state="ready"`) {
+			t.Fatalf("%s body missing service status button:\n%s", test.path, body)
 		}
 	}
 }
@@ -117,6 +120,7 @@ func testApp() http.Handler {
 		AppAddr:     "127.0.0.1:3001",
 		WatchedRoot: ".",
 	})
+	store.UpdateService("postgres", buildservice.ServiceReady, "ready")
 	return App(Config{
 		Store:             store,
 		Actions:           buildservice.NewActions(),

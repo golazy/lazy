@@ -1,8 +1,8 @@
 <footer class="status-bar">
-  <span class="app-status-chip" data-app-status="{{.state.State}}">
+  <a class="app-status-chip" href="{{path_for "logs"}}" data-turbo-frame="_top" data-app-status="{{.state.State}}">
     <span class="service-dot"></span>
     <span>App</span>
-  </span>
+  </a>
   <span>Build <span data-panel-build>{{.state.BuildCount}}</span></span>
   <span data-panel-duration>{{.state.Duration}}</span>
   <span>App <code data-panel-app-addr>{{.state.AppAddr}}</code></span>

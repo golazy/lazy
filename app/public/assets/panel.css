@@ -442,11 +442,21 @@ button:disabled:hover {
 
 .app-status-chip {
   align-items: center;
+  border: 1px solid transparent;
+  border-radius: 3px;
   color: var(--text);
+  cursor: pointer;
   display: inline-flex;
   flex: 0 0 auto;
   gap: 6px;
+  height: 20px;
   min-width: 0;
+  padding: 0 7px;
+}
+
+.app-status-chip:hover {
+  background: var(--row-hover);
+  border-color: var(--border);
 }
 
 .app-status-chip[data-app-status="running"] .service-dot {
@@ -940,8 +950,7 @@ button:disabled:hover {
   padding: 0 7px;
 }
 
-.service-status-button:hover,
-.service-status-button[aria-current="true"] {
+.service-status-button:hover {
   background: var(--row-hover);
   border-color: var(--border);
 }
@@ -976,7 +985,7 @@ button:disabled:hover {
   white-space: nowrap;
 }
 
-.status-bar span {
+.status-bar > span {
   flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
