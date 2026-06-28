@@ -27,6 +27,10 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   keeps the status bar mounted as a permanent Turbo Frame, uses the generated
   importmap for its iframe app, and streams Turbo Stream updates alongside the
   existing event JSON.
+- The development panel now uses a single top tab bar with the close control on
+  the right, app and service status chips in the permanent status bar, a
+  full-height Services page, and an App Logs split resize that expands the left
+  detail stack while the output pane fills the remaining width.
 - `lazy docs --json` includes package, value, function, type, and method source
   file and line metadata from `golazy.dev/lazydoc`.
 - The default `lazy` command now discovers local services from `lazy.toml` or
