@@ -60,10 +60,10 @@ On Ctrl-C, `lazy` stops the app first and then stops the services; a second
 Ctrl-C escalates to killing child processes.
 
 Use direct Go commands when you want to run without the development proxy or
-watcher:
+watcher. For an app generated as `github.com/guillermo/my_app`:
 
 ```sh
-go run ./cmd/app
+go run ./cmd/my_app
 ```
 
 ## Inspect routes
@@ -152,11 +152,12 @@ ignored. Use `--skip-update-check` to bypass the online check.
 By default, `lazy new` creates `./my_app` from the `golazy/sample_app` tag
 matching the CLI version. Use `--version <version>` to clone a specific sample
 app tag instead. The command removes the template Git history, changes the
-module and imports, trusts the generated `mise.toml`, runs `mise install`, then
-validates with the current `go` on `PATH` by running `go mod tidy` and
-`go test ./...`. After validation it initializes a fresh Git repository,
-commits the generated checkout with a command-local GoLazy identity, and
-prints the generated app directory and the `lazy` command to run next.
+module and imports, renames the command directory to `cmd/my_app`, trusts the
+generated `mise.toml`, runs `mise install`, then validates with the current
+`go` on `PATH` by running `go mod tidy` and `go test ./...`. After validation
+it initializes a fresh Git repository, commits the generated checkout with a
+command-local GoLazy identity, and prints the generated app directory and the
+`lazy` command to run next.
 
 If `mise` was just installed by the public installer and the current shell has
 not picked up the new `PATH`, `lazy new` can still run setup through

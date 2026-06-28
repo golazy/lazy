@@ -120,7 +120,10 @@ func (c Command) Execute(modulePath string) error {
 	}
 
 	fmt.Fprintln(c.Stdout, "* Naming the app")
-	if err := replaceTemplateName(destination, modulePath); err != nil {
+	if err := replaceTemplateName(destination, modulePath, appName); err != nil {
+		return err
+	}
+	if err := renameTemplateCommand(destination, appName); err != nil {
 		return err
 	}
 	if err := replaceSecureCookieKey(destination); err != nil {
@@ -456,7 +459,7 @@ func findWorkspace(start string, goWork string) (string, string, bool) {
 	}
 }
 
-func replaceTemplateName(root, modulePath string) error {
+func replaceTemplateName(root, modulePath, appName string) error {
 	var paths []string
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
 		if err != nil {
@@ -472,16 +475,31 @@ func replaceTemplateName(root, modulePath string) error {
 		return fmt.Errorf("walk generated app: %w", err)
 	}
 
+	replacements := []struct {
+		old []byte
+		new []byte
+	}{
+		{old: []byte("sample_app"), new: []byte(modulePath)},
+		{old: []byte("cmd/app"), new: []byte("cmd/" + appName)},
+	}
+
 	for _, path := range paths {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return fmt.Errorf("read %s: %w", path, err)
 		}
-		if !utf8.Valid(data) || !bytes.Contains(data, []byte("sample_app")) {
+		if !utf8.Valid(data) {
 			continue
 		}
 
-		updated := bytes.ReplaceAll(data, []byte("sample_app"), []byte(modulePath))
+		updated := data
+		for _, replacement := range replacements {
+			updated = bytes.ReplaceAll(updated, replacement.old, replacement.new)
+		}
+		if bytes.Equal(updated, data) {
+			continue
+		}
+
 		info, err := os.Stat(path)
 		if err != nil {
 			return fmt.Errorf("stat %s: %w", path, err)
@@ -489,6 +507,36 @@ func replaceTemplateName(root, modulePath string) error {
 		if err := os.WriteFile(path, updated, info.Mode().Perm()); err != nil {
 			return fmt.Errorf("write %s: %w", path, err)
 		}
+	}
+	return nil
+}
+
+func renameTemplateCommand(root, appName string) error {
+	source := filepath.Join(root, "cmd", "app")
+	target := filepath.Join(root, "cmd", appName)
+	if source == target {
+		return nil
+	}
+
+	info, err := os.Stat(source)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("inspect command template directory: %w", err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("command template path %q is not a directory", filepath.Join("cmd", "app"))
+	}
+
+	if _, err := os.Stat(target); err == nil {
+		return fmt.Errorf("command directory %q already exists", filepath.Join("cmd", appName))
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("inspect command directory %q: %w", filepath.Join("cmd", appName), err)
+	}
+
+	if err := os.Rename(source, target); err != nil {
+		return fmt.Errorf("rename command directory %q to %q: %w", filepath.Join("cmd", "app"), filepath.Join("cmd", appName), err)
 	}
 	return nil
 }

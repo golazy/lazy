@@ -62,9 +62,10 @@ func TestClonesRenamesAndValidates(t *testing.T) {
 				writeFile(t, filepath.Join(destination, "go.mod"), "module sample_app\n")
 				writeFile(
 					t,
-					filepath.Join(destination, "main.go"),
+					filepath.Join(destination, "cmd", "app", "main.go"),
 					"package main\nimport \"sample_app/app\"\n",
 				)
+				writeFile(t, filepath.Join(destination, "README.md"), "go run ./cmd/app\n")
 				writeFile(
 					t,
 					filepath.Join(destination, "init", "app.go"),
@@ -97,7 +98,9 @@ func TestClonesRenamesAndValidates(t *testing.T) {
 		t.Fatalf(".git was not initialized: %v", err)
 	}
 	assertFileContains(t, filepath.Join(destination, "go.mod"), "module github.com/guillermo/my_app")
-	assertFileContains(t, filepath.Join(destination, "main.go"), `"github.com/guillermo/my_app/app"`)
+	assertFileContains(t, filepath.Join(destination, "cmd", "my_app", "main.go"), `"github.com/guillermo/my_app/app"`)
+	assertFileContains(t, filepath.Join(destination, "README.md"), "go run ./cmd/my_app")
+	assertPathMissing(t, filepath.Join(destination, "cmd", "app"))
 	assertGeneratedSecureCookieKey(t, filepath.Join(destination, "init", "app.go"))
 
 	wantOutput := strings.Join([]string{
@@ -399,9 +402,10 @@ func TestCopiesSourceDirectoryRenamesAndValidates(t *testing.T) {
 	writeFile(t, filepath.Join(source, "node_modules", "library", "index.js"), "export {}\n")
 	writeFile(
 		t,
-		filepath.Join(source, "main.go"),
+		filepath.Join(source, "cmd", "app", "main.go"),
 		"package main\nimport \"sample_app/app\"\n",
 	)
+	writeFile(t, filepath.Join(source, "README.md"), "go build ./cmd/app\n")
 
 	var stdout bytes.Buffer
 	var calls []invocation
@@ -432,7 +436,9 @@ func TestCopiesSourceDirectoryRenamesAndValidates(t *testing.T) {
 		t.Fatalf("node_modules was copied: %v", err)
 	}
 	assertFileContains(t, filepath.Join(destination, "go.mod"), "module github.com/guillermo/my_app")
-	assertFileContains(t, filepath.Join(destination, "main.go"), `"github.com/guillermo/my_app/app"`)
+	assertFileContains(t, filepath.Join(destination, "cmd", "my_app", "main.go"), `"github.com/guillermo/my_app/app"`)
+	assertFileContains(t, filepath.Join(destination, "README.md"), "go build ./cmd/my_app")
+	assertPathMissing(t, filepath.Join(destination, "cmd", "app"))
 
 	if len(calls) != 7 {
 		t.Fatalf("calls = %d, want 7", len(calls))
@@ -631,6 +637,13 @@ func assertFileContains(t *testing.T, filename, expected string) {
 	}
 	if !strings.Contains(string(data), expected) {
 		t.Fatalf("%s = %q, does not contain %q", filename, data, expected)
+	}
+}
+
+func assertPathMissing(t *testing.T, filename string) {
+	t.Helper()
+	if _, err := os.Stat(filename); !os.IsNotExist(err) {
+		t.Fatalf("%s exists or could not be inspected: %v", filename, err)
 	}
 }
 
