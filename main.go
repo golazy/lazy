@@ -10,6 +10,7 @@ import (
 	"golazy.dev/lazy/commands/appcmd"
 	bastardcommand "golazy.dev/lazy/commands/bastard"
 	commandcenter "golazy.dev/lazy/commands/commandcenter"
+	datasetscommand "golazy.dev/lazy/commands/datasets"
 	docscommand "golazy.dev/lazy/commands/docs"
 	jscommand "golazy.dev/lazy/commands/js"
 	"golazy.dev/lazy/commands/lazyconfig"
@@ -19,6 +20,7 @@ import (
 	newcommand "golazy.dev/lazy/commands/new"
 	routescommand "golazy.dev/lazy/commands/routes"
 	runcommand "golazy.dev/lazy/commands/run"
+	servicescommand "golazy.dev/lazy/commands/services"
 	tailwindcommand "golazy.dev/lazy/commands/tailwind"
 	upgradecommand "golazy.dev/lazy/commands/upgrade"
 )
@@ -100,6 +102,10 @@ func execute(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer)
 		return 0
 	case "routes":
 		return executeRoutes(args[1:], stdout, stderr)
+	case "dump":
+		return executeDatasetDump(args[1:], stdin, stdout, stderr)
+	case "load":
+		return executeDatasetLoad(args[1:], stdin, stdout, stderr)
 	case "upgrade":
 		return executeUpgrade(args[1:], stdin, stdout, stderr)
 	case "native":
@@ -141,6 +147,8 @@ func printUsage(stdout io.Writer) {
 	fmt.Fprintln(stdout, "  lazy")
 	fmt.Fprintln(stdout, "  lazy new [--version <version>] [--skip-update-check] <module>")
 	fmt.Fprintln(stdout, "  lazy routes")
+	fmt.Fprintln(stdout, "  lazy dump <dataset>")
+	fmt.Fprintln(stdout, "  lazy load <dataset>")
 	fmt.Fprintln(stdout, "  lazy upgrade")
 	fmt.Fprintln(stdout, "  lazy native")
 	fmt.Fprintln(stdout, "  lazy native build")
@@ -327,7 +335,17 @@ func executeRun(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writ
 			fmt.Fprintf(stderr, "lazy: %v\n", err)
 			return 1
 		}
-		if ok {
+		useTmux := ok
+		inventory, err := servicescommand.Inspect(".", lazyToml)
+		if err != nil {
+			fmt.Fprintf(stderr, "lazy: %v\n", err)
+			return 1
+		}
+		if len(lazyToml.Services) == 0 && len(inventory.Services) > 0 {
+			lazyToml.Services = serviceConfigs(inventory.Services)
+			useTmux = true
+		}
+		if useTmux {
 			code, err := (lazytmux.Command{
 				Dir:        ".",
 				CmdPath:    *cmdPath,
@@ -342,6 +360,24 @@ func executeRun(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writ
 				fmt.Fprintf(stderr, "lazy: %v\n", err)
 			}
 			return code
+		}
+	}
+
+	if Config.LazyTmux {
+		lazyToml, _, err := lazyconfig.LoadIfExists(".")
+		if err != nil {
+			fmt.Fprintf(stderr, "lazy: %v\n", err)
+			return 1
+		}
+		if err := (servicescommand.Preparer{
+			Dir:    ".",
+			Config: lazyToml,
+			Stdin:  stdin,
+			Stdout: stdout,
+			Stderr: stderr,
+		}).Execute(); err != nil {
+			fmt.Fprintf(stderr, "lazy: %v\n", err)
+			return 1
 		}
 	}
 
@@ -360,6 +396,48 @@ func executeRun(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writ
 		fmt.Fprintf(stderr, "lazy: %v\n", err)
 	}
 	return code
+}
+
+func serviceConfigs(names []string) []lazyconfig.Service {
+	services := make([]lazyconfig.Service, 0, len(names))
+	for _, name := range names {
+		services = append(services, lazyconfig.Service{Name: name})
+	}
+	return services
+}
+
+func executeDatasetDump(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
+	if len(args) != 1 {
+		fmt.Fprintln(stderr, "lazy: usage: lazy dump <dataset>")
+		return 1
+	}
+	err := (datasetscommand.Command{
+		Stdin:  stdin,
+		Stdout: stdout,
+		Stderr: stderr,
+	}).Dump(args[0])
+	if err != nil {
+		fmt.Fprintf(stderr, "lazy: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
+func executeDatasetLoad(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
+	if len(args) != 1 {
+		fmt.Fprintln(stderr, "lazy: usage: lazy load <dataset>")
+		return 1
+	}
+	err := (datasetscommand.Command{
+		Stdin:  stdin,
+		Stdout: stdout,
+		Stderr: stderr,
+	}).Load(args[0])
+	if err != nil {
+		fmt.Fprintf(stderr, "lazy: %v\n", err)
+		return 1
+	}
+	return 0
 }
 
 func executeTailwind(args []string, stdout io.Writer, stderr io.Writer) int {

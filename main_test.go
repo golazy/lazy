@@ -167,6 +167,32 @@ func TestRoutesRejectsArguments(t *testing.T) {
 	}
 }
 
+func TestDumpRequiresDatasetName(t *testing.T) {
+	t.Setenv(lazyMultiversionEnv, lazyMultiversionOff)
+	reloadConfigForTest(t)
+	var stderr bytes.Buffer
+
+	if code := execute([]string{"dump"}, nil, &bytes.Buffer{}, &stderr); code != 1 {
+		t.Fatalf("exit code = %d, want 1", code)
+	}
+	if !strings.Contains(stderr.String(), "usage: lazy dump") {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+}
+
+func TestLoadRequiresDatasetName(t *testing.T) {
+	t.Setenv(lazyMultiversionEnv, lazyMultiversionOff)
+	reloadConfigForTest(t)
+	var stderr bytes.Buffer
+
+	if code := execute([]string{"load"}, nil, &bytes.Buffer{}, &stderr); code != 1 {
+		t.Fatalf("exit code = %d, want 1", code)
+	}
+	if !strings.Contains(stderr.String(), "usage: lazy load") {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+}
+
 func TestJSRejectsArguments(t *testing.T) {
 	t.Setenv(lazyMultiversionEnv, lazyMultiversionOff)
 	reloadConfigForTest(t)
@@ -236,6 +262,7 @@ func TestProjectVersionMatchDoesNotHandoff(t *testing.T) {
 }
 
 func TestProjectVersionMismatchRunsCachedLazy(t *testing.T) {
+	enableMultiversionForTest(t)
 	t.Chdir(t.TempDir())
 	writeGoMod(t, "v0.1.7")
 	restoreVersionHandoffTestHooks(t)
@@ -284,6 +311,7 @@ func TestProjectVersionMismatchRunsCachedLazy(t *testing.T) {
 }
 
 func TestProjectVersionMismatchInstallsMissingLazy(t *testing.T) {
+	enableMultiversionForTest(t)
 	t.Chdir(t.TempDir())
 	writeGoMod(t, "v0.1.7")
 	restoreVersionHandoffTestHooks(t)
@@ -329,6 +357,7 @@ func TestProjectVersionMismatchInstallsMissingLazy(t *testing.T) {
 }
 
 func TestProjectVersionMismatchReportsInstallFailure(t *testing.T) {
+	enableMultiversionForTest(t)
 	t.Chdir(t.TempDir())
 	writeGoMod(t, "v0.1.7")
 	restoreVersionHandoffTestHooks(t)
@@ -430,6 +459,12 @@ type commandCall struct {
 	command string
 	args    []string
 	env     []string
+}
+
+func enableMultiversionForTest(t *testing.T) {
+	t.Helper()
+	unsetenv(t, lazyMultiversionEnv)
+	reloadConfigForTest(t)
 }
 
 func restoreVersionHandoffTestHooks(t *testing.T) {

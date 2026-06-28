@@ -58,6 +58,11 @@ return status 0 only when the service is active and ready for dependent
 processes; the `lazy` command may poll it before starting the app. Add
 `postgres:kill` only as an escape hatch for stale local processes.
 
+When `lazy.toml` lists services, `lazy` uses that list. Otherwise, it
+discovers service names from `.mise/tasks` entries ending in `:start`. The app
+pane runs `check`, `create`, and `migrate` for each service when those tasks
+exist, in that order, before starting the Go app.
+
 Use direct Go commands when you want to run without the development proxy or
 watcher:
 
@@ -121,6 +126,20 @@ Override paths when needed:
 ```sh
 lazy tailwind --input app/styles/site.css --output app/public/site.css
 ```
+
+## Manage local datasets
+
+From a GoLazy application module with service dump/load tasks:
+
+```sh
+lazy dump baseline
+lazy load baseline
+```
+
+`lazy dump <name>` creates `datasets/<name>` and runs each discovered
+service's `dump` task with a service-specific output path such as
+`datasets/baseline/postgres.dump`. `lazy load <name>` runs matching `load`
+tasks for dump files present in the dataset.
 
 ## Create an application
 
@@ -257,6 +276,8 @@ LAZY_MULTIVERSION=off lazy js
 - `VERSION`: build version embedded into the binary.
 - `version_handoff.go`: app framework version detection and CLI re-exec.
 - `commands/run`: application discovery, hot reload, proxying, and execution.
+- `commands/services`: mise service discovery and lifecycle task execution.
+- `commands/datasets`: dataset dump and load coordination.
 - `commands/lazyconfig`: `lazy.toml` parsing.
 - `commands/lazytmux`: tmux session construction for configured workspaces.
 - `commands/commandcenter`: interactive tmux command-center pane.

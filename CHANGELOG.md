@@ -7,8 +7,17 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `lazy dump <dataset>` and `lazy load <dataset>` coordinate service
+  `dump` / `load` mise tasks with files under `datasets/<dataset>`.
+
 ### Changed
 
+- The default `lazy` command now discovers local services from `lazy.toml` or
+  `:start` mise tasks, starts them in tmux panes, and runs service
+  `check`, `create`, and `migrate` tasks before starting the app pane when
+  those tasks are present.
 - The embedded development panel can now be closed from its toolbar, and
   request/detail panes inside the panel can be resized with a Stimulus
   controller.
