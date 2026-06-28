@@ -39,6 +39,7 @@ func TestPanelFrameRoutes(t *testing.T) {
 		frame string
 		want  string
 	}{
+		{path: "/_golazy/console", frame: "console", want: `data-view="console"`},
 		{path: "/_golazy/logs", frame: "logs", want: `data-view="logs"`},
 		{path: "/_golazy/services", frame: "services", want: `data-view="services"`},
 		{path: "/_golazy/status", frame: "status_bar", want: `class="status-bar"`},

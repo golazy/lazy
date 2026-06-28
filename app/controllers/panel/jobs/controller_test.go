@@ -27,7 +27,7 @@ func TestIndexProxiesApplicationControlPlaneForJSON(t *testing.T) {
 		State:            buildservice.StateRunning,
 		ControlPlaneAddr: strings.TrimPrefix(appControl.URL, "http://"),
 	})
-	controller := &Controller{Base: panel.Base{Store: store}}
+	controller := &JobsController{Base: panel.Base{Store: store}}
 
 	request := httptest.NewRequest(http.MethodGet, "/_golazy/jobs", nil)
 	request.Header.Set("Accept", "application/json")

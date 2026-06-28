@@ -7,16 +7,16 @@ import (
 	"golazy.dev/lazy/app/controllers/panel"
 )
 
-type Controller struct {
+type AssetsController struct {
 	panel.Base
 }
 
-func New(ctx context.Context) (*Controller, error) {
+func New(ctx context.Context) (*AssetsController, error) {
 	base, err := panel.NewBase(ctx)
-	return &Controller{Base: base}, err
+	return &AssetsController{Base: base}, err
 }
 
-func (c *Controller) Index(_ http.ResponseWriter, _ *http.Request) error {
+func (c *AssetsController) Index(_ http.ResponseWriter, _ *http.Request) error {
 	c.SetState()
 	return nil
 }

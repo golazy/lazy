@@ -9,15 +9,15 @@ import (
 
 const appJobsPath = "/jobs"
 
-type Controller struct {
+type JobsController struct {
 	panel.Base
 }
 
-func New(ctx context.Context) (*Controller, error) {
+func New(ctx context.Context) (*JobsController, error) {
 	base, err := panel.NewBase(ctx)
-	return &Controller{Base: base}, err
+	return &JobsController{Base: base}, err
 }
 
-func (c *Controller) Index(w http.ResponseWriter, r *http.Request) error {
+func (c *JobsController) Index(w http.ResponseWriter, r *http.Request) error {
 	return c.RespondHTMLOrJSON(w, r, appJobsPath)
 }

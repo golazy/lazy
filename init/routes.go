@@ -13,7 +13,13 @@ import (
 	"golazy.dev/lazy/app/controllers/panel/status"
 	"golazy.dev/lazy/app/controllers/panel/traces"
 	"golazy.dev/lazyroutes"
+	"golazy.dev/lazysupport/inflection"
 )
+
+func init() {
+	inflection.Irregular("console", "console")
+	inflection.Irregular("status", "status")
+}
 
 func Draw(router *lazyroutes.Scope) {
 	router.Path("_golazy", func(panel *lazyroutes.Scope) {
@@ -29,22 +35,15 @@ func Draw(router *lazyroutes.Scope) {
 			resource.Post("rebuild", (*panelcontroller.Controller).Rebuild)
 			resource.Post("restart", (*panelcontroller.Controller).Restart)
 		})
-		panel.Resources(requests.New, namedResource("request", "requests"))
-		panel.Resources(console.New, namedResource("console", "console"))
-		panel.Resources(logs.New, namedResource("log", "logs"))
-		panel.Resources(services.New, namedResource("service", "services"))
-		panel.Resources(traces.New, namedResource("trace", "traces"))
-		panel.Resources(routes.New, namedResource("route", "routes"))
-		panel.Resources(jobs.New, namedResource("job", "jobs"))
-		panel.Resources(assets.New, namedResource("asset", "assets"))
-		panel.Resources(actions.New, namedResource("action", "actions"))
-		panel.Resources(status.New, namedResource("status", "status"))
+		panel.Resources(requests.New)
+		panel.Resources(console.New)
+		panel.Resources(logs.New)
+		panel.Resources(services.New)
+		panel.Resources(traces.New)
+		panel.Resources(routes.New)
+		panel.Resources(jobs.New)
+		panel.Resources(assets.New)
+		panel.Resources(actions.New)
+		panel.Resources(status.New)
 	})
-}
-
-func namedResource(singular string, plural string) func(*lazyroutes.Resource) {
-	return func(resource *lazyroutes.Resource) {
-		resource.Singular(singular)
-		resource.Plural(plural)
-	}
 }
