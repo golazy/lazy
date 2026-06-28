@@ -195,6 +195,52 @@ func TestServerServesCertificateWelcomeOnHTTP(t *testing.T) {
 	}
 }
 
+func TestServerServesCertificateWelcomeCommandCopyButtons(t *testing.T) {
+	paths := testCertificatePaths(t)
+	server, err := New("127.0.0.1:0", nil, nil, WithCertificatePaths(paths))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Shutdown(t.Context())
+
+	tests := []struct {
+		name    string
+		target  string
+		command string
+	}{
+		{
+			name:    "windows",
+			target:  "http://lazy.test/?os=windows",
+			command: "certmgr.msc",
+		},
+		{
+			name:    "linux",
+			target:  "http://lazy.test/?os=linux",
+			command: "certutil -d sql:$HOME/.pki/nssdb",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			response := httptest.NewRecorder()
+			server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, tt.target, nil))
+
+			if response.Code != http.StatusOK {
+				t.Fatalf("status = %d", response.Code)
+			}
+			body := response.Body.String()
+			for _, want := range []string{
+				`class="copy-button"`,
+				`data-copy="` + tt.command,
+				tt.command,
+			} {
+				if !strings.Contains(body, want) {
+					t.Fatalf("welcome page missing %q:\n%s", want, body)
+				}
+			}
+		})
+	}
+}
+
 func TestServerServesCertificateDownloadOnHTTP(t *testing.T) {
 	paths := testCertificatePaths(t)
 	server, err := New("127.0.0.1:0", nil, nil, WithCertificatePaths(paths))
