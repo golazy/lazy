@@ -3,11 +3,10 @@ package panel
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
-	"strings"
 
 	"golazy.dev/lazy/services/buildservice"
+	"golazy.dev/lazysse"
 )
 
 type Controller struct {
@@ -62,34 +61,36 @@ func (c *Controller) RequestMonitoringOff(w http.ResponseWriter, r *http.Request
 }
 
 func (c *Controller) Events(w http.ResponseWriter, r *http.Request) error {
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
-		return nil
+	stream, err := c.SSEStream()
+	if err != nil {
+		return err
 	}
+	defer stream.Close()
+
 	events, unsubscribe := c.Store.Subscribe()
 	defer unsubscribe()
 
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	fmt.Fprint(w, "event: ready\ndata: ok\n\n")
-	flusher.Flush()
+	if err := stream.Send(lazysse.Event{Event: "ready", Data: []string{"ok"}}); err != nil {
+		return err
+	}
 
 	for {
 		select {
-		case <-r.Context().Done():
+		case <-stream.Done():
 			return nil
 		case event := <-events:
 			data, err := json.Marshal(event)
 			if err != nil {
 				continue
 			}
-			fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event.Type, data)
-			if stream, err := c.turboStreamForEvent(r, event); err == nil && stream != "" {
-				writeSSE(w, "turbo-stream", stream)
+			if err := stream.Send(lazysse.Event{Event: string(event.Type), Data: []string{string(data)}}); err != nil {
+				return err
 			}
-			flusher.Flush()
+			if body, err := c.turboStreamForEvent(r, event); err == nil && body != "" {
+				if err := stream.Send(lazysse.Event{Event: "turbo-stream", Data: []string{body}}); err != nil {
+					return err
+				}
+			}
 		}
 	}
 }
@@ -136,12 +137,4 @@ func (c *Controller) turboStreamForEvent(r *http.Request, event buildservice.Eve
 		stream += TurboStream("replace", "logs", logs)
 	}
 	return stream, nil
-}
-
-func writeSSE(w http.ResponseWriter, event string, data string) {
-	fmt.Fprintf(w, "event: %s\n", event)
-	for _, line := range strings.Split(data, "\n") {
-		fmt.Fprintf(w, "data: %s\n", line)
-	}
-	fmt.Fprint(w, "\n")
 }

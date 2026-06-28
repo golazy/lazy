@@ -1,6 +1,7 @@
 package appinit
 
 import (
+	"bufio"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -102,12 +103,60 @@ func TestPanelAssetsAndJobsJSON(t *testing.T) {
 		t.Fatalf("importmap body = %s, want /js/app.js", asset.Body.String())
 	}
 
+	panelScript := httptest.NewRecorder()
+	app.ServeHTTP(panelScript, httptest.NewRequest(http.MethodGet, "/_golazy/assets/panel.js", nil))
+	if panelScript.Code != http.StatusOK {
+		t.Fatalf("panel script status = %d, want %d: %s", panelScript.Code, http.StatusOK, panelScript.Body.String())
+	}
+	for _, want := range []string{
+		"window.__golazyDevPanelClient",
+		"window.__lazyReloadSource",
+		"EventSource.CLOSED",
+		`location.pathname.startsWith("/_golazy")`,
+	} {
+		if !strings.Contains(panelScript.Body.String(), want) {
+			t.Fatalf("panel script missing %q:\n%s", want, panelScript.Body.String())
+		}
+	}
+
 	request := httptest.NewRequest(http.MethodGet, "/_golazy/jobs", nil)
 	request.Header.Set("Accept", "application/json")
 	jobs := httptest.NewRecorder()
 	app.ServeHTTP(jobs, request)
 	if jobs.Code != http.StatusServiceUnavailable {
 		t.Fatalf("jobs status = %d, want %d", jobs.Code, http.StatusServiceUnavailable)
+	}
+}
+
+func TestPanelEventsStreamThroughAppMiddleware(t *testing.T) {
+	app := testApp()
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	response, err := server.Client().Get(server.URL + "/_golazy/events")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+	if got, want := response.Header.Get("Content-Type"), "text/event-stream"; got != want {
+		t.Fatalf("Content-Type = %q, want %q", got, want)
+	}
+
+	reader := bufio.NewReader(response.Body)
+	var lines []string
+	for len(lines) < 3 {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			t.Fatal(err)
+		}
+		lines = append(lines, line)
+	}
+	if got, want := strings.Join(lines, ""), "event: ready\ndata: ok\n\n"; got != want {
+		t.Fatalf("first event = %q, want %q", got, want)
 	}
 }
 

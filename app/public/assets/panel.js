@@ -2,18 +2,37 @@ const panelPath = "/_golazy/"
 const embeddedPanelID = "golazy-dev-panel"
 const embeddedPanelHeight = "320px"
 const embeddedPanelClosedKey = "golazy:devpanel:closed"
+const clientState = window.__golazyDevPanelClient || {}
+window.__golazyDevPanelClient = clientState
 
 installEmbeddedPanel()
 installTurboPersistence()
 installEmbeddedPanelMessages()
+installReloadClient()
 
-const reloadSource = window.__lazyReloadSource || new EventSource("/__lazy/reload")
-window.__lazyReloadSource = reloadSource
-reloadSource.addEventListener("reload", () => {
-  if (!location.pathname.startsWith("/_golazy")) {
-    location.reload()
+function installReloadClient() {
+  if (location.pathname.startsWith("/_golazy")) return
+
+  const client = clientState.reload || {}
+  if (!client.source || client.source.readyState === EventSource.CLOSED) {
+    const existingSource = window.__lazyReloadSource
+    client.source = existingSource && existingSource.readyState !== EventSource.CLOSED ? existingSource : new EventSource("/__lazy/reload")
+    window.__lazyReloadSource = client.source
+    client.listenerInstalled = false
   }
-})
+  if (!client.onReload) {
+    client.onReload = () => {
+      if (!location.pathname.startsWith("/_golazy")) {
+        location.reload()
+      }
+    }
+  }
+  if (!client.listenerInstalled) {
+    client.source.addEventListener("reload", client.onReload)
+    client.listenerInstalled = true
+  }
+  clientState.reload = client
+}
 
 function installEmbeddedPanel() {
   if (location.pathname.startsWith("/_golazy")) return
@@ -80,6 +99,8 @@ function releasePanelSpace() {
 }
 
 function installEmbeddedPanelMessages() {
+  if (clientState.embeddedPanelMessagesInstalled) return
+  clientState.embeddedPanelMessagesInstalled = true
   window.addEventListener("message", event => {
     if (event.origin !== window.location.origin) return
     if (event.data?.type !== "golazy:devpanel:close") return
@@ -110,6 +131,8 @@ function rememberEmbeddedPanelClosed() {
 }
 
 function installTurboPersistence() {
+  if (clientState.turboPersistenceInstalled) return
+  clientState.turboPersistenceInstalled = true
   document.addEventListener("turbo:before-render", event => {
     const host = document.getElementById(embeddedPanelID)
     const newBody = event.detail?.newBody

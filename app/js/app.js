@@ -5,26 +5,52 @@ const panelPath = "/_golazy/"
 const embeddedPanelID = "golazy-dev-panel"
 const embeddedPanelHeight = "320px"
 const embeddedPanelClosedKey = "golazy:devpanel:closed"
-let selectedService = ""
-let currentPanelState = null
-let stateSource = null
-let serviceNavigationInstalled = false
-let cacheActionsInstalled = false
-let requestMonitoringInstalled = false
+const clientState = window.__golazyDevPanelClient || {}
+window.__golazyDevPanelClient = clientState
+
+let selectedService = clientState.selectedService || ""
+let currentPanelState = clientState.currentPanelState || null
+let stateSource = clientState.stateSource || null
+let serviceNavigationInstalled = Boolean(clientState.serviceNavigationInstalled)
+let cacheActionsInstalled = Boolean(clientState.cacheActionsInstalled)
+let requestMonitoringInstalled = Boolean(clientState.requestMonitoringInstalled)
 
 installEmbeddedPanel()
 installTurboPersistence()
 installEmbeddedPanelMessages()
+installReloadClient()
 bootPanelPage()
-document.addEventListener("turbo:load", bootPanelPage)
+installPanelBoot()
 
-const reloadSource = window.__lazyReloadSource || new EventSource("/__lazy/reload")
-window.__lazyReloadSource = reloadSource
-reloadSource.addEventListener("reload", () => {
-  if (!location.pathname.startsWith("/_golazy")) {
-    location.reload()
+function installReloadClient() {
+  if (location.pathname.startsWith("/_golazy")) return
+
+  const client = clientState.reload || {}
+  if (!client.source || client.source.readyState === EventSource.CLOSED) {
+    const existingSource = window.__lazyReloadSource
+    client.source = existingSource && existingSource.readyState !== EventSource.CLOSED ? existingSource : new EventSource("/__lazy/reload")
+    window.__lazyReloadSource = client.source
+    client.listenerInstalled = false
   }
-})
+  if (!client.onReload) {
+    client.onReload = () => {
+      if (!location.pathname.startsWith("/_golazy")) {
+        location.reload()
+      }
+    }
+  }
+  if (!client.listenerInstalled) {
+    client.source.addEventListener("reload", client.onReload)
+    client.listenerInstalled = true
+  }
+  clientState.reload = client
+}
+
+function installPanelBoot() {
+  if (clientState.panelBootInstalled) return
+  document.addEventListener("turbo:load", bootPanelPage)
+  clientState.panelBootInstalled = true
+}
 
 function bootPanelPage() {
   if (!panelElement()) return
@@ -44,8 +70,10 @@ function panelElement() {
 }
 
 function startPanelEvents() {
-  if (stateSource) return
+  stateSource = clientState.stateSource || stateSource
+  if (stateSource && stateSource.readyState !== EventSource.CLOSED) return
   stateSource = new EventSource("/_golazy/events")
+  clientState.stateSource = stateSource
   stateSource.addEventListener("turbo-stream", renderTurboStream)
   stateSource.addEventListener("state", refreshState)
   stateSource.addEventListener("output", updateFromOutputEvent)
@@ -119,6 +147,8 @@ function releasePanelSpace() {
 }
 
 function installEmbeddedPanelMessages() {
+  if (clientState.embeddedPanelMessagesInstalled) return
+  clientState.embeddedPanelMessagesInstalled = true
   window.addEventListener("message", event => {
     if (event.origin !== window.location.origin) return
     if (event.data?.type !== "golazy:devpanel:close") return
@@ -149,6 +179,8 @@ function rememberEmbeddedPanelClosed() {
 }
 
 function installTurboPersistence() {
+  if (clientState.turboPersistenceInstalled) return
+  clientState.turboPersistenceInstalled = true
   document.addEventListener("turbo:before-render", event => {
     const host = document.getElementById(embeddedPanelID)
     const newBody = event.detail?.newBody
@@ -168,6 +200,8 @@ function installPanelClose() {
   document.documentElement.dataset.golazyEmbedded = String(embedded)
   button.hidden = !embedded
   if (!embedded) return
+  if (button.dataset.golazyPanelCloseInstalled) return
+  button.dataset.golazyPanelCloseInstalled = "true"
 
   button.addEventListener("click", () => {
     window.parent.postMessage({ type: "golazy:devpanel:close" }, window.location.origin)
@@ -195,6 +229,7 @@ async function refreshPanelState() {
 
 function renderState(state) {
   currentPanelState = state || {}
+  clientState.currentPanelState = currentPanelState
   const panel = panelElement()
   if (panel) {
     panel.dataset.state = state.state || ""
@@ -222,6 +257,7 @@ function renderState(state) {
 function installServiceNavigation() {
   if (serviceNavigationInstalled) return
   serviceNavigationInstalled = true
+  clientState.serviceNavigationInstalled = true
   document.addEventListener("click", event => {
     const target = event.target.closest("[data-service-select], [data-service-status]")
     if (!target) return
@@ -245,6 +281,7 @@ function visitPanelPath(path) {
 function renderServices(services, events) {
   if (!selectedService || !services.some(service => service.name === selectedService)) {
     selectedService = services[0]?.name || ""
+    clientState.selectedService = selectedService
   }
   renderServiceList(services)
   renderServiceStatuses(services)
@@ -310,6 +347,7 @@ function serviceButton(service, nameAttribute) {
 
 function selectService(service) {
   selectedService = service || ""
+  clientState.selectedService = selectedService
   for (const button of document.querySelectorAll("[data-service-select]")) {
     button.setAttribute("aria-selected", String(button.getAttribute("data-service-select") === selectedService))
   }
@@ -360,6 +398,7 @@ function serviceOutputRow(event) {
 function installCacheActions() {
   if (cacheActionsInstalled) return
   cacheActionsInstalled = true
+  clientState.cacheActionsInstalled = true
   document.addEventListener("click", async event => {
     const button = event.target.closest("[data-cache-action]")
     if (!button) return
@@ -413,6 +452,7 @@ function renderCache(cache) {
 function installRequestMonitoringActions() {
   if (requestMonitoringInstalled) return
   requestMonitoringInstalled = true
+  clientState.requestMonitoringInstalled = true
   document.addEventListener("change", async event => {
     const toggle = event.target.closest("[data-request-monitoring-toggle]")
     if (!toggle) return
@@ -619,6 +659,7 @@ function appendServiceOutput(payload) {
   if (payload?.type !== "output" || !payload.service || !payload.output) return
   if (!selectedService) {
     selectedService = payload.service
+    clientState.selectedService = selectedService
   }
   if (payload.service !== selectedService) return
   const rows = []

@@ -31,6 +31,10 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   keeps the status bar mounted as a permanent Turbo Frame, uses the generated
   importmap for its iframe app, and streams Turbo Stream updates alongside the
   existing event JSON.
+- The development client now reuses one reload stream and one panel event
+  stream across Turbo visits, preventing repeated `EventSource` connections and
+  listener registration. The panel event endpoint now uses the framework SSE
+  stream helper so wrapped response writers do not produce false 500s.
 - The development panel now uses a single top tab bar with the close control on
   the right, app and service status chips in the permanent status bar, a
   full-height Services page, and an App Logs split resize that expands the left
