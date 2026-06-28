@@ -87,6 +87,56 @@ func TestCacheOnAndOffProxyApplicationControlPlane(t *testing.T) {
 	}
 }
 
+func TestRequestMonitoringProxiesApplicationControlPlane(t *testing.T) {
+	var paths []string
+	appControl := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.Method+" "+r.URL.Path)
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = fmt.Fprint(w, `{"enabled":true,"directory":".tmp/traces"}`)
+	}))
+	defer appControl.Close()
+
+	store := buildservice.NewStore(10)
+	store.Update(buildservice.Snapshot{
+		State:            buildservice.StateRunning,
+		ControlPlaneAddr: strings.TrimPrefix(appControl.URL, "http://"),
+	})
+	controller := &Controller{Base: Base{Store: store}}
+
+	for _, call := range []struct {
+		name   string
+		method string
+		fn     func(http.ResponseWriter, *http.Request) error
+	}{
+		{name: "state", method: http.MethodGet, fn: controller.RequestMonitoring},
+		{name: "on", method: http.MethodPost, fn: controller.RequestMonitoringOn},
+		{name: "off", method: http.MethodPost, fn: controller.RequestMonitoringOff},
+	} {
+		response := httptest.NewRecorder()
+		request := httptest.NewRequest(call.method, "/_golazy/request-monitoring/"+call.name, nil)
+		if err := call.fn(response, request); err != nil {
+			t.Fatal(err)
+		}
+		if response.Code != http.StatusOK {
+			t.Fatalf("%s status = %d, want %d: %s", call.name, response.Code, http.StatusOK, response.Body.String())
+		}
+	}
+
+	want := []string{
+		http.MethodGet + " " + appRequestMonitoringPath,
+		http.MethodPost + " " + appRequestMonitoringOnPath,
+		http.MethodPost + " " + appRequestMonitoringOffPath,
+	}
+	if len(paths) != len(want) {
+		t.Fatalf("proxied paths = %#v, want %#v", paths, want)
+	}
+	for index := range want {
+		if paths[index] != want[index] {
+			t.Fatalf("proxied paths = %#v, want %#v", paths, want)
+		}
+	}
+}
+
 func TestCacheReportsUnavailableControlPlane(t *testing.T) {
 	controller := &Controller{Base: Base{Store: buildservice.NewStore(10)}}
 	response := httptest.NewRecorder()

@@ -49,29 +49,32 @@ func TestStoreRecordsServiceTaggedOutputEvents(t *testing.T) {
 	}
 }
 
-func TestDevelopmentAppEnvEnablesTelemetryAndDeduplicatesValues(t *testing.T) {
+func TestDevelopmentAppEnvPreservesTelemetryAndDeduplicatesValues(t *testing.T) {
 	env := developmentAppEnv([]string{
 		"PATH=/bin",
 		"ADDR=old",
 		"OTEL_SDK_DISABLED=true",
 		"OTEL_TRACES_EXPORTER=none",
 		"OTEL_TRACES_EXPORTER=console",
-	}, "apps/sample_repo", "127.0.0.1:3001", "127.0.0.1:3002")
+	}, "127.0.0.1:3001", "127.0.0.1:3002")
 
 	for key, want := range map[string]string{
-		"ADDR":                        "127.0.0.1:3001",
-		"CONTROL_PLANE_ADDR":          "127.0.0.1:3002",
-		"OTEL_SDK_DISABLED":           "false",
-		"OTEL_SERVICE_NAME":           "sample_repo",
-		"OTEL_TRACES_EXPORTER":        "otlp",
-		"OTEL_LOGS_EXPORTER":          "otlp",
-		"OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+		"ADDR":               "127.0.0.1:3001",
+		"CONTROL_PLANE_ADDR": "127.0.0.1:3002",
 	} {
 		if got := envValue(env, key); got != want {
 			t.Fatalf("%s = %q, want %q in %#v", key, got, want, env)
 		}
 		if got := envCount(env, key); got != 1 {
 			t.Fatalf("%s appears %d times in %#v", key, got, env)
+		}
+	}
+	for key, want := range map[string]string{
+		"OTEL_SDK_DISABLED":    "true",
+		"OTEL_TRACES_EXPORTER": "none",
+	} {
+		if got := envValue(env, key); got != want {
+			t.Fatalf("%s = %q, want preserved %q in %#v", key, got, want, env)
 		}
 	}
 	if got := envValue(env, "PATH"); got != "/bin" {

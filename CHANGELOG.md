@@ -20,6 +20,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The default `lazy` development command no longer forces OTEL trace/log
+  exporters into the child app. Detailed request monitoring is off by default
+  and can be enabled from the development panel.
 - The development panel now visits one resource-backed page per top-level tab,
   keeps the status bar mounted as a permanent Turbo Frame, uses the generated
   importmap for its iframe app, and streams Turbo Stream updates alongside the

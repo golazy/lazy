@@ -1,10 +1,16 @@
 <section id="requests" class="tool-view is-active" data-view="requests">
   <div class="network-toolbar network-toolbar-container">
     <div class="network-controls">
-      <button type="button" class="icon-button record-button" disabled title="Request capture is not wired yet">
+      <button type="button" class="icon-button record-button" data-request-monitoring-action="/_golazy/request-monitoring/on" data-request-monitoring-button title="Enable detailed request monitoring" aria-pressed="false">
         <span class="record-dot"></span>
       </button>
       <button type="button" class="icon-button clear-button" disabled title="Clear request log"></button>
+      <span class="toolbar-divider"></span>
+      <label class="inline-check">
+        <input type="checkbox" data-request-monitoring-toggle>
+        <span>Detail monitoring</span>
+      </label>
+      <span class="toolbar-count" data-request-monitoring-state>Monitoring unknown</span>
       <span class="toolbar-divider"></span>
       <label class="inline-check">
         <input type="checkbox" checked disabled>
@@ -67,7 +73,7 @@
         </thead>
         <tbody>
           <tr>
-            <td colspan="9" class="empty-cell">Request capture will use browser network entries and GoLazy telemetry in a later slice.</td>
+            <td colspan="9" class="empty-cell">No request details recorded yet.</td>
           </tr>
         </tbody>
       </table>

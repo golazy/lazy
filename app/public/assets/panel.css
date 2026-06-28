@@ -303,6 +303,10 @@ button:disabled:hover {
   width: 13px;
 }
 
+.record-button[aria-pressed="true"] .record-dot {
+  background: var(--sys-color-error);
+}
+
 .clear-button::before {
   border: 2px solid var(--icon-muted);
   border-radius: 50%;

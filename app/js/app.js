@@ -10,6 +10,7 @@ let currentPanelState = null
 let stateSource = null
 let serviceNavigationInstalled = false
 let cacheActionsInstalled = false
+let requestMonitoringInstalled = false
 
 installEmbeddedPanel()
 installTurboPersistence()
@@ -29,9 +30,11 @@ function bootPanelPage() {
   if (!panelElement()) return
   installServiceNavigation()
   installCacheActions()
+  installRequestMonitoringActions()
   installPanelClose()
   refreshPanelState()
   refreshCache()
+  refreshRequestMonitoring()
   refreshJobs()
   startPanelEvents()
 }
@@ -405,6 +408,89 @@ function renderCache(cache) {
   textAll("[data-cache-sets]", stats.sets ?? 0)
   textAll("[data-cache-evictions]", stats.evictions ?? 0)
   list("[data-cache-keys]", cache?.keys || [], cacheKeyItem, "No keys.")
+}
+
+function installRequestMonitoringActions() {
+  if (requestMonitoringInstalled) return
+  requestMonitoringInstalled = true
+  document.addEventListener("change", async event => {
+    const toggle = event.target.closest("[data-request-monitoring-toggle]")
+    if (!toggle) return
+    await setRequestMonitoring(toggle.checked)
+  })
+  document.addEventListener("click", async event => {
+    const button = event.target.closest("[data-request-monitoring-button]")
+    if (!button) return
+    const action = button.getAttribute("data-request-monitoring-action")
+    if (!action) return
+    await postRequestMonitoring(action)
+  })
+}
+
+async function refreshRequestMonitoring() {
+  if (!document.querySelector("[data-request-monitoring-state], [data-request-monitoring-toggle], [data-request-monitoring-button]")) return
+  const response = await fetch("/_golazy/request-monitoring", { headers: { Accept: "application/json" } })
+  if (!response.ok) {
+    renderRequestMonitoringUnavailable()
+    return
+  }
+  renderRequestMonitoring(await response.json())
+}
+
+async function setRequestMonitoring(enabled) {
+  const action = enabled ? "/_golazy/request-monitoring/on" : "/_golazy/request-monitoring/off"
+  await postRequestMonitoring(action)
+}
+
+async function postRequestMonitoring(action) {
+  setRequestMonitoringDisabled(true)
+  try {
+    const response = await fetch(action, {
+      method: "POST",
+      headers: { Accept: "application/json" },
+    })
+    if (response.ok) {
+      renderRequestMonitoring(await response.json())
+    } else {
+      await refreshRequestMonitoring()
+    }
+  } catch {
+    renderRequestMonitoringUnavailable()
+  }
+}
+
+function renderRequestMonitoring(state) {
+  const enabled = Boolean(state?.enabled)
+  textAll("[data-request-monitoring-state]", enabled ? "Monitoring on" : "Monitoring off")
+  textAll("[data-request-monitoring-directory]", state?.directory || ".tmp/traces")
+  for (const toggle of document.querySelectorAll("[data-request-monitoring-toggle]")) {
+    toggle.checked = enabled
+    toggle.disabled = false
+  }
+  for (const button of document.querySelectorAll("[data-request-monitoring-button]")) {
+    button.disabled = false
+    button.setAttribute("aria-pressed", String(enabled))
+    button.setAttribute("data-request-monitoring-action", enabled ? "/_golazy/request-monitoring/off" : "/_golazy/request-monitoring/on")
+    button.title = enabled ? "Disable detailed request monitoring" : "Enable detailed request monitoring"
+    if (button.classList.contains("toolbar-button")) {
+      button.textContent = enabled ? "Disable monitoring" : "Enable monitoring"
+    }
+  }
+}
+
+function renderRequestMonitoringUnavailable() {
+  textAll("[data-request-monitoring-state]", "Monitoring unavailable")
+  for (const toggle of document.querySelectorAll("[data-request-monitoring-toggle]")) {
+    toggle.checked = false
+    toggle.disabled = true
+  }
+  setRequestMonitoringDisabled(true)
+}
+
+function setRequestMonitoringDisabled(disabled) {
+  for (const control of document.querySelectorAll("[data-request-monitoring-toggle], [data-request-monitoring-button]")) {
+    control.disabled = disabled
+  }
 }
 
 async function refreshJobs() {

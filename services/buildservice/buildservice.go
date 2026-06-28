@@ -374,7 +374,7 @@ func (c Config) Start(ctx context.Context, binary string) (*Process, error) {
 	cmd.Stdin = c.Stdin
 	cmd.Stdout = c.Stdout
 	cmd.Stderr = c.Stderr
-	cmd.Env = developmentAppEnv(os.Environ(), c.Root, addr, controlPlaneAddr)
+	cmd.Env = developmentAppEnv(os.Environ(), addr, controlPlaneAddr)
 
 	done := make(chan error, 1)
 	process := &Process{
@@ -492,11 +492,7 @@ func stopTimeoutOrDefault(timeout time.Duration) time.Duration {
 	return defaultStopTimeout
 }
 
-func developmentAppEnv(base []string, root, addr, controlPlaneAddr string) []string {
-	serviceName := filepath.Base(root)
-	if serviceName == "." || serviceName == string(filepath.Separator) || serviceName == "" {
-		serviceName = "golazy-app"
-	}
+func developmentAppEnv(base []string, addr, controlPlaneAddr string) []string {
 	env := append([]string(nil), base...)
 	for _, value := range []struct {
 		key   string
@@ -504,11 +500,6 @@ func developmentAppEnv(base []string, root, addr, controlPlaneAddr string) []str
 	}{
 		{key: "ADDR", value: addr},
 		{key: "CONTROL_PLANE_ADDR", value: controlPlaneAddr},
-		{key: "OTEL_SDK_DISABLED", value: "false"},
-		{key: "OTEL_SERVICE_NAME", value: serviceName},
-		{key: "OTEL_TRACES_EXPORTER", value: "otlp"},
-		{key: "OTEL_LOGS_EXPORTER", value: "otlp"},
-		{key: "OTEL_EXPORTER_OTLP_PROTOCOL", value: "http/protobuf"},
 	} {
 		env = setEnvValue(env, value.key, value.value)
 	}

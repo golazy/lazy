@@ -17,6 +17,9 @@ type Controller struct {
 const appCachePath = "/cache"
 const appCacheOnPath = "/cache/on"
 const appCacheOffPath = "/cache/off"
+const appRequestMonitoringPath = "/requests/monitoring"
+const appRequestMonitoringOnPath = "/requests/monitoring/on"
+const appRequestMonitoringOffPath = "/requests/monitoring/off"
 
 func New(ctx context.Context) (*Controller, error) {
 	base, err := NewBase(ctx)
@@ -44,6 +47,18 @@ func (c *Controller) CacheOn(w http.ResponseWriter, r *http.Request) error {
 
 func (c *Controller) CacheOff(w http.ResponseWriter, r *http.Request) error {
 	return c.ProxyAppControl(w, r, http.MethodPost, appCacheOffPath)
+}
+
+func (c *Controller) RequestMonitoring(w http.ResponseWriter, r *http.Request) error {
+	return c.ProxyAppControl(w, r, http.MethodGet, appRequestMonitoringPath)
+}
+
+func (c *Controller) RequestMonitoringOn(w http.ResponseWriter, r *http.Request) error {
+	return c.ProxyAppControl(w, r, http.MethodPost, appRequestMonitoringOnPath)
+}
+
+func (c *Controller) RequestMonitoringOff(w http.ResponseWriter, r *http.Request) error {
+	return c.ProxyAppControl(w, r, http.MethodPost, appRequestMonitoringOffPath)
 }
 
 func (c *Controller) Events(w http.ResponseWriter, r *http.Request) error {
