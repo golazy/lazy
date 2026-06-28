@@ -21,6 +21,7 @@ type Controller struct {
 const appCachePath = "/cache"
 const appCacheOnPath = "/cache/on"
 const appCacheOffPath = "/cache/off"
+const appJobsPath = "/jobs"
 
 var appControlClient = &http.Client{Timeout: 2 * time.Second}
 
@@ -61,6 +62,10 @@ func (c *Controller) CacheOn(w http.ResponseWriter, r *http.Request) error {
 
 func (c *Controller) CacheOff(w http.ResponseWriter, r *http.Request) error {
 	return c.proxyAppControl(w, r, http.MethodPost, appCacheOffPath)
+}
+
+func (c *Controller) Jobs(w http.ResponseWriter, r *http.Request) error {
+	return c.proxyAppControl(w, r, http.MethodGet, appJobsPath)
 }
 
 func (c *Controller) Events(w http.ResponseWriter, r *http.Request) error {

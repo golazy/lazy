@@ -47,6 +47,7 @@ func Draw(router *lazyroutes.Scope) {
 			resource.Get("state", (*panelcontroller.Controller).State)
 			resource.Get("events", (*panelcontroller.Controller).Events)
 			resource.Get("cache", (*panelcontroller.Controller).Cache)
+			resource.Get("jobs", (*panelcontroller.Controller).Jobs)
 			resource.Post("cache/on", (*panelcontroller.Controller).CacheOn)
 			resource.Post("cache/off", (*panelcontroller.Controller).CacheOff)
 			resource.Post("rebuild", (*panelcontroller.Controller).Rebuild)

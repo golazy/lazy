@@ -22,6 +22,7 @@ if (panel) {
   installCacheActions()
   installPanelClose()
   refreshCache()
+  refreshJobs()
 
   const stateSource = new EventSource("/_golazy/events")
   stateSource.addEventListener("state", refreshState)
@@ -187,6 +188,7 @@ async function refreshState(event) {
   if (!response.ok) return
   renderState(await response.json())
   refreshCache()
+  refreshJobs()
 }
 
 function renderState(state) {
@@ -259,6 +261,68 @@ function renderCache(cache) {
   textAll("[data-cache-sets]", stats.sets ?? 0)
   textAll("[data-cache-evictions]", stats.evictions ?? 0)
   list("[data-cache-keys]", cache?.keys || [], cacheKeyItem, "No keys.")
+}
+
+async function refreshJobs() {
+  if (!document.querySelector("[data-jobs-panel]")) return
+  const response = await fetch("/_golazy/jobs", { headers: { Accept: "application/json" } })
+  if (!response.ok) {
+    renderJobsUnavailable()
+    return
+  }
+  renderJobs(await response.json())
+}
+
+function renderJobsUnavailable() {
+  textAll("[data-jobs-state]", "Jobs unavailable")
+  textAll("[data-jobs-running]", "Unavailable")
+  for (const selector of ["[data-jobs-total]", "[data-jobs-pending]", "[data-jobs-count-running]", "[data-jobs-retrying]", "[data-jobs-succeeded]", "[data-jobs-discarded]"]) {
+    textAll(selector, "0")
+  }
+  list("[data-job-definitions]", [], jobDefinitionItem, "No job definitions.")
+  table("[data-jobs-recent]", [], jobRow, 7, "No recent jobs.")
+}
+
+function renderJobs(snapshot) {
+  const stats = snapshot?.stats || {}
+  const byState = stats.by_state || {}
+  const running = Boolean(snapshot?.running)
+  textAll("[data-jobs-state]", running ? "Runner active" : "Runner stopped")
+  textAll("[data-jobs-running]", running ? "Running" : "Stopped")
+  textAll("[data-jobs-total]", stats.total ?? 0)
+  textAll("[data-jobs-pending]", byState.pending ?? 0)
+  textAll("[data-jobs-count-running]", byState.running ?? 0)
+  textAll("[data-jobs-retrying]", byState.retrying ?? 0)
+  textAll("[data-jobs-succeeded]", byState.succeeded ?? 0)
+  textAll("[data-jobs-discarded]", byState.discarded ?? 0)
+  list("[data-job-definitions]", snapshot?.definitions || [], jobDefinitionItem, "No job definitions.")
+  table("[data-jobs-recent]", snapshot?.recent || [], jobRow, 7, "No recent jobs.")
+}
+
+function jobDefinitionItem(definition) {
+  const item = document.createElement("li")
+  const code = document.createElement("code")
+  code.textContent = definition.kind || ""
+  item.append(code, ` ${definition.queue || "default"} attempts ${definition.max_attempts || 0}`)
+  return item
+}
+
+function jobRow(job) {
+  const row = document.createElement("tr")
+  for (const value of [
+    job.id,
+    job.kind,
+    job.queue,
+    job.state,
+    `${job.attempt || 0}/${job.max_attempts || 0}`,
+    formatDateTime(job.run_at),
+    job.last_error || "",
+  ]) {
+    const cell = document.createElement("td")
+    cell.textContent = value ?? ""
+    row.append(cell)
+  }
+  return row
 }
 
 function cacheKeyItem(value) {
@@ -336,4 +400,30 @@ function list(selector, values, render, empty) {
       node.append(render(value))
     }
   }
+}
+
+function table(selector, values, render, columns, empty) {
+  for (const node of document.querySelectorAll(selector)) {
+    node.replaceChildren()
+    if (!values.length) {
+      const row = document.createElement("tr")
+      const cell = document.createElement("td")
+      cell.colSpan = columns
+      cell.className = "empty-cell"
+      cell.textContent = empty
+      row.append(cell)
+      node.append(row)
+      continue
+    }
+    for (const value of values) {
+      node.append(render(value))
+    }
+  }
+}
+
+function formatDateTime(value) {
+  if (!value) return ""
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ""
+  return date.toLocaleString()
 }
