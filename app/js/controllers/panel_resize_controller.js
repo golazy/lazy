@@ -1,4 +1,4 @@
-import { Controller } from "/_golazy/assets/lazyshaft/stimulus-FNW3RRR2.js"
+import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
   static targets = ["handle", "primary"]

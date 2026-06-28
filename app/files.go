@@ -5,7 +5,7 @@ import (
 	"io/fs"
 )
 
-//go:embed views public
+//go:embed all:views public
 var files embed.FS
 
 func Views() (fs.FS, error) {

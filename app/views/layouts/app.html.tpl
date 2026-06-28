@@ -6,7 +6,8 @@
     <title>GoLazy Development Panel</title>
     {{stylesheet "/assets/devtools.css"}}
     {{stylesheet "/assets/panel.css"}}
-    <script type="module" src="/_golazy/assets/panel.js"></script>
+    {{importmap "/assets/importmap.json"}}
+    <script type="module">import "/js/app.js"</script>
   </head>
   <body>
     {{.content}}

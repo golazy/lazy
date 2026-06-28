@@ -1,0 +1,8 @@
+{
+  "imports": {
+    "/js/app.js": "/_golazy/assets/lazyshaft/app/app-RENVKGLB.js",
+    "/js/controllers/panel_resize_controller.js": "/_golazy/assets/lazyshaft/app/controllers/panel_resize_controller-W4MYBOLN.js",
+    "@hotwired/stimulus": "/_golazy/assets/lazyshaft/stimulus-NO4IINCF.js",
+    "@hotwired/turbo": "/_golazy/assets/lazyshaft/turbo-TWHUI2X4.js"
+  }
+}

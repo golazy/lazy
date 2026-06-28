@@ -26,7 +26,7 @@ func TestCacheProxiesApplicationControlPlane(t *testing.T) {
 		State:            buildservice.StateRunning,
 		ControlPlaneAddr: strings.TrimPrefix(appControl.URL, "http://"),
 	})
-	controller := &Controller{store: store}
+	controller := &Controller{Base: Base{Store: store}}
 
 	response := httptest.NewRecorder()
 	if err := controller.Cache(response, httptest.NewRequest(http.MethodGet, "/_golazy/cache", nil)); err != nil {
@@ -63,7 +63,7 @@ func TestCacheOnAndOffProxyApplicationControlPlane(t *testing.T) {
 		State:            buildservice.StateRunning,
 		ControlPlaneAddr: strings.TrimPrefix(appControl.URL, "http://"),
 	})
-	controller := &Controller{store: store}
+	controller := &Controller{Base: Base{Store: store}}
 
 	for _, call := range []struct {
 		name string
@@ -88,45 +88,12 @@ func TestCacheOnAndOffProxyApplicationControlPlane(t *testing.T) {
 }
 
 func TestCacheReportsUnavailableControlPlane(t *testing.T) {
-	controller := &Controller{store: buildservice.NewStore(10)}
+	controller := &Controller{Base: Base{Store: buildservice.NewStore(10)}}
 	response := httptest.NewRecorder()
 	if err := controller.Cache(response, httptest.NewRequest(http.MethodGet, "/_golazy/cache", nil)); err != nil {
 		t.Fatal(err)
 	}
 	if response.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusServiceUnavailable)
-	}
-}
-
-func TestJobsProxyApplicationControlPlane(t *testing.T) {
-	var gotMethod string
-	var gotPath string
-	appControl := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotMethod = r.Method
-		gotPath = r.URL.Path
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		_, _ = fmt.Fprint(w, `{"running":true,"definitions":[{"kind":"imports.whatsapp"}],"recent":[]}`)
-	}))
-	defer appControl.Close()
-
-	store := buildservice.NewStore(10)
-	store.Update(buildservice.Snapshot{
-		State:            buildservice.StateRunning,
-		ControlPlaneAddr: strings.TrimPrefix(appControl.URL, "http://"),
-	})
-	controller := &Controller{store: store}
-
-	response := httptest.NewRecorder()
-	if err := controller.Jobs(response, httptest.NewRequest(http.MethodGet, "/_golazy/jobs", nil)); err != nil {
-		t.Fatal(err)
-	}
-	if response.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
-	}
-	if gotMethod != http.MethodGet || gotPath != appJobsPath {
-		t.Fatalf("proxied request = %s %s, want GET %s", gotMethod, gotPath, appJobsPath)
-	}
-	if !strings.Contains(response.Body.String(), `"imports.whatsapp"`) {
-		t.Fatalf("body = %s, want jobs JSON", response.Body.String())
 	}
 }

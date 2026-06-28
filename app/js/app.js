@@ -1,8 +1,12 @@
+// golazy:turbo
+// golazy:stimulus
+
 const panelPath = "/_golazy/"
 const embeddedPanelID = "golazy-dev-panel"
 const embeddedPanelHeight = "320px"
 const embeddedPanelClosedKey = "golazy:devpanel:closed"
 let selectedService = ""
+let selectedPanelTab = "logs"
 let currentPanelState = null
 
 installEmbeddedPanel()
@@ -19,7 +23,6 @@ reloadSource.addEventListener("reload", () => {
 
 const panel = document.querySelector("[data-panel]")
 if (panel) {
-  installPanelStimulus().catch(error => console.error("GoLazy panel Stimulus failed", error))
   installPanelTabs()
   installServiceNavigation()
   installCacheActions()
@@ -29,10 +32,11 @@ if (panel) {
   refreshJobs()
 
   const stateSource = new EventSource("/_golazy/events")
+  stateSource.addEventListener("turbo-stream", renderTurboStream)
   stateSource.addEventListener("state", refreshState)
-  stateSource.addEventListener("output", appendEvent)
+  stateSource.addEventListener("output", updateFromOutputEvent)
   stateSource.addEventListener("file_change", refreshState)
-  stateSource.addEventListener("reload", appendEvent)
+  stateSource.addEventListener("reload", updateFromOutputEvent)
   stateSource.addEventListener("manual", refreshState)
 }
 
@@ -142,16 +146,6 @@ function installTurboPersistence() {
   document.addEventListener("turbo:load", installEmbeddedPanel)
 }
 
-async function installPanelStimulus() {
-  const [{ Application }, { default: PanelResizeController }] = await Promise.all([
-    import("/_golazy/assets/lazyshaft/stimulus-FNW3RRR2.js"),
-    import("./controllers/panel_resize_controller.js"),
-  ])
-  const application = window.__golazyStimulus || Application.start()
-  window.__golazyStimulus = application
-  application.register("panel-resize", PanelResizeController)
-}
-
 function installPanelClose() {
   const button = document.querySelector("[data-panel-close]")
   if (!button) return
@@ -174,10 +168,15 @@ function installPanelTabs() {
   for (const button of document.querySelectorAll("[data-tab]")) {
     button.addEventListener("click", () => selectPanelTab(button.dataset.tab))
   }
+  document.addEventListener("turbo:frame-load", () => selectPanelTab(selectedPanelTab))
+  document.addEventListener("turbo:before-stream-render", () => {
+    window.queueMicrotask(() => selectPanelTab(selectedPanelTab))
+  })
 }
 
 function selectPanelTab(tab) {
   if (!tab) return
+  selectedPanelTab = tab
   for (const button of document.querySelectorAll("[data-tab]")) {
     button.setAttribute("aria-selected", String(button.dataset.tab === tab))
   }
@@ -187,10 +186,17 @@ function selectPanelTab(tab) {
 }
 
 async function refreshState(event) {
-  appendEvent(event)
   await refreshPanelState()
   refreshCache()
   refreshJobs()
+}
+
+function renderTurboStream(event) {
+  if (!event?.data || event.data === "ok") return
+  const turbo = window.Turbo
+  if (!turbo?.renderStreamMessage) return
+  turbo.renderStreamMessage(event.data)
+  window.queueMicrotask(() => selectPanelTab(selectedPanelTab))
 }
 
 async function refreshPanelState() {
@@ -469,17 +475,34 @@ function cacheKeyItem(value) {
   return item
 }
 
+function updateFromOutputEvent(event) {
+  const payload = parseEventPayload(event)
+  if (!payload) return
+  appendOutput(payload)
+  appendServiceOutput(payload)
+}
+
 function appendEvent(event) {
-  if (!event?.data || event.data === "ok") return
+  const payload = parseEventPayload(event)
+  if (!payload) return
+  appendOutput(payload)
+  appendServiceOutput(payload)
+
+  appendEventItem(payload)
+}
+
+function parseEventPayload(event) {
+  if (!event?.data || event.data === "ok") return null
   let payload
   try {
     payload = JSON.parse(event.data)
   } catch {
-    return
+    return null
   }
-  appendOutput(payload)
-  appendServiceOutput(payload)
+  return payload
+}
 
+function appendEventItem(payload) {
   const target = document.querySelector("[data-panel-events]")
   if (!target) return
   target.querySelector(".muted")?.remove()

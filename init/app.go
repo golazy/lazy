@@ -4,18 +4,19 @@ import (
 	"context"
 
 	"golazy.dev/lazy/app"
-	panelcontroller "golazy.dev/lazy/app/controllers/panel"
+
 	"golazy.dev/lazy/services/buildservice"
 	"golazy.dev/lazyapp"
 	"golazy.dev/lazyassets"
 	"golazy.dev/lazydeps"
-	"golazy.dev/lazyroutes"
+
 	_ "golazy.dev/lazyview/gotmpl"
 )
 
 type Config struct {
-	Store   *buildservice.Store
-	Actions buildservice.Actions
+	Store             *buildservice.Store
+	Actions           buildservice.Actions
+	ForceDetailErrors bool
 }
 
 func App(config Config) *lazyapp.App {
@@ -26,33 +27,16 @@ func App(config Config) *lazyapp.App {
 		config.Actions = buildservice.NewActions()
 	}
 	return lazyapp.New(lazyapp.Config{
-		Name:         "golazy.dev/lazy/dev-panel",
-		Drawer:       Draw,
-		Public:       app.Public,
-		Views:        app.Views,
-		Dependencies: dependencies(config),
+		Name:              "golazy.dev/lazy/dev-panel",
+		Drawer:            Draw,
+		Public:            app.Public,
+		Views:             app.Views,
+		Dependencies:      dependencies(config),
+		ForceDetailErrors: config.ForceDetailErrors,
 		AssetOptions: []lazyassets.Option{
 			lazyassets.WithURLPrefix("/_golazy"),
 			lazyassets.WithDevelopmentMode(true),
 		},
-	})
-}
-
-func Draw(router *lazyroutes.Scope) {
-	router.Path("_golazy", func(panel *lazyroutes.Scope) {
-		panel.Resources(panelcontroller.New, func(resource *lazyroutes.Resource) {
-			resource.Singular("panel")
-			resource.Plural("panel")
-			resource.Path("")
-			resource.Get("state", (*panelcontroller.Controller).State)
-			resource.Get("events", (*panelcontroller.Controller).Events)
-			resource.Get("cache", (*panelcontroller.Controller).Cache)
-			resource.Get("jobs", (*panelcontroller.Controller).Jobs)
-			resource.Post("cache/on", (*panelcontroller.Controller).CacheOn)
-			resource.Post("cache/off", (*panelcontroller.Controller).CacheOff)
-			resource.Post("rebuild", (*panelcontroller.Controller).Rebuild)
-			resource.Post("restart", (*panelcontroller.Controller).Restart)
-		})
 	})
 }
 

@@ -1,0 +1,7 @@
+{
+  "dependencies": {
+    "@hotwired/stimulus": "latest",
+    "@hotwired/turbo": "latest"
+  },
+  "private": true
+}
