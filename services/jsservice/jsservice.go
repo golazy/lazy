@@ -46,7 +46,7 @@ func (s Service) Build(ctx context.Context, stdout io.Writer, stderr io.Writer) 
 
 func (s Service) Bundle(ctx context.Context) Result {
 	started := time.Now()
-	const output = "* Bundling JavaScript\n"
+	const output = "* Generating JavaScript assets\n"
 	manifest, err := LoadManifest(s.Root)
 	if err != nil {
 		return Result{Output: output, Err: err, Duration: time.Since(started)}

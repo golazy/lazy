@@ -2,6 +2,7 @@ package jsservice
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -115,7 +116,7 @@ func Bundle(manifest Manifest, root, packageDir string) (BuildResult, error) {
 	if err != nil {
 		return BuildResult{}, err
 	}
-	appImports, err := bundleAppJavaScript(manifest, root, packageDir, outputDir, imports)
+	appImports, err := writeAppJavaScript(manifest, root, outputDir)
 	if err != nil {
 		return BuildResult{}, err
 	}
@@ -290,7 +291,7 @@ func outputPathRelativeToDir(outputDir string, outputPath string) (string, bool)
 	return "", false
 }
 
-func bundleAppJavaScript(manifest Manifest, root, packageDir, outputDir string, vendorImports map[string]string) (map[string]string, error) {
+func writeAppJavaScript(manifest Manifest, root, outputDir string) (map[string]string, error) {
 	appRoot := filepath.Join(root, filepath.FromSlash(appSourceDir))
 	info, err := os.Stat(appRoot)
 	if os.IsNotExist(err) {
@@ -311,14 +312,7 @@ func bundleAppJavaScript(manifest Manifest, root, packageDir, outputDir string, 
 		return nil, nil
 	}
 
-	tempDir, err := os.MkdirTemp("", "lazy-js-app-*")
-	if err != nil {
-		return nil, fmt.Errorf("create app JavaScript work directory: %w", err)
-	}
-	defer os.RemoveAll(tempDir)
-
-	inputs := map[string]string{}
-	entrypoints := make([]string, 0, len(files))
+	imports := map[string]string{}
 	for _, relative := range files {
 		source := filepath.Join(appRoot, filepath.FromSlash(relative))
 		data, err := os.ReadFile(source)
@@ -332,49 +326,32 @@ func bundleAppJavaScript(manifest Manifest, root, packageDir, outputDir string, 
 			}
 		}
 
-		target := filepath.Join(tempDir, filepath.FromSlash(relative))
+		outputRelative := hashedAppOutputPath(relative, data)
+		target := filepath.Join(outputDir, filepath.FromSlash(outputRelative))
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return nil, fmt.Errorf("create app JavaScript directory: %w", err)
 		}
 		if err := os.WriteFile(target, data, 0o644); err != nil {
-			return nil, fmt.Errorf("write generated app JavaScript: %w", err)
+			return nil, fmt.Errorf("write app JavaScript: %w", err)
 		}
 
-		entry := filepath.ToSlash(relative)
-		entrypoints = append(entrypoints, entry)
-		inputs[entry] = path.Join(appImportPrefix, entry)
+		specifier := path.Join(appImportPrefix, filepath.ToSlash(relative))
+		imports[specifier] = publicAssetPath(manifest.Output.PublicPath, outputDir, target)
 	}
+	return imports, nil
+}
 
-	result := api.Build(api.BuildOptions{
-		AbsWorkingDir:     tempDir,
-		EntryPoints:       entrypoints,
-		Bundle:            true,
-		Format:            api.FormatESModule,
-		Platform:          api.PlatformBrowser,
-		Target:            targetFor(manifest.Bundle.Target),
-		Outdir:            outputDir,
-		Outbase:           tempDir,
-		EntryNames:        "app/[dir]/[name]-[hash]",
-		ChunkNames:        "app/shared-[hash]",
-		AssetNames:        "app/assets/[name]-[hash]",
-		Splitting:         manifest.Bundle.Shared,
-		MinifyWhitespace:  manifest.Bundle.Minify,
-		MinifyIdentifiers: manifest.Bundle.Minify,
-		MinifySyntax:      manifest.Bundle.Minify,
-		Sourcemap:         sourcemapFor(manifest.Bundle.Sourcemap),
-		Write:             true,
-		Metafile:          true,
-		LogLevel:          api.LogLevelSilent,
-		External:          appExternalSpecifiers(vendorImports, inputs),
-		NodePaths:         []string{filepath.Join(packageDir, "node_modules")},
-	})
-	if len(result.Errors) != 0 {
-		return nil, fmt.Errorf("bundle app JavaScript: %s", formatMessages(result.Errors))
-	}
-	if result.Metafile == "" {
-		return nil, fmt.Errorf("bundle app JavaScript: esbuild did not return a metafile")
-	}
-	return appImportmapImports(result.Metafile, outputDir, manifest.Output.PublicPath, inputs)
+func hashedAppOutputPath(relative string, data []byte) string {
+	relative = filepath.ToSlash(relative)
+	ext := path.Ext(relative)
+	dir, file := path.Split(relative)
+	name := strings.TrimSuffix(file, ext)
+	return path.Join("app", dir, name+"-"+appContentHash(data)+ext)
+}
+
+func appContentHash(data []byte) string {
+	sum := sha256.Sum256(data)
+	return fmt.Sprintf("%X", sum[:4])
 }
 
 func appJavaScriptFiles(appRoot string) ([]string, error) {
@@ -534,67 +511,6 @@ func exportedIdentifier(value string) string {
 		return "App"
 	}
 	return builder.String()
-}
-
-func appImportmapImports(metafileJSON, outputDir, publicPath string, inputs map[string]string) (map[string]string, error) {
-	var meta metafile
-	if err := json.Unmarshal([]byte(metafileJSON), &meta); err != nil {
-		return nil, fmt.Errorf("parse app JavaScript metafile: %w", err)
-	}
-
-	imports := map[string]string{}
-	for output, detail := range meta.Outputs {
-		if detail.EntryPoint == "" || strings.HasSuffix(output, ".map") {
-			continue
-		}
-		entrypoint := normalizeAppEntrypoint(detail.EntryPoint)
-		specifier, ok := inputs[entrypoint]
-		if !ok {
-			continue
-		}
-		outputPath := resolveBuildOutputPath(outputDir, output)
-		imports[specifier] = publicAssetPath(publicPath, outputDir, outputPath)
-	}
-
-	for _, specifier := range inputs {
-		if imports[specifier] == "" {
-			return nil, fmt.Errorf("bundle app JavaScript: output for %q not found", specifier)
-		}
-	}
-	return imports, nil
-}
-
-func normalizeAppEntrypoint(entrypoint string) string {
-	normalized := filepath.ToSlash(filepath.Clean(entrypoint))
-	normalized = strings.TrimPrefix(normalized, "./")
-	return normalized
-}
-
-func externalSpecifiers(imports map[string]string) []string {
-	values := make([]string, 0, len(imports))
-	for specifier := range imports {
-		values = append(values, specifier)
-	}
-	sort.Strings(values)
-	return values
-}
-
-func appExternalSpecifiers(vendorImports map[string]string, appInputs map[string]string) []string {
-	seen := map[string]bool{}
-	var values []string
-	for _, specifier := range externalSpecifiers(vendorImports) {
-		seen[specifier] = true
-		values = append(values, specifier)
-	}
-	for _, specifier := range appInputs {
-		if seen[specifier] {
-			continue
-		}
-		seen[specifier] = true
-		values = append(values, specifier)
-	}
-	sort.Strings(values)
-	return values
 }
 
 func writeImportmap(root, importmapPath string, imports map[string]string) error {

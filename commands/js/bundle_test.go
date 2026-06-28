@@ -87,15 +87,16 @@ func TestBundleSharesChunksWithinEntrypointGroups(t *testing.T) {
 	}
 }
 
-func TestBundleBuildsAppJavaScriptAndExpandsDirectives(t *testing.T) {
+func TestBundleWritesAppJavaScriptWithoutBundlingOrMinifyingAndExpandsDirectives(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "turbo.js"), "export const Turbo = {};\n")
 	writeFile(t, filepath.Join(dir, "stimulus.js"), "export const Application = { start() { return { register() {} } } };\n")
-	writeFile(t, filepath.Join(dir, "app", "js", "app.js"), "// golazy:turbo\n// golazy:stimulus\nconsole.log('ready');\n")
-	writeFile(t, filepath.Join(dir, "app", "js", "controllers", "hello_controller.js"), "export default class HelloController {}\n")
+	appSource := "// golazy:turbo\n// golazy:stimulus\nconst message = \"ready\";\nconsole.log(message);\n"
+	controllerSource := "export default class HelloController {\n  connect() {\n    this.element.dataset.ready = \"true\";\n  }\n}\n"
+	writeFile(t, filepath.Join(dir, "app", "js", "app.js"), appSource)
+	writeFile(t, filepath.Join(dir, "app", "js", "controllers", "hello_controller.js"), controllerSource)
 
 	manifest := defaultManifest()
-	manifest.Bundle.Minify = false
 	manifest.Entrypoints = []Entrypoint{
 		{Name: "turbo", Module: "./turbo.js", Imports: []string{"@hotwired/turbo"}},
 		{Name: "stimulus", Module: "./stimulus.js", Imports: []string{"@hotwired/stimulus"}},
@@ -128,15 +129,27 @@ func TestBundleBuildsAppJavaScriptAndExpandsDirectives(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		`import "@hotwired/turbo";`,
-		`import { Application } from "@hotwired/stimulus";`,
-		`import HelloController from "/js/controllers/hello_controller.js";`,
-		`application = Application.start();`,
-		`application.register("hello", HelloController);`,
+		"import \"@hotwired/turbo\"\n",
+		"import { Application } from \"@hotwired/stimulus\"\n",
+		"import HelloController from \"/js/controllers/hello_controller.js\"\n",
+		"const application = Application.start()\n",
+		"application.register(\"hello\", HelloController)\n",
+		"const message = \"ready\";\nconsole.log(message);\n",
 	} {
 		if !strings.Contains(string(appBundle), want) {
 			t.Fatalf("app bundle does not contain %q:\n%s", want, appBundle)
 		}
+	}
+	if strings.Contains(string(appBundle), "class HelloController") {
+		t.Fatalf("app output bundled controller source:\n%s", appBundle)
+	}
+
+	controllerBundle, err := os.ReadFile(publicAssetFile(dir, controllerPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(controllerBundle) != controllerSource {
+		t.Fatalf("controller output = %q, want source copy %q", controllerBundle, controllerSource)
 	}
 }
 

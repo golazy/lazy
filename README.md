@@ -99,9 +99,10 @@ lazy js
 ```
 
 The command installs the JavaScript packages named by `[entrypoint.<name>]`
-blocks, bundles those library entrypoints with esbuild, bundles application
-modules from `app/js`, expands the `// golazy:turbo` and
-`// golazy:stimulus` directives in `app/js/app.js`, and writes the importmap.
+blocks, bundles those library entrypoints with esbuild, expands the
+`// golazy:turbo` and `// golazy:stimulus` directives in `app/js/app.js`, writes
+app-owned modules from `app/js` as readable hashed assets, and writes the
+importmap.
 During `lazy` development, apps with `js.toml` run the JavaScript pipeline
 before the first build and after changes to `app/js`, `js.toml`, or package
 metadata.
@@ -290,7 +291,7 @@ LAZY_MULTIVERSION=off lazy js
 - `commands/routes`: route-table inspection.
 - `commands/upgrade`: one-step application upgrades and migration helpers.
 - `commands/lazycode`: Go source rewrite helpers used by upgrade migrations.
-- `commands/js`: JavaScript library and app-module bundling, directive
+- `commands/js`: JavaScript library bundling, app-module hashing, directive
   expansion, and importmap generation.
 - `commands/tailwind`: Tailwind CLI setup and stylesheet compilation.
 - `services/lifecycleservice`: managed local service subprocess lifecycle.

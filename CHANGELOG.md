@@ -60,6 +60,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   installed mise tools in `pnpm`, `yarn`, `bun`, `node` order. Managers found
   through mise run with `mise exec`; apps without a usable mise package-manager
   tool fall back to direct `npm` / `npx`.
+- `lazy js` now keeps app-owned files under `app/js` readable and unbundled
+  while still writing content-hashed lazyshaft assets and importmap entries.
+  Manifest-declared library entrypoints remain bundled.
 
 ## [0.1.16] - 2026-06-27
 

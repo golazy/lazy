@@ -818,7 +818,7 @@ func javaScriptAssetTaskName(mode javaScriptAssetMode) string {
 	case javaScriptAssetFull:
 		return "Generate JavaScript assets"
 	case javaScriptAssetBundle:
-		return "Bundle JavaScript assets"
+		return "Generate JavaScript assets"
 	default:
 		return "Generate JavaScript assets"
 	}

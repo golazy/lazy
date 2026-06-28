@@ -82,7 +82,7 @@ func (c Command) Execute() (int, error) {
 	if bundler == nil {
 		bundler = Bundle
 	}
-	fmt.Fprintln(stdout, "* Bundling JavaScript")
+	fmt.Fprintln(stdout, "* Generating JavaScript assets")
 	if _, err := bundler(manifest, root, packageDir); err != nil {
 		return 1, err
 	}
