@@ -115,6 +115,48 @@ pre {
   font-weight: 500;
 }
 
+.panel-close-button {
+  align-items: center;
+  align-self: stretch;
+  background: transparent;
+  border: 0;
+  border-left: 1px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 32px;
+  justify-content: center;
+  min-width: 32px;
+  position: relative;
+}
+
+.panel-close-button:hover {
+  background: var(--row-hover);
+  color: var(--text);
+}
+
+.panel-close-button:focus-visible {
+  outline: 2px solid var(--sys-color-state-focus-ring);
+  outline-offset: -2px;
+}
+
+.panel-close-button::before,
+.panel-close-button::after {
+  background: currentColor;
+  content: "";
+  height: 1px;
+  position: absolute;
+  width: 13px;
+}
+
+.panel-close-button::before {
+  transform: rotate(45deg);
+}
+
+.panel-close-button::after {
+  transform: rotate(-45deg);
+}
+
 .tool-view {
   display: none;
   grid-template-rows: 31px minmax(0, 1fr);
@@ -359,7 +401,7 @@ button:disabled:hover {
 
 .split-view {
   display: grid;
-  grid-template-columns: minmax(0, clamp(18rem, 46%, 34rem)) minmax(0, 1fr);
+  grid-template-columns: minmax(12rem, var(--panel-resize-primary-size, clamp(18rem, 46%, 34rem))) 6px minmax(0, 1fr);
   min-height: 0;
   min-width: 0;
   overflow: hidden;
@@ -370,6 +412,27 @@ button:disabled:hover {
   min-height: 0;
   min-width: 0;
   overflow: hidden auto;
+}
+
+.split-resize-handle {
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  cursor: col-resize;
+  min-height: 0;
+  min-width: 6px;
+  touch-action: none;
+}
+
+.split-resize-handle:hover,
+.split-view.is-resizing .split-resize-handle {
+  background: var(--row-hover);
+}
+
+.split-resize-handle:focus-visible {
+  background: var(--row-hover);
+  outline: 2px solid var(--sys-color-state-focus-ring);
+  outline-offset: -2px;
 }
 
 .data-grid {
@@ -450,7 +513,6 @@ button:disabled:hover {
 
 .details-pane {
   background: var(--base);
-  border-left: 1px solid var(--border);
   min-width: 0;
   overflow: auto;
 }

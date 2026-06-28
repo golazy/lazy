@@ -9,6 +9,7 @@
       <button type="button" data-tab="assets" aria-selected="false">Assets</button>
       <button type="button" data-tab="actions" aria-selected="false">Actions</button>
     </nav>
+    <button type="button" class="panel-close-button" data-panel-close hidden aria-label="Close GoLazy development panel" title="Close GoLazy development panel"></button>
   </header>
 
   <section class="tool-view" data-view="requests">
@@ -62,8 +63,8 @@
       </div>
     </div>
 
-    <div class="split-view">
-      <section class="request-table-pane" aria-label="Request log">
+    <div class="split-view" data-controller="panel-resize" data-panel-resize-axis-value="horizontal" data-panel-resize-min-value="240">
+      <section class="request-table-pane" aria-label="Request log" data-panel-resize-target="primary">
         <table class="data-grid network-log-grid">
           <thead>
             <tr>
@@ -85,6 +86,8 @@
           </tbody>
         </table>
       </section>
+
+      <div class="split-resize-handle" data-panel-resize-target="handle" data-action="pointerdown->panel-resize#start keydown->panel-resize#nudge" aria-label="Resize request details pane"></div>
 
       <aside class="details-pane">
         <div class="empty-state">Select a request to inspect headers, preview, response, logs, cache, and traces.</div>

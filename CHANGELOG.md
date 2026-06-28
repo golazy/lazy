@@ -9,6 +9,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The embedded development panel can now be closed from its toolbar, and
+  request/detail panes inside the panel can be resized with a Stimulus
+  controller.
 - `lazy js` and `lazy tailwind` now choose Node package managers from active
   installed mise tools in `pnpm`, `yarn`, `bun`, `node` order. Managers found
   through mise run with `mise exec`; apps without a usable mise package-manager

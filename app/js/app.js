@@ -1,9 +1,11 @@
 const panelPath = "/_golazy/"
 const embeddedPanelID = "golazy-dev-panel"
 const embeddedPanelHeight = "320px"
+const embeddedPanelClosedKey = "golazy:devpanel:closed"
 
 installEmbeddedPanel()
 installTurboPersistence()
+installEmbeddedPanelMessages()
 
 const reloadSource = window.__lazyReloadSource || new EventSource("/__lazy/reload")
 window.__lazyReloadSource = reloadSource
@@ -15,8 +17,10 @@ reloadSource.addEventListener("reload", () => {
 
 const panel = document.querySelector("[data-panel]")
 if (panel) {
+  installPanelStimulus().catch(error => console.error("GoLazy panel Stimulus failed", error))
   installPanelTabs()
   installCacheActions()
+  installPanelClose()
   refreshCache()
 
   const stateSource = new EventSource("/_golazy/events")
@@ -29,7 +33,10 @@ if (panel) {
 
 function installEmbeddedPanel() {
   if (location.pathname.startsWith("/_golazy")) return
-  reservePanelSpace()
+  if (isEmbeddedPanelClosed()) {
+    releasePanelSpace()
+    return
+  }
 
   if (document.getElementById(embeddedPanelID)) return
   if (!document.body) {
@@ -37,6 +44,7 @@ function installEmbeddedPanel() {
     return
   }
 
+  reservePanelSpace()
   const host = document.createElement("golazy-dev-panel")
   host.id = embeddedPanelID
   host.setAttribute("data-turbo-permanent", "")
@@ -80,6 +88,43 @@ function reservePanelSpace() {
   root.style.paddingBottom = `calc(${root.dataset.golazyDevPanelPaddingBase} + var(--golazy-dev-panel-height) + env(safe-area-inset-bottom))`
 }
 
+function releasePanelSpace() {
+  const root = document.documentElement
+  if (!root.dataset.golazyDevPanelPaddingBase) return
+  root.style.paddingBottom = root.dataset.golazyDevPanelPaddingBase
+  root.style.removeProperty("--golazy-dev-panel-height")
+}
+
+function installEmbeddedPanelMessages() {
+  window.addEventListener("message", event => {
+    if (event.origin !== window.location.origin) return
+    if (event.data?.type !== "golazy:devpanel:close") return
+    closeEmbeddedPanel()
+  })
+}
+
+function closeEmbeddedPanel() {
+  rememberEmbeddedPanelClosed()
+  document.getElementById(embeddedPanelID)?.remove()
+  releasePanelSpace()
+}
+
+function isEmbeddedPanelClosed() {
+  try {
+    return window.sessionStorage.getItem(embeddedPanelClosedKey) === "true"
+  } catch {
+    return false
+  }
+}
+
+function rememberEmbeddedPanelClosed() {
+  try {
+    window.sessionStorage.setItem(embeddedPanelClosedKey, "true")
+  } catch {
+    // Closing should still work when sessionStorage is unavailable.
+  }
+}
+
 function installTurboPersistence() {
   document.addEventListener("turbo:before-render", event => {
     const host = document.getElementById(embeddedPanelID)
@@ -90,6 +135,30 @@ function installTurboPersistence() {
   })
   document.addEventListener("turbo:render", installEmbeddedPanel)
   document.addEventListener("turbo:load", installEmbeddedPanel)
+}
+
+async function installPanelStimulus() {
+  const [{ Application }, { default: PanelResizeController }] = await Promise.all([
+    import("/_golazy/assets/lazyshaft/stimulus-FNW3RRR2.js"),
+    import("./controllers/panel_resize_controller.js"),
+  ])
+  const application = window.__golazyStimulus || Application.start()
+  window.__golazyStimulus = application
+  application.register("panel-resize", PanelResizeController)
+}
+
+function installPanelClose() {
+  const button = document.querySelector("[data-panel-close]")
+  if (!button) return
+
+  const embedded = window.parent && window.parent !== window
+  document.documentElement.dataset.golazyEmbedded = String(embedded)
+  button.hidden = !embedded
+  if (!embedded) return
+
+  button.addEventListener("click", () => {
+    window.parent.postMessage({ type: "golazy:devpanel:close" }, window.location.origin)
+  })
 }
 
 function installPanelTabs() {
