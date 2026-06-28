@@ -69,6 +69,7 @@ func TestPanelFrameRoutes(t *testing.T) {
 		{path: "/_golazy/console", frame: "console", want: `data-view="console"`},
 		{path: "/_golazy/logs", frame: "logs", want: `data-view="logs"`},
 		{path: "/_golazy/services", frame: "services", want: `data-view="services"`},
+		{path: "/_golazy/traces", frame: "traces", want: `data-traces-panel`},
 		{path: "/_golazy/status", frame: "status_bar", want: `<a class="app-status-chip" href="/_golazy/logs" data-turbo-frame="_top" data-app-status="running">`},
 	} {
 		request := httptest.NewRequest(http.MethodGet, test.path, nil)

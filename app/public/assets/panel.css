@@ -801,6 +801,233 @@ button:disabled:hover {
   white-space: pre-wrap;
 }
 
+.traces-layout {
+  display: grid;
+  grid-template-columns: minmax(15rem, 24rem) minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.trace-list-pane {
+  border-right: 1px solid var(--border);
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+}
+
+.trace-detail-pane {
+  display: grid;
+  grid-template-rows: 31px minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.trace-summary-strip {
+  align-items: center;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0 8px;
+  white-space: nowrap;
+}
+
+.trace-summary-strip strong,
+.trace-summary-strip code,
+.trace-summary-strip span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trace-summary-strip span {
+  color: var(--text-muted);
+}
+
+.trace-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(23rem, 1.35fr) minmax(17rem, 0.8fr);
+  grid-template-rows: minmax(11rem, 1fr) minmax(9rem, 0.8fr);
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.trace-timeline-pane,
+.trace-region-pane,
+.trace-flame-pane,
+.trace-log-pane {
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+}
+
+.trace-flame-pane {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.trace-log-pane {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.trace-list-grid th,
+.trace-list-grid td,
+.trace-log-grid th,
+.trace-log-grid td {
+  width: auto;
+}
+
+.trace-list-grid th:nth-child(1),
+.trace-list-grid td:nth-child(1) {
+  width: 4.5rem;
+}
+
+.trace-list-grid th:nth-child(3),
+.trace-list-grid td:nth-child(3),
+.trace-list-grid th:nth-child(4),
+.trace-list-grid td:nth-child(4) {
+  width: 4.8rem;
+}
+
+.trace-list-grid tr[data-trace-id] {
+  cursor: pointer;
+}
+
+.trace-list-grid tr[data-trace-id]:hover td,
+.trace-list-grid tr[data-trace-id]:focus td {
+  background: var(--row-hover);
+}
+
+.trace-list-grid tr[aria-selected="true"] td {
+  background: var(--row-selected);
+}
+
+.trace-timeline,
+.trace-flamegraph {
+  display: grid;
+  gap: 3px;
+  min-width: 34rem;
+}
+
+.trace-timeline-row {
+  align-items: center;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(12rem, 19rem) minmax(12rem, 1fr) 4.8rem;
+  min-width: 0;
+}
+
+.trace-timeline-label,
+.trace-timeline-track,
+.trace-flame-row {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--text);
+  cursor: pointer;
+  height: 22px;
+  min-width: 0;
+}
+
+.trace-timeline-label {
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trace-timeline-track {
+  background: var(--surface);
+  border-color: var(--border);
+  position: relative;
+}
+
+.trace-timeline-bar {
+  background: var(--sys-color-primary);
+  border-radius: 2px;
+  bottom: 4px;
+  min-width: 2px;
+  position: absolute;
+  top: 4px;
+}
+
+.trace-task-bar {
+  background: var(--text-muted);
+}
+
+.trace-timeline-row[data-framework="true"] .trace-timeline-bar {
+  background: var(--warn);
+}
+
+.trace-timeline-row[data-selected="true"] .trace-timeline-label,
+.trace-timeline-row[data-selected="true"] .trace-timeline-track,
+.trace-flame-row[data-selected="true"] {
+  border-color: var(--sys-color-primary);
+}
+
+.trace-timeline-time {
+  color: var(--text-muted);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  text-align: right;
+}
+
+.trace-flamegraph {
+  gap: 2px;
+}
+
+.trace-flame-row {
+  align-items: center;
+  display: flex;
+  height: 24px;
+  padding: 0;
+  position: relative;
+  text-align: left;
+}
+
+.trace-flame-row:hover,
+.trace-timeline-label:hover,
+.trace-timeline-track:hover {
+  background: var(--row-hover);
+}
+
+.trace-flame-bar {
+  background: color-mix(in srgb, var(--sys-color-primary) 72%, transparent);
+  border: 1px solid var(--sys-color-primary);
+  border-radius: 2px;
+  height: 18px;
+  min-width: 2px;
+}
+
+.trace-flame-label {
+  left: 8px;
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+  right: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trace-log-grid th:nth-child(1),
+.trace-log-grid td:nth-child(1) {
+  width: 10rem;
+}
+
+.trace-log-grid th:nth-child(2),
+.trace-log-grid td:nth-child(2) {
+  width: 5rem;
+}
+
+.trace-log-grid th:nth-child(4),
+.trace-log-grid td:nth-child(4) {
+  width: 8rem;
+}
+
 .detail-list,
 .cache-stats {
   display: grid;

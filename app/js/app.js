@@ -15,9 +15,14 @@ window.__golazyDevPanelClient = clientState
 let selectedService = clientState.selectedService || ""
 let currentPanelState = clientState.currentPanelState || null
 let stateSource = clientState.stateSource || null
+let traceSnapshots = clientState.traceSnapshots || []
+let selectedTraceID = clientState.selectedTraceID || ""
+let selectedTraceSpanID = clientState.selectedTraceSpanID || ""
+let traceFrameworkVisible = Boolean(clientState.traceFrameworkVisible)
 let serviceNavigationInstalled = Boolean(clientState.serviceNavigationInstalled)
 let cacheActionsInstalled = Boolean(clientState.cacheActionsInstalled)
 let requestMonitoringInstalled = Boolean(clientState.requestMonitoringInstalled)
+let traceActionsInstalled = Boolean(clientState.traceActionsInstalled)
 
 installEmbeddedPanel()
 installTurboPersistence()
@@ -61,10 +66,12 @@ function bootPanelPage() {
   installServiceNavigation()
   installCacheActions()
   installRequestMonitoringActions()
+  installTraceActions()
   installPanelClose()
   refreshPanelState()
   refreshCache()
   refreshRequestMonitoring()
+  refreshTraces()
   refreshJobs()
   startPanelEvents()
 }
@@ -696,6 +703,354 @@ function setRequestMonitoringDisabled(disabled) {
   }
 }
 
+function installTraceActions() {
+  if (traceActionsInstalled) return
+  traceActionsInstalled = true
+  clientState.traceActionsInstalled = true
+  document.addEventListener("change", event => {
+    const toggle = event.target.closest("[data-trace-framework-toggle]")
+    if (!toggle) return
+    traceFrameworkVisible = toggle.checked
+    clientState.traceFrameworkVisible = traceFrameworkVisible
+    renderSelectedTrace()
+  })
+  document.addEventListener("input", event => {
+    if (!event.target.closest("[data-trace-filter]")) return
+    renderTraceList()
+  })
+  document.addEventListener("click", event => {
+    const traceRow = event.target.closest("[data-trace-id]")
+    if (traceRow) {
+      selectedTraceID = traceRow.getAttribute("data-trace-id") || ""
+      selectedTraceSpanID = ""
+      clientState.selectedTraceID = selectedTraceID
+      clientState.selectedTraceSpanID = selectedTraceSpanID
+      renderTraceList()
+      renderSelectedTrace()
+      return
+    }
+    const spanButton = event.target.closest("[data-trace-span-id]")
+    if (!spanButton) return
+    selectedTraceSpanID = spanButton.getAttribute("data-trace-span-id") || ""
+    clientState.selectedTraceSpanID = selectedTraceSpanID
+    renderSelectedTrace()
+  })
+  document.addEventListener("keydown", event => {
+    if (event.key !== "Enter" && event.key !== " ") return
+    const target = event.target.closest("[data-trace-id], [data-trace-span-id]")
+    if (!target) return
+    event.preventDefault()
+    target.click()
+  })
+}
+
+async function refreshTraces() {
+  if (!document.querySelector("[data-traces-panel]")) return
+  const response = await fetch("/_golazy/traces", { headers: { Accept: "application/json" } })
+  if (!response.ok) {
+    renderTracesUnavailable()
+    return
+  }
+  renderTraces(await response.json())
+}
+
+function renderTracesUnavailable() {
+  traceSnapshots = []
+  clientState.traceSnapshots = traceSnapshots
+  table("[data-trace-list]", [], traceListRow, 4, "Trace summaries unavailable.")
+  textAll("[data-trace-title]", "Trace summaries unavailable")
+  textAll("[data-trace-runtime]", "")
+  textAll("[data-trace-memory]", "")
+  textAll("[data-trace-file]", "")
+  textAll("[data-trace-span-count]", "0 regions")
+  renderTraceEmpty("[data-trace-timeline]", "Trace summaries unavailable.")
+  renderTraceEmpty("[data-trace-flamegraph]", "Select a timeline section.")
+  table("[data-trace-logs]", [], traceLogRow, 4, "No logs for this trace.")
+}
+
+function renderTraces(snapshot) {
+  traceSnapshots = snapshot?.traces || []
+  clientState.traceSnapshots = traceSnapshots
+  if (!traceSnapshots.some(trace => trace.request_id === selectedTraceID)) {
+    selectedTraceID = traceSnapshots[0]?.request_id || ""
+    selectedTraceSpanID = ""
+  }
+  clientState.selectedTraceID = selectedTraceID
+  renderTraceList()
+  renderSelectedTrace()
+}
+
+function renderTraceList() {
+  const query = String(document.querySelector("[data-trace-filter]")?.value || "").trim().toLowerCase()
+  const rows = query ? traceSnapshots.filter(trace => {
+    return [trace.request_id, trace.method, trace.path, trace.status].some(value => String(value || "").toLowerCase().includes(query))
+  }) : traceSnapshots
+  table("[data-trace-list]", rows, traceListRow, 4, "No traces recorded.")
+}
+
+function traceListRow(trace) {
+  const row = document.createElement("tr")
+  row.tabIndex = 0
+  row.setAttribute("data-trace-id", trace.request_id || "")
+  row.setAttribute("aria-selected", String(trace.request_id === selectedTraceID))
+  for (const value of [
+    trace.method || "",
+    trace.path || "",
+    trace.status ?? "",
+    formatDuration(trace.duration_ms),
+  ]) {
+    const cell = document.createElement("td")
+    cell.textContent = value
+    row.append(cell)
+  }
+  return row
+}
+
+function renderSelectedTrace() {
+  const trace = traceSnapshots.find(candidate => candidate.request_id === selectedTraceID)
+  for (const toggle of document.querySelectorAll("[data-trace-framework-toggle]")) {
+    toggle.checked = traceFrameworkVisible
+  }
+  if (!trace) {
+    textAll("[data-trace-title]", "Select a trace")
+    textAll("[data-trace-runtime]", "")
+    textAll("[data-trace-memory]", "")
+    textAll("[data-trace-file]", "")
+    textAll("[data-trace-span-count]", "0 regions")
+    textAll("[data-trace-region-name]", "")
+    textAll("[data-trace-region-duration]", "")
+    textAll("[data-trace-region-allocations]", "Not captured per region")
+    textAll("[data-trace-command]", "")
+    renderTraceEmpty("[data-trace-timeline]", "Select a recorded request.")
+    renderTraceEmpty("[data-trace-flamegraph]", "Select a timeline section.")
+    table("[data-trace-logs]", [], traceLogRow, 4, "No logs for this trace.")
+    return
+  }
+
+  textAll("[data-trace-title]", `${trace.method || ""} ${trace.path || ""}`.trim() || trace.request_id)
+  textAll("[data-trace-runtime]", traceRuntimeLabel(trace))
+  textAll("[data-trace-memory]", requestMemoryLabel(trace))
+  textAll("[data-trace-file]", trace.trace_file || "")
+
+  const visibleSpans = visibleTraceSpans(trace)
+  if (!visibleSpans.some(span => span.span_id === selectedTraceSpanID)) {
+    selectedTraceSpanID = firstSelectableSpan(visibleSpans)?.span_id || ""
+  }
+  clientState.selectedTraceSpanID = selectedTraceSpanID
+  textAll("[data-trace-span-count]", `${visibleSpans.length} ${visibleSpans.length === 1 ? "region" : "regions"}`)
+  renderTraceTimeline(trace, visibleSpans)
+  renderTraceFlamegraph(trace, visibleSpans)
+  renderTraceRegion(trace, visibleSpans.find(span => span.span_id === selectedTraceSpanID))
+  table("[data-trace-logs]", trace.logs || [], traceLogRow, 4, "No logs for this trace.")
+}
+
+function firstSelectableSpan(spans) {
+  return spans.find(span => span.name !== "http.server.request") || spans[0]
+}
+
+function visibleTraceSpans(trace) {
+  const spans = trace.spans || []
+  if (traceFrameworkVisible) return spans
+  return spans.filter(span => span.name === "http.server.request" || !frameworkTraceSpan(span))
+}
+
+function frameworkTraceSpan(span) {
+  const name = span?.name || ""
+  return name === "router" || name.startsWith("middleware ") || name.startsWith("dispatch ")
+}
+
+function renderTraceTimeline(trace, spans) {
+  for (const node of document.querySelectorAll("[data-trace-timeline]")) {
+    node.replaceChildren()
+    if (!spans.length) {
+      node.append(traceEmpty("No regions in this trace."))
+      continue
+    }
+    const base = traceBaseTime(trace)
+    const duration = traceDuration(trace)
+    const spanMap = new Map((trace.spans || []).map(span => [span.span_id, span]))
+    const visibleSet = new Set(spans.map(span => span.span_id))
+    for (const span of spans) {
+      node.append(traceTimelineRow(span, base, duration, visibleDepth(span, spanMap, visibleSet)))
+    }
+  }
+}
+
+function traceTimelineRow(span, base, duration, depth) {
+  const row = document.createElement("div")
+  row.className = "trace-timeline-row"
+  row.dataset.framework = String(frameworkTraceSpan(span))
+  row.dataset.selected = String(span.span_id === selectedTraceSpanID)
+
+  const label = document.createElement("button")
+  label.type = "button"
+  label.className = "trace-timeline-label"
+  label.setAttribute("data-trace-span-id", span.span_id || "")
+  label.style.paddingLeft = `${Math.min(depth, 8) * 12 + 6}px`
+  label.textContent = span.name || "region"
+
+  const track = document.createElement("button")
+  track.type = "button"
+  track.className = "trace-timeline-track"
+  track.setAttribute("data-trace-span-id", span.span_id || "")
+  const bar = document.createElement("span")
+  bar.className = span.name === "http.server.request" ? "trace-timeline-bar trace-task-bar" : "trace-timeline-bar"
+  const offset = Math.max(0, new Date(span.started_at).getTime() - base)
+  const width = Math.max(0.25, Number(span.duration_ms || 0) / duration * 100)
+  bar.style.left = `${Math.min(100, offset / duration * 100)}%`
+  bar.style.width = `${Math.min(100, width)}%`
+  track.append(bar)
+
+  const time = document.createElement("span")
+  time.className = "trace-timeline-time"
+  time.textContent = formatDuration(span.duration_ms)
+  row.append(label, track, time)
+  return row
+}
+
+function renderTraceFlamegraph(trace, spans) {
+  const selected = spans.find(span => span.span_id === selectedTraceSpanID)
+  const selectedIDs = selected ? descendantSpanIDs(trace.spans || [], selected.span_id) : new Set(spans.map(span => span.span_id))
+  const flameSpans = spans.filter(span => selectedIDs.has(span.span_id)).sort((a, b) => new Date(a.started_at) - new Date(b.started_at))
+  for (const node of document.querySelectorAll("[data-trace-flamegraph]")) {
+    node.replaceChildren()
+    if (!flameSpans.length) {
+      node.append(traceEmpty("Select a timeline section."))
+      continue
+    }
+    const base = traceBaseTime(trace)
+    const duration = traceDuration(trace)
+    const spanMap = new Map((trace.spans || []).map(span => [span.span_id, span]))
+    const visibleSet = new Set(spans.map(span => span.span_id))
+    for (const span of flameSpans) {
+      node.append(traceFlameRow(span, base, duration, visibleDepth(span, spanMap, visibleSet)))
+    }
+  }
+}
+
+function traceFlameRow(span, base, duration, depth) {
+  const row = document.createElement("button")
+  row.type = "button"
+  row.className = "trace-flame-row"
+  row.setAttribute("data-trace-span-id", span.span_id || "")
+  row.dataset.selected = String(span.span_id === selectedTraceSpanID)
+  row.style.marginLeft = `${Math.min(depth, 8) * 14}px`
+
+  const bar = document.createElement("span")
+  bar.className = "trace-flame-bar"
+  const offset = Math.max(0, new Date(span.started_at).getTime() - base)
+  bar.style.marginLeft = `${Math.min(100, offset / duration * 100)}%`
+  bar.style.width = `${Math.min(100, Math.max(1, Number(span.duration_ms || 0) / duration * 100))}%`
+  const label = document.createElement("span")
+  label.className = "trace-flame-label"
+  label.textContent = `${span.name || "region"} ${formatDuration(span.duration_ms)}`
+  row.append(bar, label)
+  return row
+}
+
+function renderTraceRegion(trace, span) {
+  if (!span) {
+    textAll("[data-trace-region-name]", "")
+    textAll("[data-trace-region-duration]", "")
+    textAll("[data-trace-region-allocations]", "Not captured per region")
+    textAll("[data-trace-command]", "")
+    return
+  }
+  textAll("[data-trace-region-name]", span.name || "")
+  textAll("[data-trace-region-duration]", formatDuration(span.duration_ms))
+  textAll("[data-trace-region-allocations]", `Not captured per region. Request mallocs: ${formatInteger(trace.memory?.mallocs_delta)}`)
+  const regionURL = `/userregion?type=${encodeURIComponent(span.name || "")}`
+  textAll("[data-trace-command]", `go tool trace -http=127.0.0.1:18082 ${trace.trace_file || "<trace-file>"} then open ${regionURL}`)
+}
+
+function traceLogRow(log) {
+  const row = document.createElement("tr")
+  for (const value of [
+    formatDateTime(log.time),
+    log.level || "",
+    log.message || "",
+    log.span_id || "",
+  ]) {
+    const cell = document.createElement("td")
+    cell.textContent = value ?? ""
+    row.append(cell)
+  }
+  return row
+}
+
+function descendantSpanIDs(spans, rootID) {
+  const children = new Map()
+  for (const span of spans) {
+    if (!span.parent_id) continue
+    if (!children.has(span.parent_id)) {
+      children.set(span.parent_id, [])
+    }
+    children.get(span.parent_id).push(span.span_id)
+  }
+  const ids = new Set()
+  const stack = [rootID]
+  while (stack.length) {
+    const id = stack.pop()
+    if (!id || ids.has(id)) continue
+    ids.add(id)
+    for (const child of children.get(id) || []) {
+      stack.push(child)
+    }
+  }
+  return ids
+}
+
+function visibleDepth(span, spanMap, visibleSet) {
+  let depth = 0
+  let current = spanMap.get(span.parent_id)
+  while (current) {
+    if (visibleSet.has(current.span_id)) {
+      depth += 1
+    }
+    current = spanMap.get(current.parent_id)
+  }
+  return depth
+}
+
+function traceBaseTime(trace) {
+  const root = (trace.spans || [])[0]
+  const value = new Date(root?.started_at || trace.started_at).getTime()
+  return Number.isFinite(value) ? value : Date.now()
+}
+
+function traceDuration(trace) {
+  return Math.max(0.001, Number(trace.duration_ms || trace.spans?.[0]?.duration_ms || 0.001))
+}
+
+function requestMemoryLabel(trace) {
+  const memory = trace.memory || {}
+  const mallocs = formatInteger(memory.mallocs_delta)
+  const allocated = formatBytes(memory.total_alloc_bytes_delta)
+  return `mallocs ${mallocs}, allocated ${allocated}`
+}
+
+function traceRuntimeLabel(trace) {
+  const runtime = trace.runtime || {}
+  if (!runtime.go_version) return ""
+  const goroutines = Number.isFinite(Number(runtime.goroutines_start)) || Number.isFinite(Number(runtime.goroutines_end))
+    ? `, goroutines ${runtime.goroutines_start ?? "?"}->${runtime.goroutines_end ?? "?"}`
+    : ""
+  return `${runtime.go_version} ${runtime.goos || ""}/${runtime.goarch || ""}${goroutines}`
+}
+
+function renderTraceEmpty(selector, message) {
+  for (const node of document.querySelectorAll(selector)) {
+    node.replaceChildren(traceEmpty(message))
+  }
+}
+
+function traceEmpty(message) {
+  const item = document.createElement("div")
+  item.className = "empty-state"
+  item.textContent = message
+  return item
+}
+
 async function refreshJobs() {
   if (!document.querySelector("[data-jobs-panel]")) return
   const response = await fetch("/_golazy/jobs", { headers: { Accept: "application/json" } })
@@ -906,4 +1261,31 @@ function formatDateTime(value) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return ""
   return date.toLocaleString()
+}
+
+function formatDuration(value) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return ""
+  if (number < 1) return `${(number * 1000).toFixed(0)}us`
+  if (number < 1000) return `${number.toFixed(number < 10 ? 2 : 1)}ms`
+  return `${(number / 1000).toFixed(2)}s`
+}
+
+function formatInteger(value) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return "0"
+  return new Intl.NumberFormat().format(number)
+}
+
+function formatBytes(value) {
+  const number = Number(value)
+  if (!Number.isFinite(number) || number <= 0) return "0 B"
+  const units = ["B", "KiB", "MiB", "GiB"]
+  let size = number
+  let unit = 0
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024
+    unit += 1
+  }
+  return `${size.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`
 }
