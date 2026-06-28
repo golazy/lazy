@@ -11,10 +11,11 @@ import (
 	"sync"
 	"syscall"
 
-	"golazy.dev/lazy/commands"
-	"golazy.dev/lazy/commands/appcmd"
-	"golazy.dev/lazy/commands/gowork"
-	"golazy.dev/lazy/commands/lazyconfig"
+	"golazy.dev/lazy/services/appservice"
+	"golazy.dev/lazy/services/configservice"
+	"golazy.dev/lazy/services/devloopservice"
+	"golazy.dev/lazy/services/execservice"
+	"golazy.dev/lazy/services/workspaceservice"
 	"golazy.dev/lazytui/progress"
 )
 
@@ -29,7 +30,7 @@ type Command struct {
 	Stdin      io.Reader
 	Stdout     io.Writer
 	Stderr     io.Writer
-	Runner     commands.Runner
+	Runner     execservice.Runner
 	Context    context.Context
 }
 
@@ -43,7 +44,7 @@ func (c Command) Execute() (int, error) {
 		}
 	}
 
-	candidate, err := appcmd.Find(dir, c.CmdPath)
+	candidate, err := appservice.Find(dir, c.CmdPath)
 	if err != nil {
 		return 1, err
 	}
@@ -53,7 +54,7 @@ func (c Command) Execute() (int, error) {
 		return c.executeDirect(dir, candidate, runner)
 	}
 
-	serviceConfig, _, err := lazyconfig.LoadIfExists(dir)
+	serviceConfig, _, err := configservice.LoadIfExists(dir)
 	if err != nil {
 		return 1, err
 	}
@@ -65,19 +66,19 @@ func (c Command) Execute() (int, error) {
 		ctx, stop, forceKill = interruptContext()
 		defer stop()
 	}
-	return (&devRunner{
-		root:          dir,
-		commandPath:   candidate,
-		viewPath:      c.ViewPath,
-		publicPath:    c.PublicPath,
-		listenAddr:    publicListenAddr(c.Addr, c.Port),
-		goWork:        c.GoWork,
-		serviceConfig: serviceConfig,
-		stdin:         c.Stdin,
-		stdout:        c.Stdout,
-		stderr:        c.Stderr,
-		forceKill:     forceKill,
-	}).run(ctx)
+	return (devloopservice.Config{
+		Root:          dir,
+		CommandPath:   candidate,
+		ViewPath:      c.ViewPath,
+		PublicPath:    c.PublicPath,
+		ListenAddr:    devloopservice.PublicListenAddr(c.Addr, c.Port),
+		GoWork:        c.GoWork,
+		ServiceConfig: serviceConfig,
+		Stdin:         c.Stdin,
+		Stdout:        c.Stdout,
+		Stderr:        c.Stderr,
+		ForceKill:     forceKill,
+	}).Run(ctx)
 }
 
 func interruptContext() (context.Context, func(), <-chan struct{}) {
@@ -120,19 +121,19 @@ func interruptContext() (context.Context, func(), <-chan struct{}) {
 	return ctx, stop, forceKill
 }
 
-func (c Command) executeDirect(dir string, candidate string, runner commands.Runner) (int, error) {
-	buildFlags, err := appcmd.LazyDevBuildFlags(dir, c.ViewPath, c.PublicPath)
+func (c Command) executeDirect(dir string, candidate string, runner execservice.Runner) (int, error) {
+	buildFlags, err := appservice.LazyDevBuildFlags(dir, c.ViewPath, c.PublicPath)
 	if err != nil {
 		return 1, err
 	}
-	workspaceActive, err := gowork.Active(dir, c.GoWork)
+	workspaceActive, err := workspaceservice.Active(dir, c.GoWork)
 	if err != nil {
 		return 1, fmt.Errorf("inspect Go workspace: %w", err)
 	}
 	tasks := progress.Tasks{}
 	if !workspaceActive {
 		tasks = append(tasks, progress.Task("Update Go modules", func(_ io.Reader, _ io.Writer, _ io.Writer) error {
-			if err := runner("go", []string{"mod", "tidy"}, commands.Options{
+			if err := runner("go", []string{"mod", "tidy"}, execservice.Options{
 				Dir:     dir,
 				Capture: true,
 			}); err != nil {
@@ -143,7 +144,7 @@ func (c Command) executeDirect(dir string, candidate string, runner commands.Run
 	}
 	tasks = append(tasks, progress.UITask("Run application", func(ui *progress.UI) error {
 		return ui.Takeover(func(stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
-			if err := runner("go", appcmd.GoRunArgs("lazydev", filepath.ToSlash(candidate), buildFlags...), commands.Options{
+			if err := runner("go", appservice.GoRunArgs("lazydev", filepath.ToSlash(candidate), buildFlags...), execservice.Options{
 				Dir:    dir,
 				Stdin:  stdin,
 				Stdout: stdout,
@@ -156,7 +157,7 @@ func (c Command) executeDirect(dir string, candidate string, runner commands.Run
 	}))
 
 	if err := c.runProgress(tasks); err != nil {
-		var processExit *commands.ExitError
+		var processExit *execservice.ExitError
 		if errors.As(err, &processExit) {
 			return processExit.Code, nil
 		}

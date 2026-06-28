@@ -1,4 +1,4 @@
-package jscommand
+package jsservice
 
 import (
 	"encoding/json"
@@ -68,6 +68,10 @@ func ensurePackageDependencies(path string, packages []string) (bool, error) {
 	return true, nil
 }
 
+func EnsurePackageDependencies(path string, packages []string) (bool, error) {
+	return ensurePackageDependencies(path, packages)
+}
+
 func readPackageJSON(path string) (map[string]any, error) {
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
@@ -116,6 +120,10 @@ func requiredPackages(manifest Manifest) []string {
 	}
 	sort.Strings(packages)
 	return packages
+}
+
+func RequiredPackages(manifest Manifest) []string {
+	return requiredPackages(manifest)
 }
 
 func packageName(specifier string) string {

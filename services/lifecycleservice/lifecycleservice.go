@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"golazy.dev/lazy/commands/lazyconfig"
-	commandservices "golazy.dev/lazy/commands/services"
+	"golazy.dev/lazy/services/configservice"
+	"golazy.dev/lazy/services/taskservice"
 )
 
 const (
@@ -42,7 +42,7 @@ type Process interface {
 
 type Service struct {
 	Dir               string
-	Config            lazyconfig.Config
+	Config            configservice.Config
 	Stdin             io.Reader
 	Stdout            io.Writer
 	Stderr            io.Writer
@@ -69,7 +69,7 @@ func (s Service) Start(ctx context.Context) (*Manager, error) {
 	if dir == "" {
 		dir = "."
 	}
-	inventory, err := commandservices.Inspect(dir, s.Config)
+	inventory, err := taskservice.Inspect(dir, s.Config)
 	if err != nil {
 		return nil, err
 	}
@@ -192,8 +192,8 @@ func (m *Manager) snapshotProcesses(stopping bool) []Process {
 	return processes
 }
 
-func (s Service) startService(ctx context.Context, manager *Manager, inventory commandservices.Inventory, service string) error {
-	startTask := commandservices.TaskName(service, "start")
+func (s Service) startService(ctx context.Context, manager *Manager, inventory taskservice.Inventory, service string) error {
+	startTask := taskservice.TaskName(service, "start")
 	s.status(service, StateNotReady, "Starting service.")
 	s.logf(service, "lazy: starting %s service\n", service)
 	process, err := s.starter()(s.dir(), startTask, s.output(service, "stdout"), s.output(service, "stderr"), s.stopTimeout())
@@ -206,7 +206,7 @@ func (s Service) startService(ctx context.Context, manager *Manager, inventory c
 		return context.Canceled
 	}
 
-	if commandservices.HasTask(inventory.Tasks, service, "check") {
+	if taskservice.HasTask(inventory.Tasks, service, "check") {
 		if err := s.waitForCheck(ctx, manager, service, process); err != nil {
 			return err
 		}
@@ -215,10 +215,10 @@ func (s Service) startService(ctx context.Context, manager *Manager, inventory c
 	}
 
 	for _, action := range []string{"create", "migrate"} {
-		if !commandservices.HasTask(inventory.Tasks, service, action) {
+		if !taskservice.HasTask(inventory.Tasks, service, action) {
 			continue
 		}
-		task := commandservices.TaskName(service, action)
+		task := taskservice.TaskName(service, action)
 		s.logf(service, "lazy: running %s\n", task)
 		if err := s.runner()(ctx, s.dir(), task, nil, s.Stdin, s.output(service, "stdout"), s.output(service, "stderr"), false); err != nil {
 			s.logf(service, "lazy: %s failed: %v\n", task, err)
@@ -232,7 +232,7 @@ func (s Service) startService(ctx context.Context, manager *Manager, inventory c
 }
 
 func (s Service) waitForCheck(ctx context.Context, manager *Manager, service string, process Process) error {
-	task := commandservices.TaskName(service, "check")
+	task := taskservice.TaskName(service, "check")
 	interval := s.CheckInterval
 	if interval <= 0 {
 		interval = defaultCheckInterval
@@ -367,11 +367,11 @@ func (s Service) logf(service string, format string, args ...any) {
 }
 
 func startName(service string) string {
-	return commandservices.TaskName(service, "start")
+	return taskservice.TaskName(service, "start")
 }
 
 func runTask(ctx context.Context, dir string, task string, args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer, capture bool) error {
-	command, runArgs, env := commandservices.TaskCommand(task, args)
+	command, runArgs, env := taskservice.TaskCommand(task, args)
 	cmd := exec.CommandContext(ctx, command, runArgs...)
 	cmd.Dir = dir
 	cmd.Stdin = stdin
@@ -404,7 +404,7 @@ type taskProcess struct {
 }
 
 func startTask(dir string, task string, stdout io.Writer, stderr io.Writer, stopTimeout time.Duration) (Process, error) {
-	command, args, env := commandservices.TaskCommand(task, nil)
+	command, args, env := taskservice.TaskCommand(task, nil)
 	cmd := exec.Command(command, args...)
 	cmd.Dir = dir
 	cmd.Stdout = stdout

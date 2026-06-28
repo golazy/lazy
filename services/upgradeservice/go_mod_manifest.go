@@ -1,4 +1,4 @@
-package upgrade
+package upgradeservice
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"golang.org/x/mod/modfile"
-	"golazy.dev/lazy/commands"
+	"golazy.dev/lazy/services/execservice"
 )
 
 type upgradeGoModManifest struct {
@@ -107,7 +107,7 @@ func (e stepExecutor) runGoGet(spec string) error {
 		return nil
 	}
 	fmt.Fprintf(e.stdout, "  running go get %s\n", spec)
-	if err := e.runner("go", []string{"get", spec}, commands.Options{
+	if err := e.runner("go", []string{"get", spec}, execservice.Options{
 		Dir:    e.dir,
 		Stdout: e.stdout,
 		Stderr: e.stderr,

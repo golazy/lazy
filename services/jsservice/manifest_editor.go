@@ -1,4 +1,4 @@
-package jscommand
+package jsservice
 
 import (
 	"bytes"
@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"golazy.dev/lazy/commands"
+	"golazy.dev/lazy/services/execservice"
 )
 
 type ManifestEditor struct {
@@ -20,8 +20,8 @@ type ManifestEditor struct {
 	dirty            bool
 	closed           bool
 
-	Runner  commands.Runner
-	Mise    commands.OutputRunner
+	Runner  execservice.Runner
+	Mise    execservice.OutputRunner
 	Bundler Bundler
 }
 
@@ -220,6 +220,10 @@ func cloneManifest(manifest Manifest) Manifest {
 		clone.Entrypoints[index] = cloneEntrypoint(entrypoint)
 	}
 	return clone
+}
+
+func CloneManifest(manifest Manifest) Manifest {
+	return cloneManifest(manifest)
 }
 
 func cloneEntrypoint(entrypoint Entrypoint) Entrypoint {

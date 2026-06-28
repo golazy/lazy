@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"io"
 	"time"
-
-	tailwindcommand "golazy.dev/lazy/commands/tailwind"
 )
 
 type Result struct {
@@ -31,7 +29,7 @@ func (s Service) Build(ctx context.Context, stdout io.Writer, stderr io.Writer) 
 	if stderr == nil {
 		stderr = &output
 	}
-	code, err := (tailwindcommand.Command{
+	code, err := (Command{
 		Dir:    s.Root,
 		Input:  s.Input,
 		Output: s.Output,

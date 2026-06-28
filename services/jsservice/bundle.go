@@ -1,4 +1,4 @@
-package jscommand
+package jsservice
 
 import (
 	"bytes"

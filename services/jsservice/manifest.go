@@ -1,4 +1,4 @@
-package jscommand
+package jsservice
 
 import (
 	"fmt"
@@ -240,6 +240,10 @@ func defaultManifest() Manifest {
 			Target: "es2020",
 		},
 	}
+}
+
+func DefaultManifest() Manifest {
+	return defaultManifest()
 }
 
 func assignManifestValue(manifest *Manifest, entries map[string]int, section, key, rawValue string) error {

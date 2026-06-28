@@ -16,8 +16,8 @@ import (
 	"sync"
 	"time"
 
-	"golazy.dev/lazy/commands/appcmd"
-	"golazy.dev/lazy/commands/gowork"
+	"golazy.dev/lazy/services/appservice"
+	"golazy.dev/lazy/services/workspaceservice"
 )
 
 const defaultStopTimeout = 2 * time.Second
@@ -318,7 +318,7 @@ func (c Config) Build(ctx context.Context, tmpDir string, buildNumber int) Build
 	binary := filepath.Join(tmpDir, "app-"+strconv.Itoa(buildNumber)+exeSuffix())
 
 	var output bytes.Buffer
-	workspaceActive, err := gowork.Active(c.Root, c.GoWork)
+	workspaceActive, err := workspaceservice.Active(c.Root, c.GoWork)
 	if err != nil {
 		err = fmt.Errorf("inspect Go workspace: %w", err)
 	} else if !workspaceActive {
@@ -330,9 +330,9 @@ func (c Config) Build(ctx context.Context, tmpDir string, buildNumber int) Build
 	}
 	if err == nil {
 		var buildFlags []string
-		buildFlags, err = appcmd.LazyDevBuildFlags(c.Root, c.ViewPath, c.PublicPath)
+		buildFlags, err = appservice.LazyDevBuildFlags(c.Root, c.ViewPath, c.PublicPath)
 		if err == nil {
-			args := appcmd.GoBuildArgs("lazydev", filepath.ToSlash(c.CommandPath), binary, buildFlags...)
+			args := appservice.GoBuildArgs("lazydev", filepath.ToSlash(c.CommandPath), binary, buildFlags...)
 			build := exec.CommandContext(ctx, "go", args...)
 			build.Dir = c.Root
 			build.Stdout = &output

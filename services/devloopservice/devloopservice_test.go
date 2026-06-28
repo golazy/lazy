@@ -1,4 +1,4 @@
-package run
+package devloopservice
 
 import (
 	"bytes"
@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -23,6 +24,16 @@ func TestNormalizeListenAddr(t *testing.T) {
 		if got := normalizeListenAddr(input); got != want {
 			t.Fatalf("normalizeListenAddr(%q) = %q, want %q", input, got, want)
 		}
+	}
+}
+
+func writeFile(t *testing.T, filename string, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(filename), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filename, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }
 

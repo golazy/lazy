@@ -1,4 +1,4 @@
-package run
+package devloopservice
 
 import (
 	"bytes"
@@ -13,10 +13,10 @@ import (
 	"sync"
 	"time"
 
-	"golazy.dev/lazy/commands/appcmd"
-	"golazy.dev/lazy/commands/lazyconfig"
 	appinit "golazy.dev/lazy/init"
+	"golazy.dev/lazy/services/appservice"
 	"golazy.dev/lazy/services/buildservice"
+	"golazy.dev/lazy/services/configservice"
 	"golazy.dev/lazy/services/devserver"
 	"golazy.dev/lazy/services/jsservice"
 	"golazy.dev/lazy/services/lifecycleservice"
@@ -158,7 +158,7 @@ type devRunner struct {
 	publicPath    string
 	listenAddr    string
 	goWork        string
-	serviceConfig lazyconfig.Config
+	serviceConfig configservice.Config
 	stdin         io.Reader
 	stdout        io.Writer
 	stderr        io.Writer
@@ -167,6 +167,36 @@ type devRunner struct {
 	pollInterval   time.Duration
 	debounce       time.Duration
 	startupTimeout time.Duration
+}
+
+type Config struct {
+	Root          string
+	CommandPath   string
+	ViewPath      string
+	PublicPath    string
+	ListenAddr    string
+	GoWork        string
+	ServiceConfig configservice.Config
+	Stdin         io.Reader
+	Stdout        io.Writer
+	Stderr        io.Writer
+	ForceKill     <-chan struct{}
+}
+
+func (c Config) Run(ctx context.Context) (int, error) {
+	return (&devRunner{
+		root:          c.Root,
+		commandPath:   c.CommandPath,
+		viewPath:      c.ViewPath,
+		publicPath:    c.PublicPath,
+		listenAddr:    c.ListenAddr,
+		goWork:        c.GoWork,
+		serviceConfig: c.ServiceConfig,
+		stdin:         c.Stdin,
+		stdout:        c.Stdout,
+		stderr:        c.Stderr,
+		forceKill:     c.ForceKill,
+	}).run(ctx)
 }
 
 func (d *devRunner) run(ctx context.Context) (int, error) {
@@ -822,9 +852,9 @@ func classifyDevelopmentChange(viewPath string, publicPath string, changed []str
 	hasPublic := false
 	for _, path := range changed {
 		switch {
-		case isActiveRootPath(path, viewPath, appcmd.DefaultViewPath):
+		case isActiveRootPath(path, viewPath, appservice.DefaultViewPath):
 			hasView = true
-		case isActiveRootPath(path, publicPath, appcmd.DefaultPublicPath):
+		case isActiveRootPath(path, publicPath, appservice.DefaultPublicPath):
 			hasPublic = true
 		default:
 			return devChangeRebuild
@@ -983,6 +1013,10 @@ func publicListenAddr(addr string, port int) string {
 		return ":" + strconv.Itoa(port)
 	}
 	return normalizedAddr
+}
+
+func PublicListenAddr(addr string, port int) string {
+	return publicListenAddr(addr, port)
 }
 
 func normalizeListenAddr(addr string) string {

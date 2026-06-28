@@ -1,4 +1,4 @@
-package upgrade
+package upgradeservice
 
 import (
 	"bytes"
@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"golazy.dev/lazy/commands"
+	"golazy.dev/lazy/services/execservice"
 )
 
 type upgradeInvocation struct {
@@ -810,9 +810,9 @@ func assertExecutable(t *testing.T, path string) {
 	}
 }
 
-func goGetRunner(t *testing.T, calls *[]upgradeInvocation) commands.Runner {
+func goGetRunner(t *testing.T, calls *[]upgradeInvocation) execservice.Runner {
 	t.Helper()
-	return func(command string, args []string, options commands.Options) error {
+	return func(command string, args []string, options execservice.Options) error {
 		if calls != nil {
 			*calls = append(*calls, upgradeInvocation{
 				command: command,
