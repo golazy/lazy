@@ -64,6 +64,12 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   while still writing content-hashed lazyshaft assets and importmap entries.
   Manifest-declared library entrypoints remain bundled.
 
+### Fixed
+
+- The development panel Traces tab now stops parent-depth walks when span data
+  contains cyclic parent links, preventing malformed `.spans` sidecars from
+  freezing the browser.
+
 ## [0.1.16] - 2026-06-27
 
 ### Added

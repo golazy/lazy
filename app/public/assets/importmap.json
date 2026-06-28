@@ -1,6 +1,6 @@
 {
   "imports": {
-    "/js/app.js": "/_golazy/assets/lazyshaft/app/app-6F5D404A.js",
+    "/js/app.js": "/_golazy/assets/lazyshaft/app/app-9CD107F3.js",
     "/js/controllers/panel_resize_controller.js": "/_golazy/assets/lazyshaft/app/controllers/panel_resize_controller-AA19D42B.js",
     "@hotwired/stimulus": "/_golazy/assets/lazyshaft/stimulus-NO4IINCF.js",
     "@hotwired/turbo": "/_golazy/assets/lazyshaft/turbo-TWHUI2X4.js"

@@ -1006,8 +1006,13 @@ function descendantSpanIDs(spans, rootID) {
 
 function visibleDepth(span, spanMap, visibleSet) {
   let depth = 0
+  const seen = new Set([span.span_id])
   let current = spanMap.get(span.parent_id)
   while (current) {
+    if (seen.has(current.span_id)) {
+      break
+    }
+    seen.add(current.span_id)
     if (visibleSet.has(current.span_id)) {
       depth += 1
     }
