@@ -81,12 +81,30 @@ type panelOutputWriter struct {
 	stream string
 }
 
+type serviceOutputWriter struct {
+	store   *buildservice.Store
+	service string
+	stream  string
+}
+
 func (w panelOutputWriter) Write(p []byte) (int, error) {
 	if w.store != nil && len(p) > 0 {
 		w.store.AddEvent(buildservice.Event{
 			Type:   buildservice.EventOutput,
 			Stream: w.stream,
 			Output: string(p),
+		})
+	}
+	return len(p), nil
+}
+
+func (w serviceOutputWriter) Write(p []byte) (int, error) {
+	if w.store != nil && len(p) > 0 {
+		w.store.AddEvent(buildservice.Event{
+			Type:    buildservice.EventOutput,
+			Stream:  w.stream,
+			Service: w.service,
+			Output:  string(p),
 		})
 	}
 	return len(p), nil
@@ -221,11 +239,22 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 	}
 
 	lifecycle, err := (lifecycleservice.Service{
-		Dir:    d.root,
-		Config: d.serviceConfig,
-		Stdin:  nil,
-		Stdout: io.MultiWriter(stdout, panelOutputWriter{store: store, stream: "stdout"}),
-		Stderr: io.MultiWriter(stderr, panelOutputWriter{store: store, stream: "stderr"}),
+		Dir:      d.root,
+		Config:   d.serviceConfig,
+		Stdin:    nil,
+		Stdout:   stdout,
+		Stderr:   stderr,
+		Register: store.SetServices,
+		Status: func(service string, state lifecycleservice.State, message string) {
+			store.UpdateService(service, serviceState(state), message)
+		},
+		Output: func(service string, stream string) io.Writer {
+			target := stdout
+			if stream == "stderr" {
+				target = stderr
+			}
+			return io.MultiWriter(target, serviceOutputWriter{store: store, service: service, stream: stream})
+		},
 	}).Start(ctx)
 	if err != nil {
 		return 1, err
@@ -566,6 +595,17 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 
 func shouldExitAfterApplicationDone(ctx context.Context, err error) bool {
 	return ctx.Err() != nil || err == nil || buildservice.Interrupted(err)
+}
+
+func serviceState(state lifecycleservice.State) buildservice.ServiceState {
+	switch state {
+	case lifecycleservice.StateReady:
+		return buildservice.ServiceReady
+	case lifecycleservice.StateStopped:
+		return buildservice.ServiceStopped
+	default:
+		return buildservice.ServiceNotReady
+	}
 }
 
 func waitForLifecycle(ctx context.Context, lifecycle *lifecycleservice.Manager) error {

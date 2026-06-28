@@ -26,6 +26,14 @@ type TaskRunner func(ctx context.Context, dir string, task string, args []string
 
 type Starter func(dir string, task string, stdout io.Writer, stderr io.Writer, stopTimeout time.Duration) (Process, error)
 
+type State string
+
+const (
+	StateStopped  State = "stopped"
+	StateNotReady State = "not_ready"
+	StateReady    State = "ready"
+)
+
 type Process interface {
 	Done() <-chan error
 	Stop()
@@ -40,6 +48,9 @@ type Service struct {
 	Stderr            io.Writer
 	Runner            TaskRunner
 	Starter           Starter
+	Register          func([]string)
+	Status            func(service string, state State, message string)
+	Output            func(service string, stream string) io.Writer
 	CheckInterval     time.Duration
 	CheckWarningDelay time.Duration
 	StopTimeout       time.Duration
@@ -72,6 +83,7 @@ func (s Service) Start(ctx context.Context) (*Manager, error) {
 		manager.ready <- nil
 		return manager, nil
 	}
+	s.register(inventory.Services)
 
 	var wg sync.WaitGroup
 	errs := make(chan error, len(inventory.Services))
@@ -182,9 +194,11 @@ func (m *Manager) snapshotProcesses(stopping bool) []Process {
 
 func (s Service) startService(ctx context.Context, manager *Manager, inventory commandservices.Inventory, service string) error {
 	startTask := commandservices.TaskName(service, "start")
-	s.logf("lazy: starting %s service\n", service)
-	process, err := s.starter()(s.dir(), startTask, s.stdout(), s.stderr(), s.stopTimeout())
+	s.status(service, StateNotReady, "Starting service.")
+	s.logf(service, "lazy: starting %s service\n", service)
+	process, err := s.starter()(s.dir(), startTask, s.output(service, "stdout"), s.output(service, "stderr"), s.stopTimeout())
 	if err != nil {
+		s.status(service, StateStopped, err.Error())
 		return fmt.Errorf("%s:start: %w", service, err)
 	}
 	if !manager.addProcess(service, process) {
@@ -196,6 +210,8 @@ func (s Service) startService(ctx context.Context, manager *Manager, inventory c
 		if err := s.waitForCheck(ctx, manager, service, process); err != nil {
 			return err
 		}
+	} else {
+		s.status(service, StateReady, "Service started.")
 	}
 
 	for _, action := range []string{"create", "migrate"} {
@@ -203,12 +219,12 @@ func (s Service) startService(ctx context.Context, manager *Manager, inventory c
 			continue
 		}
 		task := commandservices.TaskName(service, action)
-		s.logf("lazy: running %s\n", task)
-		if err := s.runner()(ctx, s.dir(), task, nil, s.Stdin, s.stdout(), s.stderr(), false); err != nil {
-			s.logf("lazy: %s failed: %v\n", task, err)
+		s.logf(service, "lazy: running %s\n", task)
+		if err := s.runner()(ctx, s.dir(), task, nil, s.Stdin, s.output(service, "stdout"), s.output(service, "stderr"), false); err != nil {
+			s.logf(service, "lazy: %s failed: %v\n", task, err)
 			continue
 		}
-		s.logf("lazy: %s finished\n", task)
+		s.logf(service, "lazy: %s finished\n", task)
 	}
 
 	go s.watchProcess(manager, service, process)
@@ -235,7 +251,8 @@ func (s Service) waitForCheck(ctx context.Context, manager *Manager, service str
 	for {
 		err := s.runner()(ctx, s.dir(), task, nil, s.Stdin, io.Discard, s.stderr(), true)
 		if err == nil {
-			s.logf("lazy: %s is ready\n", service)
+			s.status(service, StateReady, "Service is ready.")
+			s.logf(service, "lazy: %s is ready\n", service)
 			return nil
 		}
 
@@ -245,14 +262,16 @@ func (s Service) waitForCheck(ctx context.Context, manager *Manager, service str
 		case processErr := <-process.Done():
 			manager.removeProcess(service, process)
 			if processErr == nil {
+				s.status(service, StateStopped, fmt.Sprintf("%s exited before readiness.", startName(service)))
 				return fmt.Errorf("%s:start exited before %s succeeded", service, task)
 			}
+			s.status(service, StateStopped, processErr.Error())
 			return fmt.Errorf("%s:start exited before %s succeeded: %w", service, task, processErr)
 		case <-warning.C:
 			if !warned {
-				s.logf("lazy: %s is still failing after %s; check the service output. lazy will keep checking.\n", task, warningDelay.Round(time.Millisecond))
+				s.logf(service, "lazy: %s is still failing after %s; check the service output. lazy will keep checking.\n", task, warningDelay.Round(time.Millisecond))
 				if message := strings.TrimSpace(err.Error()); message != "" {
-					s.logf("lazy: latest %s error: %s\n", task, message)
+					s.logf(service, "lazy: latest %s error: %s\n", task, message)
 				}
 				warned = true
 			}
@@ -268,10 +287,12 @@ func (s Service) watchProcess(manager *Manager, service string, process Process)
 		return
 	}
 	if err != nil {
-		s.logf("lazy: %s service exited: %v\n", service, err)
+		s.status(service, StateStopped, err.Error())
+		s.logf(service, "lazy: %s service exited: %v\n", service, err)
 		return
 	}
-	s.logf("lazy: %s service exited\n", service)
+	s.status(service, StateStopped, "Service stopped.")
+	s.logf(service, "lazy: %s service exited\n", service)
 }
 
 func (s Service) dir() string {
@@ -295,6 +316,31 @@ func (s Service) stderr() io.Writer {
 	return s.Stderr
 }
 
+func (s Service) output(service string, stream string) io.Writer {
+	if s.Output != nil {
+		return s.Output(service, stream)
+	}
+	if stream == "stderr" {
+		return s.stderr()
+	}
+	return s.stdout()
+}
+
+func (s Service) register(services []string) {
+	if s.Register != nil {
+		s.Register(append([]string(nil), services...))
+	}
+	for _, service := range services {
+		s.status(service, StateNotReady, "Waiting to start.")
+	}
+}
+
+func (s Service) status(service string, state State, message string) {
+	if s.Status != nil {
+		s.Status(service, state, message)
+	}
+}
+
 func (s Service) stopTimeout() time.Duration {
 	if s.StopTimeout > 0 {
 		return s.StopTimeout
@@ -316,8 +362,12 @@ func (s Service) starter() Starter {
 	return startTask
 }
 
-func (s Service) logf(format string, args ...any) {
-	_, _ = fmt.Fprintf(s.stderr(), format, args...)
+func (s Service) logf(service string, format string, args ...any) {
+	_, _ = fmt.Fprintf(s.output(service, "stderr"), format, args...)
+}
+
+func startName(service string) string {
+	return commandservices.TaskName(service, "start")
 }
 
 func runTask(ctx context.Context, dir string, task string, args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer, capture bool) error {

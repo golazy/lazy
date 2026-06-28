@@ -13,6 +13,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `dump` / `load` mise tasks with files under `datasets/<dataset>`.
 - The development panel now includes a Jobs tab that proxies the application's
   lazyjobs control-plane state.
+- The development panel now includes a Services tab with per-service output and
+  status-bar service indicators.
 
 ### Changed
 

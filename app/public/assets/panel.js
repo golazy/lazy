@@ -2,6 +2,8 @@ const panelPath = "/_golazy/"
 const embeddedPanelID = "golazy-dev-panel"
 const embeddedPanelHeight = "320px"
 const embeddedPanelClosedKey = "golazy:devpanel:closed"
+let selectedService = ""
+let currentPanelState = null
 
 installEmbeddedPanel()
 installTurboPersistence()
@@ -19,8 +21,10 @@ const panel = document.querySelector("[data-panel]")
 if (panel) {
   installPanelStimulus().catch(error => console.error("GoLazy panel Stimulus failed", error))
   installPanelTabs()
+  installServiceNavigation()
   installCacheActions()
   installPanelClose()
+  refreshPanelState()
   refreshCache()
   refreshJobs()
 
@@ -29,7 +33,7 @@ if (panel) {
   stateSource.addEventListener("output", appendEvent)
   stateSource.addEventListener("file_change", refreshState)
   stateSource.addEventListener("reload", appendEvent)
-  stateSource.addEventListener("manual", appendEvent)
+  stateSource.addEventListener("manual", refreshState)
 }
 
 function installEmbeddedPanel() {
@@ -184,14 +188,19 @@ function selectPanelTab(tab) {
 
 async function refreshState(event) {
   appendEvent(event)
-  const response = await fetch("/_golazy/state", { headers: { Accept: "application/json" } })
-  if (!response.ok) return
-  renderState(await response.json())
+  await refreshPanelState()
   refreshCache()
   refreshJobs()
 }
 
+async function refreshPanelState() {
+  const response = await fetch("/_golazy/state", { headers: { Accept: "application/json" } })
+  if (!response.ok) return
+  renderState(await response.json())
+}
+
 function renderState(state) {
+  currentPanelState = state || {}
   panel.dataset.state = state.state || ""
   for (const chip of document.querySelectorAll("[data-state-chip]")) {
     chip.dataset.stateValue = state.state || ""
@@ -210,6 +219,133 @@ function renderState(state) {
     item.append(code)
     return item
   }, "No recent changes.")
+  renderServices(state.services || [], state.events || [])
+}
+
+function installServiceNavigation() {
+  document.addEventListener("click", event => {
+    const target = event.target.closest("[data-service-select], [data-service-status]")
+    if (!target) return
+    const service = target.getAttribute("data-service-select") || target.getAttribute("data-service-name")
+    if (!service) return
+    selectService(service)
+    selectPanelTab("services")
+  })
+}
+
+function renderServices(services, events) {
+  if (!selectedService || !services.some(service => service.name === selectedService)) {
+    selectedService = services[0]?.name || ""
+  }
+  renderServiceList(services)
+  renderServiceStatuses(services)
+  renderServiceOutput(events)
+}
+
+function renderServiceList(services) {
+  for (const node of document.querySelectorAll("[data-service-list]")) {
+    node.replaceChildren()
+    if (!services.length) {
+      const item = document.createElement("li")
+      item.className = "muted"
+      item.textContent = "No services discovered."
+      node.append(item)
+      continue
+    }
+    for (const service of services) {
+      const item = document.createElement("li")
+      const button = serviceButton(service, "data-service-select")
+      button.setAttribute("aria-selected", String(service.name === selectedService))
+      item.append(button)
+      node.append(item)
+    }
+  }
+}
+
+function renderServiceStatuses(services) {
+  for (const node of document.querySelectorAll("[data-service-statuses]")) {
+    node.replaceChildren()
+    if (!services.length) {
+      const empty = document.createElement("span")
+      empty.className = "muted"
+      empty.setAttribute("data-service-status-empty", "")
+      empty.textContent = "No services"
+      node.append(empty)
+      continue
+    }
+    for (const service of services) {
+      const button = serviceButton(service, "data-service-name")
+      button.classList.add("service-status-button")
+      button.setAttribute("data-service-status", "")
+      button.setAttribute("aria-current", String(service.name === selectedService))
+      node.append(button)
+    }
+  }
+}
+
+function serviceButton(service, nameAttribute) {
+  const button = document.createElement("button")
+  button.type = "button"
+  button.setAttribute(nameAttribute, service.name || "")
+  button.setAttribute("data-service-state", service.state || "stopped")
+  if (service.message) {
+    button.title = `${service.name}: ${service.message}`
+  }
+  const dot = document.createElement("span")
+  dot.className = "service-dot"
+  const label = document.createElement("span")
+  label.textContent = service.name || ""
+  button.append(dot, label)
+  return button
+}
+
+function selectService(service) {
+  selectedService = service || ""
+  for (const button of document.querySelectorAll("[data-service-select]")) {
+    button.setAttribute("aria-selected", String(button.getAttribute("data-service-select") === selectedService))
+  }
+  for (const button of document.querySelectorAll("[data-service-status]")) {
+    button.setAttribute("aria-current", String(button.getAttribute("data-service-name") === selectedService))
+  }
+  renderServiceOutput(currentPanelState?.events || [])
+}
+
+function renderServiceOutput(events) {
+  const outputEvents = serviceOutputEvents(events, selectedService)
+  textAll("[data-service-output-title]", selectedService ? `${selectedService} output` : "Select a service")
+  textAll("[data-service-output-count]", `${outputEvents.length} ${outputEvents.length === 1 ? "message" : "messages"}`)
+  table("[data-service-output]", outputEvents, serviceOutputRow, 3, selectedService ? "No output recorded for this service." : "Select a service to inspect output.")
+}
+
+function serviceOutputEvents(events, service) {
+  if (!service) return []
+  const rows = []
+  for (const event of events || []) {
+    if (event.type !== "output" || event.service !== service || !event.output) continue
+    for (const line of String(event.output).split(/\r?\n/)) {
+      if (line === "") continue
+      rows.push({
+        stream: event.stream || "",
+        time: event.time,
+        message: line,
+      })
+    }
+  }
+  return rows
+}
+
+function serviceOutputRow(event) {
+  const row = document.createElement("tr")
+  for (const value of [
+    event.stream,
+    formatDateTime(event.time),
+    event.message,
+  ]) {
+    const cell = document.createElement("td")
+    cell.textContent = value ?? ""
+    row.append(cell)
+  }
+  return row
 }
 
 function installCacheActions() {
@@ -342,6 +478,7 @@ function appendEvent(event) {
     return
   }
   appendOutput(payload)
+  appendServiceOutput(payload)
 
   const target = document.querySelector("[data-panel-events]")
   if (!target) return
@@ -360,11 +497,39 @@ function appendEvent(event) {
 }
 
 function appendOutput(payload) {
-  if (payload?.type !== "output" || !payload.output) return
+  if (payload?.type !== "output" || payload.service || !payload.output) return
   for (const node of document.querySelectorAll("[data-panel-output]")) {
     node.textContent += payload.output
     node.scrollTop = node.scrollHeight
   }
+}
+
+function appendServiceOutput(payload) {
+  if (payload?.type !== "output" || !payload.service || !payload.output) return
+  if (!selectedService) {
+    selectedService = payload.service
+  }
+  if (payload.service !== selectedService) return
+  const rows = []
+  for (const line of String(payload.output).split(/\r?\n/)) {
+    if (line === "") continue
+    rows.push({
+      stream: payload.stream || "",
+      time: payload.time,
+      message: line,
+    })
+  }
+  const target = document.querySelector("[data-service-output]")
+  if (!target || !rows.length) return
+  target.querySelector(".empty-cell")?.closest("tr")?.remove()
+  for (const row of rows) {
+    target.append(serviceOutputRow(row))
+  }
+  while (target.children.length > 300) {
+    target.firstElementChild.remove()
+  }
+  textAll("[data-service-output-title]", `${selectedService} output`)
+  textAll("[data-service-output-count]", `${target.children.length} ${target.children.length === 1 ? "message" : "messages"}`)
 }
 
 function eventTime(value) {

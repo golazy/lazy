@@ -28,7 +28,9 @@ When an application declares or exposes local services, `lazy` starts those
 services as managed subprocesses after the development proxy is already
 serving its status page. Service commands are ordinary non-interactive
 processes; their stdout and stderr stay attached to the terminal and are
-recorded by the development panel.
+recorded by the development panel. The panel's Services tab shows per-service
+stdout and stderr, and the status bar shows each service with a stopped,
+not-ready, or ready indicator that opens the Services tab when clicked.
 
 Example `lazy.toml`:
 

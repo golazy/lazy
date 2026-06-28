@@ -156,6 +156,37 @@ func TestCreateFailureIsReportedAndMigrateStillRuns(t *testing.T) {
 	}
 }
 
+func TestServiceWithoutCheckIsMarkedReadyAfterStart(t *testing.T) {
+	dir := t.TempDir()
+	writeTask(t, dir, "postgres/start")
+
+	var mu sync.Mutex
+	var states []State
+	manager, err := (Service{
+		Dir:     dir,
+		Starter: fakeStarter,
+		Status: func(_ string, state State, _ string) {
+			mu.Lock()
+			defer mu.Unlock()
+			states = append(states, state)
+		},
+	}).Start(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Stop()
+
+	if err := waitReady(t, manager); err != nil {
+		t.Fatal(err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if !slices.Contains(states, StateReady) {
+		t.Fatalf("states = %#v, want ready for service without check", states)
+	}
+}
+
 func waitReady(t *testing.T, manager *Manager) error {
 	t.Helper()
 	select {

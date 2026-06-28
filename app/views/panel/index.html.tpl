@@ -4,6 +4,7 @@
       <button type="button" data-tab="requests" aria-selected="false">Requests</button>
       <button type="button" data-tab="console" aria-selected="false">Console</button>
       <button type="button" data-tab="logs" aria-selected="true">App Logs</button>
+      <button type="button" data-tab="services" aria-selected="false">Services</button>
       <button type="button" data-tab="traces" aria-selected="false">Traces</button>
       <button type="button" data-tab="routes" aria-selected="false">Routes</button>
       <button type="button" data-tab="jobs" aria-selected="false">Jobs</button>
@@ -170,6 +171,50 @@
     </div>
   </section>
 
+  <section class="tool-view services-view" data-view="services">
+    <div class="filter-toolbar">
+      <span>Services</span>
+      <span class="toolbar-divider"></span>
+      <span class="toolbar-count" data-service-output-title>Select a service</span>
+      <span class="toolbar-spacer"></span>
+      <span class="toolbar-count" data-service-output-count>0 messages</span>
+    </div>
+
+    <div class="services-layout" data-services-panel>
+      <aside class="services-sidebar" aria-label="Development services">
+        <ul class="service-list" data-service-list>
+          {{range .state.Services}}
+            <li>
+              <button type="button" data-service-select="{{.Name}}" data-service-state="{{.State}}">
+                <span class="service-dot"></span>
+                <span>{{.Name}}</span>
+              </button>
+            </li>
+          {{else}}
+            <li class="muted">No services discovered.</li>
+          {{end}}
+        </ul>
+      </aside>
+
+      <section class="service-output-pane" aria-label="Service output">
+        <table class="data-grid service-output-grid">
+          <thead>
+            <tr>
+              <th>stdout/stderr</th>
+              <th>timestamp</th>
+              <th>message</th>
+            </tr>
+          </thead>
+          <tbody data-service-output>
+            <tr>
+              <td colspan="3" class="empty-cell">Select a service to inspect output.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </div>
+  </section>
+
   <section class="tool-view" data-view="traces">
     <div class="filter-toolbar">
       <button type="button" class="toolbar-button" disabled>Capture trace</button>
@@ -320,5 +365,16 @@
     <span>App <code data-panel-app-addr>{{.state.AppAddr}}</code></span>
     <span>Control <code data-panel-control-addr>{{.state.ControlPlaneAddr}}</code></span>
     <span data-cache-state>Cache unknown</span>
+    <span class="status-spacer"></span>
+    <div class="service-status-strip" data-service-statuses aria-label="Development service status">
+      {{range .state.Services}}
+        <button type="button" class="service-status-button" data-service-status data-service-name="{{.Name}}" data-service-state="{{.State}}">
+          <span class="service-dot"></span>
+          <span>{{.Name}}</span>
+        </button>
+      {{else}}
+        <span class="muted" data-service-status-empty>No services</span>
+      {{end}}
+    </div>
   </footer>
 </main>

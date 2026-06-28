@@ -320,6 +320,10 @@ button:disabled:hover {
   flex: 1 1 auto;
 }
 
+.status-spacer {
+  flex: 1 1 auto;
+}
+
 .toolbar-count {
   color: var(--text-muted);
   white-space: nowrap;
@@ -354,6 +358,23 @@ button:disabled:hover {
 .state-chip[data-state-value="run_failed"] .state-dot,
 .state-chip[data-state-value="reload_failed"] .state-dot {
   background: var(--error);
+}
+
+.service-dot {
+  background: var(--error);
+  border: 1px solid color-mix(in srgb, currentColor 28%, transparent);
+  border-radius: 50%;
+  flex: 0 0 auto;
+  height: 9px;
+  width: 9px;
+}
+
+[data-service-state="ready"] .service-dot {
+  background: var(--ok);
+}
+
+[data-service-state="not_ready"] .service-dot {
+  background: var(--warn);
 }
 
 .scope-filter {
@@ -577,6 +598,90 @@ button:disabled:hover {
   grid-column: 1 / span 2;
 }
 
+.services-layout {
+  display: grid;
+  grid-template-columns: minmax(10rem, 13rem) minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.services-sidebar {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  padding: 4px;
+}
+
+.service-list {
+  display: grid;
+  gap: 2px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.service-list button {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+  height: 27px;
+  justify-content: flex-start;
+  min-width: 0;
+  padding: 0 8px;
+  text-align: left;
+  width: 100%;
+}
+
+.service-list button:hover {
+  background: var(--row-hover);
+}
+
+.service-list button[aria-selected="true"] {
+  background: var(--sys-color-tonal-container);
+  border-color: var(--sys-color-primary);
+  color: var(--sys-color-on-tonal-container);
+}
+
+.service-list button span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.service-output-pane {
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+}
+
+.service-output-grid th:nth-child(1),
+.service-output-grid td:nth-child(1) {
+  width: 7rem;
+}
+
+.service-output-grid th:nth-child(2),
+.service-output-grid td:nth-child(2) {
+  width: 11rem;
+}
+
+.service-output-grid th:nth-child(3),
+.service-output-grid td:nth-child(3) {
+  width: auto;
+}
+
+.service-output-grid td:nth-child(3) {
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: pre-wrap;
+}
+
 .detail-list,
 .cache-stats {
   display: grid;
@@ -696,6 +801,50 @@ button:disabled:hover {
   max-height: 12rem;
   overflow: auto;
   padding-top: 8px;
+}
+
+.service-status-strip {
+  align-items: center;
+  display: flex;
+  flex: 0 1 auto;
+  gap: 4px;
+  justify-content: flex-end;
+  min-width: 0;
+  overflow: auto hidden;
+  padding: 0 6px 0 8px;
+}
+
+.service-status-button {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--text);
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  height: 20px;
+  max-width: 12rem;
+  min-width: 0;
+  padding: 0 7px;
+}
+
+.service-status-button:hover,
+.service-status-button[aria-current="true"] {
+  background: var(--row-hover);
+  border-color: var(--border);
+}
+
+.service-status-button .service-dot {
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
+.service-status-button span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .muted,

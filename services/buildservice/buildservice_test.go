@@ -1,9 +1,53 @@
 package buildservice
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
+
+func TestStorePreservesServicesAcrossSnapshotUpdates(t *testing.T) {
+	store := NewStore(10)
+	store.SetServices([]string{"postgres", "minio"})
+	store.UpdateService("postgres", ServiceReady, "Service is ready.")
+
+	store.Update(Snapshot{
+		State:      StateRunning,
+		Message:    "Application is running.",
+		BuildCount: 1,
+	})
+
+	snapshot := store.Snapshot()
+	want := []ServiceSnapshot{
+		{Name: "postgres", State: ServiceReady, Message: "Service is ready."},
+		{Name: "minio", State: ServiceNotReady},
+	}
+	if !reflect.DeepEqual(snapshot.Services, want) {
+		t.Fatalf("services = %#v, want %#v", snapshot.Services, want)
+	}
+}
+
+func TestStoreRecordsServiceTaggedOutputEvents(t *testing.T) {
+	store := NewStore(10)
+	store.SetServices([]string{"postgres"})
+	store.UpdateService("postgres", ServiceReady, "Service is ready.")
+	store.AddEvent(Event{
+		Type:    EventOutput,
+		Service: "postgres",
+		Stream:  "stderr",
+		Output:  "ready\n",
+	})
+
+	events := store.Snapshot().Events
+	event := events[len(events)-1]
+	if event.Service != "postgres" || event.Stream != "stderr" || event.Output != "ready\n" {
+		t.Fatalf("event = %#v, want service output", event)
+	}
+	services := store.Snapshot().Services
+	if len(services) != 1 || services[0].State != ServiceReady {
+		t.Fatalf("services = %#v, want service state preserved", services)
+	}
+}
 
 func TestDevelopmentAppEnvEnablesTelemetryAndDeduplicatesValues(t *testing.T) {
 	env := developmentAppEnv([]string{

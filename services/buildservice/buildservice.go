@@ -45,18 +45,33 @@ const (
 	EventManual     EventType = "manual"
 )
 
+type ServiceState string
+
+const (
+	ServiceStopped  ServiceState = "stopped"
+	ServiceNotReady ServiceState = "not_ready"
+	ServiceReady    ServiceState = "ready"
+)
+
 type Event struct {
 	Type      EventType `json:"type"`
 	Time      time.Time `json:"time"`
 	State     State     `json:"state,omitempty"`
 	Message   string    `json:"message,omitempty"`
 	Stream    string    `json:"stream,omitempty"`
+	Service   string    `json:"service,omitempty"`
 	Output    string    `json:"output,omitempty"`
 	Changed   []string  `json:"changed,omitempty"`
 	Build     int       `json:"build,omitempty"`
 	Duration  string    `json:"duration,omitempty"`
 	AppAddr   string    `json:"app_addr,omitempty"`
 	PanelAddr string    `json:"panel_addr,omitempty"`
+}
+
+type ServiceSnapshot struct {
+	Name    string       `json:"name"`
+	State   ServiceState `json:"state"`
+	Message string       `json:"message,omitempty"`
 }
 
 type Action string
@@ -123,18 +138,19 @@ func (a Actions) Enqueue(ctx context.Context, action Action) error {
 }
 
 type Snapshot struct {
-	State            State     `json:"state"`
-	Message          string    `json:"message"`
-	CommandPath      string    `json:"command_path"`
-	WatchedRoot      string    `json:"watched_root"`
-	BuildCount       int       `json:"build_count"`
-	Duration         string    `json:"duration,omitempty"`
-	StartedAt        time.Time `json:"started_at,omitempty"`
-	AppAddr          string    `json:"app_addr,omitempty"`
-	ControlPlaneAddr string    `json:"control_plane_addr,omitempty"`
-	Changed          []string  `json:"changed,omitempty"`
-	Output           string    `json:"output,omitempty"`
-	Events           []Event   `json:"events,omitempty"`
+	State            State             `json:"state"`
+	Message          string            `json:"message"`
+	CommandPath      string            `json:"command_path"`
+	WatchedRoot      string            `json:"watched_root"`
+	BuildCount       int               `json:"build_count"`
+	Duration         string            `json:"duration,omitempty"`
+	StartedAt        time.Time         `json:"started_at,omitempty"`
+	AppAddr          string            `json:"app_addr,omitempty"`
+	ControlPlaneAddr string            `json:"control_plane_addr,omitempty"`
+	Changed          []string          `json:"changed,omitempty"`
+	Output           string            `json:"output,omitempty"`
+	Services         []ServiceSnapshot `json:"services,omitempty"`
+	Events           []Event           `json:"events,omitempty"`
 }
 
 type Store struct {
@@ -160,7 +176,41 @@ func (s *Store) Update(snapshot Snapshot) {
 }
 
 func (s *Store) AddEvent(event Event) {
-	s.record(s.Snapshot(), event)
+	s.recordEvent(event)
+}
+
+func (s *Store) SetServices(names []string) {
+	snapshot := s.Snapshot()
+	services := make([]ServiceSnapshot, 0, len(names))
+	for _, name := range names {
+		if name == "" {
+			continue
+		}
+		services = append(services, ServiceSnapshot{Name: name, State: ServiceNotReady})
+	}
+	snapshot.Services = services
+	s.record(snapshot, Event{Type: EventManual, Message: "Development services discovered."})
+}
+
+func (s *Store) UpdateService(name string, state ServiceState, message string) {
+	if name == "" {
+		return
+	}
+	snapshot := s.Snapshot()
+	found := false
+	for index := range snapshot.Services {
+		if snapshot.Services[index].Name != name {
+			continue
+		}
+		snapshot.Services[index].State = state
+		snapshot.Services[index].Message = message
+		found = true
+		break
+	}
+	if !found {
+		snapshot.Services = append(snapshot.Services, ServiceSnapshot{Name: name, State: state, Message: message})
+	}
+	s.record(snapshot, Event{Type: EventManual, Service: name, Message: message})
 }
 
 func (s *Store) Snapshot() Snapshot {
@@ -168,6 +218,7 @@ func (s *Store) Snapshot() Snapshot {
 	defer s.mu.RUnlock()
 	snapshot := s.snapshot
 	snapshot.Changed = append([]string(nil), snapshot.Changed...)
+	snapshot.Services = append([]ServiceSnapshot(nil), snapshot.Services...)
 	snapshot.Events = append([]Event(nil), s.events...)
 	return snapshot
 }
@@ -189,7 +240,33 @@ func (s *Store) record(snapshot Snapshot, event Event) {
 		event.Time = time.Now()
 	}
 	s.mu.Lock()
+	if snapshot.Services == nil {
+		snapshot.Services = append([]ServiceSnapshot(nil), s.snapshot.Services...)
+	}
 	s.snapshot = snapshot
+	s.events = append(s.events, event)
+	if len(s.events) > s.limit {
+		s.events = append([]Event(nil), s.events[len(s.events)-s.limit:]...)
+	}
+	listeners := make([]chan Event, 0, len(s.listeners))
+	for ch := range s.listeners {
+		listeners = append(listeners, ch)
+	}
+	s.mu.Unlock()
+
+	for _, ch := range listeners {
+		select {
+		case ch <- event:
+		default:
+		}
+	}
+}
+
+func (s *Store) recordEvent(event Event) {
+	if event.Time.IsZero() {
+		event.Time = time.Now()
+	}
+	s.mu.Lock()
 	s.events = append(s.events, event)
 	if len(s.events) > s.limit {
 		s.events = append([]Event(nil), s.events[len(s.events)-s.limit:]...)
