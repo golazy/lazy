@@ -49,9 +49,14 @@ command = "nvim"
 window = "workspace"
 ```
 
-Each service is implemented as mise tasks such as `postgres:start`,
-`postgres:kill`, `postgres:dump`, `postgres:load`, `postgres:create`, and
-`postgres:migrate`. Only `<service>:start` is required by the tmux launcher.
+Each service is implemented as mise tasks named `{service}:{action}`. For a
+stateful service such as PostgreSQL, define `postgres:start`,
+`postgres:check`, `postgres:create`, `postgres:dump FILE`,
+`postgres:load FILE`, and `postgres:migrate`. `postgres:start` is mandatory
+and must run in the foreground so SIGINT stops it. `postgres:check` should
+return status 0 only when the service is active and ready for dependent
+processes; the `lazy` command may poll it before starting the app. Add
+`postgres:kill` only as an escape hatch for stale local processes.
 
 Use direct Go commands when you want to run without the development proxy or
 watcher:
