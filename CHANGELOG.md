@@ -16,6 +16,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- `lazy docs --json` includes package, value, function, type, and method source
+  file and line metadata from `golazy.dev/lazydoc`.
 - The default `lazy` command now discovers local services from `lazy.toml` or
   `:start` mise tasks, starts them in tmux panes, and runs service
   `check`, `create`, and `migrate` tasks before starting the app pane when
