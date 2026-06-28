@@ -639,6 +639,33 @@ button:disabled:hover {
   width: 58px;
 }
 
+.routes-grid th:nth-child(1),
+.routes-grid td:nth-child(1) {
+  width: 72px;
+}
+
+.routes-grid th:nth-child(2),
+.routes-grid td:nth-child(2) {
+  width: 34%;
+}
+
+.routes-grid th:nth-child(3),
+.routes-grid td:nth-child(3) {
+  width: 18%;
+}
+
+.routes-grid th:nth-child(4),
+.routes-grid td:nth-child(4) {
+  width: 24%;
+}
+
+.routes-grid th:nth-child(5),
+.routes-grid td:nth-child(5),
+.routes-grid th:nth-child(6),
+.routes-grid td:nth-child(6) {
+  width: 12%;
+}
+
 .details-pane {
   background: var(--base);
   min-width: 0;

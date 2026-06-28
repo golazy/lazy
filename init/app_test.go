@@ -92,6 +92,56 @@ func TestPanelFrameRoutes(t *testing.T) {
 	}
 }
 
+func TestPanelRoutesPageFetchesApplicationRoutes(t *testing.T) {
+	var gotPath string
+	appControl := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = w.Write([]byte(`[
+			{"method":"GET","path":"/posts","name":"posts","controller":"posts","action":"Index"},
+			{"method":"GET","path":"/posts/{post_id}","name":"post","controller":"posts","action":"Show","params":{"post_id":true}},
+			{"method":"GET","path":"/admin","name":"admin","controller":"admin","action":"Index"}
+		]`))
+	}))
+	defer appControl.Close()
+
+	store := buildservice.NewStore(10)
+	store.Update(buildservice.Snapshot{
+		State:            buildservice.StateRunning,
+		Message:          "running",
+		ControlPlaneAddr: strings.TrimPrefix(appControl.URL, "http://"),
+	})
+	app := App(Config{
+		Store:             store,
+		Actions:           buildservice.NewActions(),
+		ForceDetailErrors: true,
+	})
+
+	response := httptest.NewRecorder()
+	app.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/_golazy/routes?q=post_id", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	if gotPath != "/routes" {
+		t.Fatalf("app control path = %q, want /routes", gotPath)
+	}
+	body := response.Body.String()
+	for _, want := range []string{
+		`<table class="data-grid routes-grid">`,
+		`<code>/posts/{post_id}</code>`,
+		`post_id`,
+		`posts#Show`,
+		`1 / 3 routes`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("body missing %q:\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, `<code>/admin</code>`) {
+		t.Fatalf("body includes unfiltered route:\n%s", body)
+	}
+}
+
 func TestPanelAssetsAndJobsJSON(t *testing.T) {
 	app := testApp()
 

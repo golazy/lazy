@@ -2,6 +2,7 @@ package panel
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"html"
 	"io"
@@ -90,6 +91,31 @@ func (b *Base) ProxyAppControl(w http.ResponseWriter, r *http.Request, method st
 	}
 	w.WriteHeader(response.StatusCode)
 	_, _ = io.Copy(w, io.LimitReader(response.Body, 1<<20))
+	return nil
+}
+
+func (b *Base) FetchAppControlJSON(ctx context.Context, path string, target any) error {
+	addr := b.Snapshot().ControlPlaneAddr
+	if addr == "" {
+		return fmt.Errorf("application control plane is not available")
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+addr+path, nil)
+	if err != nil {
+		return err
+	}
+	request.Header.Set("Accept", "application/json")
+
+	response, err := appControlClient.Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return fmt.Errorf("application control plane returned %s", response.Status)
+	}
+	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(target); err != nil {
+		return err
+	}
 	return nil
 }
 

@@ -13,6 +13,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `dump` / `load` mise tasks with files under `datasets/<dataset>`.
 - `lazy new` now renames the generated command directory from `cmd/app` to
   `cmd/<app-name>` and rewrites template docs and build commands to match.
+- The development panel Routes tab now reads the application's lazydev route
+  table and renders a filterable route list.
 - The development panel now includes a Jobs tab that proxies the application's
   lazyjobs control-plane state.
 - The development panel now includes a Services tab with per-service output and
