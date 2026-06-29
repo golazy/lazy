@@ -162,6 +162,7 @@ type Snapshot struct {
 	Output           string            `json:"output,omitempty"`
 	Services         []ServiceSnapshot `json:"services,omitempty"`
 	Tasks            []string          `json:"tasks,omitempty"`
+	BuildTrace       BuildTraceSummary `json:"build_trace,omitempty"`
 	Events           []Event           `json:"events,omitempty"`
 }
 
@@ -259,6 +260,7 @@ func (s *Store) Snapshot() Snapshot {
 	snapshot.Changed = append([]string(nil), snapshot.Changed...)
 	snapshot.Services = append([]ServiceSnapshot(nil), snapshot.Services...)
 	snapshot.Tasks = append([]string(nil), snapshot.Tasks...)
+	snapshot.BuildTrace = cloneBuildTraceSummary(snapshot.BuildTrace)
 	snapshot.Events = append([]Event(nil), s.events...)
 	return snapshot
 }
@@ -285,6 +287,11 @@ func (s *Store) record(snapshot Snapshot, event Event) {
 	}
 	if snapshot.Tasks == nil {
 		snapshot.Tasks = append([]string(nil), s.snapshot.Tasks...)
+	}
+	if snapshot.BuildTrace.Empty() {
+		snapshot.BuildTrace = cloneBuildTraceSummary(s.snapshot.BuildTrace)
+	} else {
+		snapshot.BuildTrace = cloneBuildTraceSummary(snapshot.BuildTrace)
 	}
 	s.snapshot = snapshot
 	s.events = append(s.events, event)
@@ -342,10 +349,11 @@ type Config struct {
 }
 
 type BuildResult struct {
-	Binary   string
-	Output   string
-	Err      error
-	Duration time.Duration
+	Binary     string
+	Output     string
+	Err        error
+	Duration   time.Duration
+	BuildTrace BuildTraceSummary
 }
 
 type Process struct {
@@ -359,6 +367,7 @@ type Process struct {
 func (c Config) Build(ctx context.Context, tmpDir string, buildNumber int) BuildResult {
 	started := time.Now()
 	binary := filepath.Join(tmpDir, "app-"+strconv.Itoa(buildNumber)+exeSuffix())
+	tracePath := filepath.Join(tmpDir, "build-"+strconv.Itoa(buildNumber)+"-debug-trace.json")
 
 	var output bytes.Buffer
 	workspaceActive, err := workspaceservice.Active(c.Root, c.GoWork)
@@ -376,6 +385,7 @@ func (c Config) Build(ctx context.Context, tmpDir string, buildNumber int) Build
 		buildFlags, err = appservice.LazyDevBuildFlags(c.Root, c.ViewPath, c.PublicPath)
 		if err == nil {
 			args := appservice.GoBuildArgs("lazydev", filepath.ToSlash(c.CommandPath), binary, buildFlags...)
+			args = addDebugTraceArg(args, tracePath)
 			build := exec.CommandContext(ctx, "go", args...)
 			build.Dir = c.Root
 			build.Stdout = &output
@@ -384,11 +394,22 @@ func (c Config) Build(ctx context.Context, tmpDir string, buildNumber int) Build
 		}
 	}
 	return BuildResult{
-		Binary:   binary,
-		Output:   output.String(),
-		Err:      err,
-		Duration: time.Since(started),
+		Binary:     binary,
+		Output:     output.String(),
+		Err:        err,
+		Duration:   time.Since(started),
+		BuildTrace: readBuildTraceSummary(tracePath, buildNumber),
 	}
+}
+
+func addDebugTraceArg(args []string, tracePath string) []string {
+	if len(args) == 0 || tracePath == "" {
+		return args
+	}
+	next := make([]string, 0, len(args)+1)
+	next = append(next, args[0], "-debug-trace="+tracePath)
+	next = append(next, args[1:]...)
+	return next
 }
 
 func (c Config) Start(ctx context.Context, binary string) (*Process, error) {

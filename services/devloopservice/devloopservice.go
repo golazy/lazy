@@ -431,6 +431,7 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 					BuildCount:  buildNumber,
 					Duration:    duration.Round(time.Millisecond).String(),
 					Output:      output,
+					BuildTrace:  result.BuildTrace,
 				})
 				return
 			}
@@ -442,6 +443,7 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 				BuildCount:  buildNumber,
 				Duration:    duration.Round(time.Millisecond).String(),
 				Output:      runOutput,
+				BuildTrace:  result.BuildTrace,
 			})
 			if runOutput != "" {
 				printOutput(d.stderr, runOutput)
@@ -465,6 +467,7 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 			AppAddr:          next.Addr(),
 			ControlPlaneAddr: next.ControlPlaneAddr(),
 			Changed:          changed,
+			BuildTrace:       result.BuildTrace,
 		})
 		if old != nil {
 			old.Stop()

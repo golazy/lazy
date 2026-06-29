@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"golazy.dev/lazy/app"
 	"golazy.dev/lazy/app/controllers/panel"
@@ -43,6 +44,28 @@ func TestBuildInfoViewReadsApplicationControlPlane(t *testing.T) {
 	store.Update(buildservice.Snapshot{
 		State:            buildservice.StateRunning,
 		ControlPlaneAddr: strings.TrimPrefix(appControl.URL, "http://"),
+		BuildCount:       3,
+		BuildTrace: buildservice.BuildTraceSummary{
+			Available:   true,
+			BuildNumber: 3,
+			Total:       250 * time.Millisecond,
+			Phases: []buildservice.BuildTracePhase{
+				{Name: buildservice.BuildTracePhaseBuild, Duration: 200 * time.Millisecond, Count: 2},
+				{Name: buildservice.BuildTracePhaseLink, Duration: 50 * time.Millisecond, Count: 1},
+			},
+			Packages: []buildservice.BuildTracePackage{{
+				Package:  "example.test/app/pkg",
+				Phase:    buildservice.BuildTracePhaseBuild,
+				Duration: 200 * time.Millisecond,
+				Count:    2,
+			}},
+			Actions: []buildservice.BuildTraceAction{{
+				Name:     "Executing action (build example.test/app/pkg)",
+				Phase:    buildservice.BuildTracePhaseBuild,
+				Package:  "example.test/app/pkg",
+				Duration: 180 * time.Millisecond,
+			}},
+		},
 	})
 	controller := &BuildInfoController{Base: panel.Base{Store: store}}
 	request := httptest.NewRequest(http.MethodGet, "/_golazy/buildinfo", nil)
@@ -70,6 +93,10 @@ func TestBuildInfoViewReadsApplicationControlPlane(t *testing.T) {
 	for _, want := range []string{
 		`data-buildinfo-panel`,
 		`BuildInfo`,
+		`Build 3 - 250.0ms`,
+		`Why This Build Took Time`,
+		`Slow Packages`,
+		`example.test/app/pkg`,
 		`2 dependencies`,
 		`example.test/app/cmd/app`,
 		`go1.26.0`,

@@ -30,7 +30,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   their public paths from the app lazydev control plane.
 - The development panel now includes a BuildInfo tab that shows the running
   app's Go version, module path, dependencies, replacements, and recorded build
-  settings from the app lazydev control plane.
+  settings from the app lazydev control plane, plus the last lazydev Go build's
+  trace summary with fetch, load, cache, build, link, package, and action
+  timing.
 - The development panel now includes a Dependencies tab that shows the running
   app's `lazydeps` service graph from the app lazydev control plane.
 - The development panel Cache tab now shows cache size, usage, hit/miss/set
