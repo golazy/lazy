@@ -7,6 +7,7 @@ const embeddedPanelMaxRatio = 0.85
 const embeddedPanelResizeHandleHeight = 8
 const embeddedPanelHeightKey = "golazy:devpanel:height"
 const embeddedPanelClosedKey = "golazy:devpanel:closed"
+const pageReadyMessage = "golazy:page:devpanel-ready"
 
 export default class DevPanelController {
   static connect(root, options = {}) {
@@ -41,6 +42,7 @@ export default class DevPanelController {
     this.installResize()
     this.installViewportResize()
     this.installTurboPersistence()
+    this.announceReady()
     if (window.__golazyDevToolsOpen === true) {
       this.setDevToolsPanelOpen(true)
       return
@@ -51,6 +53,10 @@ export default class DevPanelController {
   disable() {
     this.state.extensionInstalled = true
     this.setDevToolsPanelOpen(true)
+  }
+
+  announceReady() {
+    window.postMessage({ type: pageReadyMessage }, window.location.origin)
   }
 
   sync() {
@@ -76,8 +82,7 @@ export default class DevPanelController {
         this.closePanel()
         break
       case "golazy:extension:installed":
-        this.state.extensionInstalled = true
-        this.hideLauncher()
+        this.setExtensionInstalled(true)
         break
       case "golazy:extension:toggle-inpage-panel":
         this.togglePanel()
@@ -183,8 +188,13 @@ export default class DevPanelController {
 
   showLauncher() {
     if (!this.root || !this.launcher) return
+    if (!this.shouldShowLauncher()) {
+      this.hideLauncher()
+      if (!this.isPanelOpen()) this.root.hidden = true
+      return
+    }
     this.root.hidden = false
-    this.launcher.hidden = this.isExtensionInstalled() || this.isDevToolsPanelOpen()
+    this.launcher.hidden = false
   }
 
   hideLauncher() {
@@ -205,7 +215,7 @@ export default class DevPanelController {
 
   togglePanel() {
     if (this.isDevToolsPanelOpen()) {
-      this.hidePanel()
+      this.hideAll()
       return
     }
     if (this.panel && !this.panel.hidden) {
@@ -218,6 +228,11 @@ export default class DevPanelController {
   setDevToolsPanelOpen(open) {
     this.state.devToolsOpen = open === true
     window.__golazyDevToolsOpen = this.state.devToolsOpen
+    this.sync()
+  }
+
+  setExtensionInstalled(installed) {
+    this.state.extensionInstalled = installed === true
     this.sync()
   }
 
@@ -302,5 +317,13 @@ export default class DevPanelController {
 
   isDevToolsPanelOpen() {
     return this.state.devToolsOpen === true || window.__golazyDevToolsOpen === true
+  }
+
+  isPanelOpen() {
+    return this.panel?.hidden === false
+  }
+
+  shouldShowLauncher() {
+    return this.isEmbeddedPanelClosed() && !this.isPanelOpen() && !this.isExtensionInstalled() && !this.isDevToolsPanelOpen()
   }
 }

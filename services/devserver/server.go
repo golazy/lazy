@@ -101,37 +101,33 @@ var clientPanel = []byte(`<div id="golazy-dev-panel-root" data-golazy-dev-panel-
     }
     #golazy-dev-panel-launcher {
       align-items: center;
-      background: #fbbc04;
-      border: 1px solid rgba(32, 33, 36, 0.22);
-      border-radius: 999px;
+      background: #ffffff;
+      border: 1px solid rgba(32, 33, 36, 0.18);
+      border-radius: 12px;
       bottom: calc(16px + env(safe-area-inset-bottom));
       box-shadow: 0 3px 10px rgba(32, 33, 36, 0.24);
       cursor: pointer;
       display: flex;
-      height: 44px;
+      height: 46px;
       justify-content: center;
+      overflow: hidden;
       padding: 0;
       position: fixed;
       right: calc(16px + env(safe-area-inset-right));
-      width: 44px;
+      width: 46px;
       z-index: 2147483646;
     }
     #golazy-dev-panel-launcher:hover,
     #golazy-dev-panel-launcher:focus-visible {
-      background: #fdd663;
+      background: #ffffff;
+      border-color: rgba(32, 33, 36, 0.34);
       outline: 2px solid rgba(32, 33, 36, 0.4);
       outline-offset: 2px;
     }
-    #golazy-dev-panel-launcher svg {
+    #golazy-dev-panel-launcher img {
       display: block;
-      height: 31px;
-      width: 31px;
-    }
-    #golazy-dev-panel-launcher circle {
-      fill: transparent;
-    }
-    #golazy-dev-panel-launcher path {
-      fill: #202124;
+      height: 36px;
+      width: 36px;
     }
   </style>
   <div id="golazy-dev-panel-padding" data-golazy-dev-panel-padding aria-hidden="true" hidden></div>
@@ -140,11 +136,7 @@ var clientPanel = []byte(`<div id="golazy-dev-panel-root" data-golazy-dev-panel-
     <iframe src="/_golazy/" title="GoLazy development panel"></iframe>
   </div>
   <button id="golazy-dev-panel-launcher" data-golazy-dev-panel-launcher type="button" aria-label="Open GoLazy development panel" title="Open GoLazy development panel" hidden>
-    <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
-      <circle cx="32" cy="32" r="30"></circle>
-      <path d="M24 16h21v8H24c-5.1 0-8.5 3.5-8.5 8.1 0 4.7 3.4 8.2 8.5 8.2h7.1v-5.5h-8.4v-7.6h17.2v20.9H24c-10 0-17.1-6.8-17.1-16 0-9.3 7.1-16.1 17.1-16.1Z"></path>
-      <path d="M42.4 30.2 55.8 16h-9.7L33.3 30.2h9.1Zm-9.8 17.9h22.1v-8H42.6l12.9-14.3h-9.7L32.6 40.6v7.5Z"></path>
-    </svg>
+    <img src="/_golazy/assets/golazy-mark.svg" alt="" aria-hidden="true">
   </button>
 </div>`)
 var clientMarkup = append(append([]byte{}, clientPanel...), clientScript...)

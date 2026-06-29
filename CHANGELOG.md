@@ -54,6 +54,10 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The development proxy now injects hidden panel host markup into proxied app
   HTML, while `/_golazy/assets/devpanel_controller.js` owns the in-page panel,
   spacer, launcher, resize, and extension state.
+- The in-page development panel launcher now uses the real GoLazy mark in a
+  rounded-square button, and the extension content bridge re-announces itself
+  when the page host client becomes ready so the launcher stays hidden while
+  the Chrome extension is active.
 - `lazy upgrade` now migrates `v0.1.16 -> v0.1.17` controller calls from
   `SetLayout` to `Layout` and rewrites common `CacheKey` / `CacheKeyF` action
   returns for the new boolean cache-hit contract.

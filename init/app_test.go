@@ -400,7 +400,9 @@ func TestPanelAssetsAndJobsPage(t *testing.T) {
 	}
 	for _, want := range []string{
 		"DevPanelController",
+		"golazy:page:devpanel-ready",
 		"golazy:devpanel:height",
+		"shouldShowLauncher",
 		"togglePanel",
 	} {
 		if !strings.Contains(controllerScript.Body.String(), want) {
