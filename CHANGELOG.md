@@ -34,7 +34,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   trace summary with fetch, load, cache, build, link, package, and action
   timing.
 - The development panel now includes a Dependencies tab that shows the running
-  app's `lazydeps` service graph from the app lazydev control plane.
+  app's `lazydeps` service graph from the app lazydev control plane, using
+  table row metadata as a progressive-enhancement source for an SVG graph.
 - The development panel Cache tab now shows cache size, usage, hit/miss/set
   counters, a searchable key table with age, size, and key metadata, and
   selected cache entry content when the app backend exposes inspectable

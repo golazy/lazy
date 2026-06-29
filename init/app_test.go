@@ -322,6 +322,9 @@ func TestPanelDependenciesPageFetchesApplicationGraph(t *testing.T) {
 	for _, want := range []string{
 		`<turbo-stream-source src="/_golazy/dependencies"></turbo-stream-source>`,
 		`<section id="dependencies" class="tool-view is-active dependencies-view" data-view="dependencies" data-dependencies-panel>`,
+		`<div class="dependencies-layout" data-controller="depgraph">`,
+		`data-depgraph-name="posts"`,
+		`data-controller-depgraph-depends-on="db"`,
 		`2 services`,
 		`<td><code>posts</code></td>`,
 		`<td><code>db</code></td>`,

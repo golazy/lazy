@@ -8,7 +8,7 @@
   {{if .dependencies.Error}}
     <div class="empty-state">Dependency graph unavailable: {{.dependencies.Error}}</div>
   {{else}}
-    <div class="dependencies-layout">
+    <div class="dependencies-layout" data-controller="depgraph">
       <section class="runtime-pane dependencies-summary-pane">
         <div class="section-heading">
           <h2>Graph</h2>
@@ -25,7 +25,8 @@
 
       <section class="runtime-pane dependencies-table-pane">
         <h2>Services</h2>
-        <table class="data-grid dependencies-grid" data-controller="table-resize">
+        <div class="depgraph-output" data-depgraph-target="output" hidden></div>
+        <table class="data-grid dependencies-grid" data-controller="table-resize" data-depgraph-target="table">
           <thead>
             <tr>
               <th>Service</th>
@@ -35,7 +36,7 @@
           </thead>
           <tbody>
             {{range .dependency_nodes}}
-              <tr>
+              <tr data-depgraph-service data-depgraph-name="{{.Name}}" data-depgraph-depends-on="{{.DependsOn}}" data-depgraph-used-by="{{.UsedBy}}" data-controller-depgraph-name="{{.Name}}" data-controller-depgraph-depends-on="{{.DependsOn}}" data-controller-depgraph-used-by="{{.UsedBy}}">
                 <td><code>{{.Name}}</code></td>
                 <td><code>{{.DependsOn}}</code></td>
                 <td><code>{{.UsedBy}}</code></td>
