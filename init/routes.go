@@ -78,6 +78,8 @@ func Draw(router *lazyroutes.Scope) {
 			resource.Singular("dependency")
 			resource.Plural("dependencies")
 			resource.Path("dependencies")
+			resource.Post("shutdown", (*paneldependencies.DependenciesController).StartShutdown)
+			resource.Get("shutdown/events", (*paneldependencies.DependenciesController).ShutdownEvents)
 		})
 		panel.Resources(assets.New)
 		panel.Resources(cache.New, func(resource *lazyroutes.Resource) {

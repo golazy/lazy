@@ -13,6 +13,8 @@ const appJobsControlPath = "/jobs"
 const appCacheEntryPath = "/cache/entry"
 const appBuildInfoPath = "/buildinfo"
 const appDependenciesPath = "/dependencies"
+const appDependenciesShutdownPath = "/dependencies/shutdown"
+const appDependenciesShutdownEventsPath = "/dependencies/shutdown/events"
 
 type CacheSnapshot struct {
 	Enabled bool         `json:"enabled"`
@@ -126,6 +128,24 @@ type DependencyGraphSnapshot struct {
 	Error string           `json:"-"`
 }
 
+type DependencyShutdownSnapshot struct {
+	Ready             bool                     `json:"ready"`
+	ReadyStatus       int                      `json:"ready_status"`
+	ReadyText         string                   `json:"ready_text"`
+	ActiveRequests    int64                    `json:"active_requests"`
+	ActiveConnections int64                    `json:"active_connections"`
+	Running           bool                     `json:"running"`
+	Phase             string                   `json:"phase"`
+	Message           string                   `json:"message"`
+	Nodes             []DependencyShutdownNode `json:"nodes"`
+	Error             string                   `json:"-"`
+}
+
+type DependencyShutdownNode struct {
+	Name  string `json:"name"`
+	State string `json:"state"`
+}
+
 type DependencyNode string
 
 type DependencyEdge struct {
@@ -137,6 +157,7 @@ type DependencyNodeRow struct {
 	Name      string
 	DependsOn string
 	UsedBy    string
+	State     string
 }
 
 type BuildInfoModule struct {
@@ -204,6 +225,42 @@ func (s DependencyGraphSnapshot) StatusText() string {
 		return "1 service"
 	}
 	return fmt.Sprintf("%d services", count)
+}
+
+func (s DependencyShutdownSnapshot) ReadyTextValue() string {
+	if s.Error != "" {
+		return "GET /readyz unavailable"
+	}
+	if s.ReadyText != "" {
+		return s.ReadyText
+	}
+	if s.Ready {
+		return "GET /readyz => 200 ready"
+	}
+	if s.ReadyStatus != 0 {
+		return fmt.Sprintf("GET /readyz => %d not ready", s.ReadyStatus)
+	}
+	return "GET /readyz => 503 not ready"
+}
+
+func (s DependencyShutdownSnapshot) PhaseText() string {
+	if s.Error != "" {
+		return "Unavailable"
+	}
+	if s.Phase == "" {
+		return "idle"
+	}
+	return s.Phase
+}
+
+func (s DependencyShutdownSnapshot) MessageText() string {
+	if s.Error != "" {
+		return s.Error
+	}
+	if s.Message != "" {
+		return s.Message
+	}
+	return "Shutdown simulation has not started."
 }
 
 func (s DependencyGraphSnapshot) ServiceCount() int {
@@ -338,6 +395,14 @@ func (b *Base) DependencyGraphSnapshot(ctx context.Context) DependencyGraphSnaps
 	}
 	if snapshot.Edges == nil {
 		snapshot.Edges = []DependencyEdge{}
+	}
+	return snapshot
+}
+
+func (b *Base) DependencyShutdownSnapshot(ctx context.Context) DependencyShutdownSnapshot {
+	var snapshot DependencyShutdownSnapshot
+	if err := b.FetchAppControlJSON(ctx, appDependenciesShutdownPath, &snapshot); err != nil {
+		snapshot.Error = err.Error()
 	}
 	return snapshot
 }

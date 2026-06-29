@@ -4,7 +4,7 @@
     "@hotwired/turbo": "/_golazy/assets/lazyshaft/turbo-TWHUI2X4.js",
     "app.js": "/_golazy/assets/lazyshaft/app/app-44695DAB.js",
     "controllers/debounced_form_controller.js": "/_golazy/assets/lazyshaft/app/controllers/debounced_form_controller-98E58DF6.js",
-    "controllers/depgraph_controller.js": "/_golazy/assets/lazyshaft/app/controllers/depgraph_controller-5210107F.js",
+    "controllers/depgraph_controller.js": "/_golazy/assets/lazyshaft/app/controllers/depgraph_controller-7295B45B.js",
     "controllers/panel_close_controller.js": "/_golazy/assets/lazyshaft/app/controllers/panel_close_controller-B0AC4849.js",
     "controllers/panel_nav_controller.js": "/_golazy/assets/lazyshaft/app/controllers/panel_nav_controller-DFD20367.js",
     "controllers/panel_resize_controller.js": "/_golazy/assets/lazyshaft/app/controllers/panel_resize_controller-AA19D42B.js",

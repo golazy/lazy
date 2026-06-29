@@ -3,10 +3,16 @@ import { Controller } from "@hotwired/stimulus"
 const svgNamespace = "http://www.w3.org/2000/svg"
 
 export default class extends Controller {
-  static targets = ["table", "output"]
+  static targets = ["table", "output", "ready", "activeRequests", "activeConnections", "phase", "message"]
+  static values = { eventsUrl: String }
 
   connect() {
     this.render()
+    this.connectEvents()
+  }
+
+  disconnect() {
+    this.disconnectEvents()
   }
 
   render() {
@@ -29,14 +35,15 @@ export default class extends Controller {
       const name = this.valueFor(row, "name")
       if (!name) return
 
-      const node = nodeMap.get(name) || { name, dependsOn: [], usedBy: [] }
+      const node = nodeMap.get(name) || { name, dependsOn: [], usedBy: [], state: "running" }
       node.dependsOn = this.namesFromValue(this.valueFor(row, "dependsOn"))
       node.usedBy = this.namesFromValue(this.valueFor(row, "usedBy"))
+      node.state = this.valueFor(row, "state") || "running"
       nodeMap.set(name, node)
 
       node.dependsOn.forEach(dependency => {
         if (!nodeMap.has(dependency)) {
-          nodeMap.set(dependency, { name: dependency, dependsOn: [], usedBy: [] })
+          nodeMap.set(dependency, { name: dependency, dependsOn: [], usedBy: [], state: "running" })
         }
         const key = `${name}\u0000${dependency}`
         if (seenEdges.has(key)) return
@@ -169,6 +176,7 @@ export default class extends Controller {
   nodeGroup(node, position) {
     const group = document.createElementNS(svgNamespace, "g")
     group.classList.add("depgraph-node")
+    group.classList.add(`depgraph-node-${this.stateClass(node.state)}`)
     if (node.name === "app") group.classList.add("depgraph-node-root")
     group.setAttribute("transform", `translate(${position.x} ${position.y})`)
 
@@ -198,7 +206,68 @@ export default class extends Controller {
   metaText(node) {
     const deps = node.dependsOn.length
     const users = node.usedBy.length
-    return `${deps} dep${deps === 1 ? "" : "s"} · ${users} user${users === 1 ? "" : "s"}`
+    const state = node.state && node.state !== "running" ? `${node.state} · ` : ""
+    return `${state}${deps} dep${deps === 1 ? "" : "s"} · ${users} user${users === 1 ? "" : "s"}`
+  }
+
+  connectEvents() {
+    if (!this.hasEventsUrlValue || this.eventsUrlValue === "") return
+    this.disconnectEvents()
+    this.events = new EventSource(this.eventsUrlValue)
+    this.events.addEventListener("shutdown", event => {
+      try {
+        this.applyShutdownState(JSON.parse(event.data))
+      } catch (error) {
+        console.error("dependency shutdown event could not be parsed", error)
+      }
+    })
+  }
+
+  disconnectEvents() {
+    if (!this.events) return
+    this.events.close()
+    this.events = null
+  }
+
+  applyShutdownState(state) {
+    if (!state) return
+    this.updateTextTarget("ready", state.ready_text || this.readyText(state))
+    this.updateTextTarget("activeRequests", String(state.active_requests ?? 0))
+    this.updateTextTarget("activeConnections", String(state.active_connections ?? 0))
+    this.updateTextTarget("phase", state.phase || "idle")
+    this.updateTextTarget("message", state.message || "")
+
+    const states = new Map()
+    const nodes = state.nodes || []
+    nodes.forEach(node => {
+      if (node && node.name) states.set(node.name, node.state || "running")
+    })
+    if (!this.hasTableTarget) return
+    this.tableTarget.querySelectorAll("tbody tr[data-depgraph-name], tbody tr[data-controller-depgraph-name]").forEach(row => {
+      const name = this.valueFor(row, "name")
+      const nodeState = states.get(name) || "running"
+      row.dataset.depgraphState = nodeState
+      row.setAttribute("data-controller-depgraph-state", nodeState)
+    })
+    this.render()
+  }
+
+  updateTextTarget(name, value) {
+    const targetName = `${name}Target`
+    const hasTargetName = `has${this.capitalize(name)}Target`
+    if (!this[hasTargetName]) return
+    this[targetName].textContent = value
+  }
+
+  readyText(state) {
+    if (state.ready) return "GET /readyz => 200 ready"
+    const status = state.ready_status || 503
+    return `GET /readyz => ${status} not ready`
+  }
+
+  stateClass(state) {
+    const normalized = String(state || "running").toLowerCase().replace(/[^a-z0-9_-]/g, "-")
+    return normalized || "running"
   }
 
   nodeSort(left, right) {

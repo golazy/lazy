@@ -772,6 +772,51 @@ button:disabled:hover {
   top: 0;
 }
 
+.dependency-shutdown-form {
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+}
+
+.dependency-shutdown-form label {
+  color: var(--text-muted);
+  display: grid;
+  font-size: 12px;
+  gap: 4px;
+}
+
+.dependency-shutdown-form input {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  color: var(--text);
+  font: inherit;
+  min-height: 28px;
+  padding: 4px 6px;
+  width: 5rem;
+}
+
+.dependency-shutdown-form button {
+  background: var(--sys-color-primary);
+  border: 1px solid var(--sys-color-primary);
+  border-radius: 4px;
+  color: var(--sys-color-on-primary);
+  cursor: pointer;
+  font: inherit;
+  min-height: 30px;
+  padding: 4px 8px;
+}
+
+.dependency-shutdown-message {
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.35;
+  margin: 0;
+  padding: 8px;
+}
+
 .depgraph-output {
   min-height: 0;
   min-width: 0;
@@ -810,6 +855,27 @@ button:disabled:hover {
   stroke: var(--sys-color-primary);
 }
 
+.depgraph-node-draining rect {
+  fill: #fff4cf;
+  stroke: #b7791f;
+}
+
+.depgraph-node-canceling rect {
+  fill: #ffe4d6;
+  stroke: #c2410c;
+}
+
+.depgraph-node-stopped rect {
+  fill: #dcfce7;
+  stroke: #15803d;
+}
+
+.depgraph-node-error rect,
+.depgraph-node-interrupted rect {
+  fill: #fee2e2;
+  stroke: #b91c1c;
+}
+
 .depgraph-node-name,
 .depgraph-node-meta {
   fill: var(--text);
@@ -840,6 +906,23 @@ button:disabled:hover {
 .dependencies-grid th:nth-child(3),
 .dependencies-grid td:nth-child(3) {
   width: 36%;
+}
+
+.dependencies-grid tr[data-depgraph-state="draining"] td {
+  background: #fff8df;
+}
+
+.dependencies-grid tr[data-depgraph-state="canceling"] td {
+  background: #fff0e8;
+}
+
+.dependencies-grid tr[data-depgraph-state="stopped"] td {
+  background: #ecfdf3;
+}
+
+.dependencies-grid tr[data-depgraph-state="error"] td,
+.dependencies-grid tr[data-depgraph-state="interrupted"] td {
+  background: #fff1f2;
 }
 
 .dependency-edge-grid th:nth-child(1),

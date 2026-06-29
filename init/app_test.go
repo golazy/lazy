@@ -286,18 +286,38 @@ func TestPanelRoutesStreamHydratesApplicationRoutes(t *testing.T) {
 }
 
 func TestPanelDependenciesPageFetchesApplicationGraph(t *testing.T) {
-	var gotPath string
+	gotPaths := map[string]bool{}
 	appControl := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotPath = r.URL.Path
+		gotPaths[r.URL.Path] = true
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		_, _ = w.Write([]byte(`{
-			"nodes":["app","db","posts"],
-			"edges":[
-				{"from":"app","to":"db"},
-				{"from":"app","to":"posts"},
-				{"from":"posts","to":"db"}
-			]
-		}`))
+		switch r.URL.Path {
+		case "/dependencies":
+			_, _ = w.Write([]byte(`{
+				"nodes":["app","db","posts"],
+				"edges":[
+					{"from":"app","to":"db"},
+					{"from":"app","to":"posts"},
+					{"from":"posts","to":"db"}
+				]
+			}`))
+		case "/dependencies/shutdown":
+			_, _ = w.Write([]byte(`{
+				"ready":true,
+				"ready_status":200,
+				"ready_text":"GET /readyz => 200 ready",
+				"active_requests":0,
+				"active_connections":1,
+				"phase":"idle",
+				"message":"Shutdown simulation has not started.",
+				"nodes":[
+					{"name":"app","state":"running"},
+					{"name":"db","state":"running"},
+					{"name":"posts","state":"running"}
+				]
+			}`))
+		default:
+			http.NotFound(w, r)
+		}
 	}))
 	defer appControl.Close()
 
@@ -318,14 +338,21 @@ func TestPanelDependenciesPageFetchesApplicationGraph(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
 	}
-	if gotPath != "/dependencies" {
-		t.Fatalf("app control path = %q, want /dependencies", gotPath)
+	for _, path := range []string{"/dependencies", "/dependencies/shutdown"} {
+		if !gotPaths[path] {
+			t.Fatalf("app control paths = %#v, missing %s", gotPaths, path)
+		}
 	}
 	body := response.Body.String()
 	for _, want := range []string{
 		`<turbo-stream-source src="/_golazy/dependencies"></turbo-stream-source>`,
 		`<section id="dependencies" class="tool-view is-active dependencies-view" data-view="dependencies" data-dependencies-panel>`,
-		`<div class="dependencies-layout" data-controller="depgraph">`,
+		`data-controller="depgraph" data-depgraph-events-url-value="/_golazy/dependencies/shutdown/events"`,
+		`action="/_golazy/dependencies/shutdown"`,
+		`Seconds at 10 RPS`,
+		`Simulate shutdown`,
+		`GET /readyz =&gt; 200 ready`,
+		`data-depgraph-state="running"`,
 		`data-depgraph-name="posts"`,
 		`data-controller-depgraph-depends-on="db"`,
 		`2 services`,
