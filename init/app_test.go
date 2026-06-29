@@ -2,8 +2,11 @@ package appinit
 
 import (
 	"bufio"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -21,6 +24,63 @@ func TestPanelRootRedirectsToApp(t *testing.T) {
 	}
 	if got, want := response.Header().Get("Location"), "/_golazy/app"; got != want {
 		t.Fatalf("Location = %q, want %q", got, want)
+	}
+}
+
+func TestDevToolsWorkspaceRoutePointsAtAppJS(t *testing.T) {
+	root := t.TempDir()
+	store := buildservice.NewStore(10)
+	store.Update(buildservice.Snapshot{
+		State:       buildservice.StateRunning,
+		Message:     "running",
+		WatchedRoot: root,
+	})
+	app := App(Config{
+		Store:             store,
+		Actions:           buildservice.NewActions(),
+		ForceDetailErrors: true,
+	})
+
+	response := httptest.NewRecorder()
+	app.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/.well-known/appspecific/com.chrome.devtools.json", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	if got := response.Header().Get("Content-Type"); got != "application/json; charset=utf-8" {
+		t.Fatalf("Content-Type = %q, want application/json; charset=utf-8", got)
+	}
+	if got := response.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("Cache-Control = %q, want no-store", got)
+	}
+
+	var got struct {
+		Workspace struct {
+			Root string `json:"root"`
+			UUID string `json:"uuid"`
+		} `json:"workspace"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode response: %v\n%s", err, response.Body.String())
+	}
+	if want := filepath.Join(root, "app", "js"); got.Workspace.Root != want {
+		t.Fatalf("workspace.root = %q, want %q", got.Workspace.Root, want)
+	}
+	if !validDevToolsWorkspaceUUID(got.Workspace.UUID) {
+		t.Fatalf("workspace.uuid = %q, want valid UUID", got.Workspace.UUID)
+	}
+
+	again := httptest.NewRecorder()
+	app.ServeHTTP(again, httptest.NewRequest(http.MethodGet, "/.well-known/appspecific/com.chrome.devtools.json", nil))
+	var gotAgain struct {
+		Workspace struct {
+			UUID string `json:"uuid"`
+		} `json:"workspace"`
+	}
+	if err := json.Unmarshal(again.Body.Bytes(), &gotAgain); err != nil {
+		t.Fatalf("decode second response: %v\n%s", err, again.Body.String())
+	}
+	if gotAgain.Workspace.UUID != got.Workspace.UUID {
+		t.Fatalf("workspace.uuid changed between requests: %q then %q", got.Workspace.UUID, gotAgain.Workspace.UUID)
 	}
 }
 
@@ -403,4 +463,8 @@ func testApp() http.Handler {
 		Actions:           buildservice.NewActions(),
 		ForceDetailErrors: true,
 	})
+}
+
+func validDevToolsWorkspaceUUID(value string) bool {
+	return regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`).MatchString(value)
 }

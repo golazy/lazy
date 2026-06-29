@@ -31,6 +31,7 @@ const PanelPrefix = "/_golazy"
 const PanelClientPath = "/_golazy/assets/panel.js"
 const ExtensionHandshakePath = "/_golazy/extension"
 const ExtensionHandshakeBody = "i love being lazy"
+const DevToolsWorkspacePath = "/.well-known/appspecific/com.chrome.devtools.json"
 const HTTPSProbePath = "/_golazy/https-ready"
 const CertificateDownloadPath = "/_golazy/local-development-ca.pem"
 const requestIDHeader = "X-Request-ID"
@@ -169,6 +170,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.URL.Path == ExtensionHandshakePath {
 		serveExtensionHandshake(w, r)
+		return
+	}
+	if r.URL.Path == DevToolsWorkspacePath {
+		s.panel.ServeHTTP(w, r)
 		return
 	}
 	if r.URL.Path == ReloadPath {

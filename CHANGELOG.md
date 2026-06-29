@@ -36,6 +36,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Chrome DevTools extension handshake. The extension probes that endpoint and
   embeds the site's `/_golazy/` panel when the exact `i love being lazy` body
   is returned.
+- The `lazy` development proxy now serves Chromium Automatic Workspace Folders
+  metadata at `/.well-known/appspecific/com.chrome.devtools.json`, pointing
+  Chrome DevTools at the app's `app/js` source folder.
 
 ### Changed
 

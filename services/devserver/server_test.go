@@ -122,6 +122,43 @@ func TestServerServesExtensionHandshakeBeforePanel(t *testing.T) {
 	}
 }
 
+func TestServerServesDevToolsWorkspaceBeforeProxy(t *testing.T) {
+	var panelPath string
+	panel := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		panelPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = fmt.Fprint(w, `{"workspace":{"root":"/app/app/js","uuid":"1f95f222-3d25-5c10-a871-82fb1634e0e1"}}`)
+	})
+	backendHit := false
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		backendHit = true
+		_, _ = fmt.Fprint(w, "backend")
+	}))
+	defer backend.Close()
+	server, err := New("127.0.0.1:0", panel, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Shutdown(t.Context())
+	server.SetTarget(backend.URL)
+
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "https://lazy.test"+DevToolsWorkspacePath, nil))
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", response.Code)
+	}
+	if panelPath != DevToolsWorkspacePath {
+		t.Fatalf("panel path = %q, want %q", panelPath, DevToolsWorkspacePath)
+	}
+	if backendHit {
+		t.Fatal("well-known DevTools workspace request was proxied to the app")
+	}
+	if !strings.Contains(response.Body.String(), `"workspace"`) {
+		t.Fatalf("body = %q, want workspace JSON", response.Body.String())
+	}
+}
+
 func TestServerAddsRequestTraceHeadersToProxiedRequests(t *testing.T) {
 	headers := make(chan http.Header, 1)
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
