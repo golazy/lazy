@@ -2039,7 +2039,7 @@ button:disabled:hover {
 
 .buildinfo-layout {
   display: grid;
-  grid-template-columns: minmax(17rem, 24rem) minmax(0, 1fr);
+  grid-template-columns: minmax(19rem, 28rem) minmax(0, 1fr);
   min-height: 0;
   min-width: 0;
   overflow: hidden;
@@ -2049,7 +2049,7 @@ button:disabled:hover {
   border-right: 1px solid var(--border);
 }
 
-.buildinfo-runtime-header {
+.buildinfo-section-header {
   border-top: 1px solid var(--border);
 }
 
@@ -2062,46 +2062,43 @@ button:disabled:hover {
   padding: 5px 0;
 }
 
-.buildinfo-facts code {
-  overflow-wrap: anywhere;
+.buildinfo-value {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .buildtrace-phase-list {
-  border-top: 1px solid var(--border);
   display: grid;
 }
 
 .buildtrace-phase-row {
-  display: grid;
-  gap: 4px 8px;
-  grid-template-columns: minmax(0, 1fr) 5.5rem;
+  align-items: center;
   border-bottom: 1px solid var(--border);
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(4.5rem, 7rem) 5.5rem minmax(7rem, 1fr);
   min-width: 0;
   padding: 6px 8px;
 }
 
-.buildtrace-phase-row > div:first-child {
-  display: flex;
-  gap: 6px;
-  min-width: 0;
-}
-
-.buildtrace-phase-row strong,
-.buildtrace-phase-row span {
+.buildtrace-phase-name,
+.buildtrace-duration {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.buildtrace-phase-row > span,
-.buildtrace-package-grid td:nth-child(3) {
+.buildtrace-duration,
+.buildtrace-top-package-grid td:nth-child(3) {
   font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
   text-align: right;
 }
 
-.buildtrace-meter,
-.buildtrace-row-meter {
+.buildtrace-meter {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -2111,82 +2108,94 @@ button:disabled:hover {
   overflow: hidden;
 }
 
-.buildtrace-meter {
-  grid-column: 1 / -1;
-}
-
-.buildtrace-meter span,
-.buildtrace-row-meter span {
+.buildtrace-meter span {
   background: var(--sys-color-primary);
   display: block;
   height: 100%;
   min-width: 2px;
 }
 
-.buildtrace-row-meter {
-  margin-top: 5px;
-  max-width: 16rem;
+.buildtrace-top-package-grid {
+  table-layout: fixed;
+  width: 100%;
 }
 
-.buildinfo-main-pane {
+.buildtrace-top-package-grid th:first-child,
+.buildtrace-top-package-grid td:first-child {
+  width: auto;
+}
+
+.buildtrace-top-package-grid th:nth-child(2),
+.buildtrace-top-package-grid td:nth-child(2) {
+  width: 5.75rem;
+}
+
+.buildtrace-top-package-grid th:nth-child(3),
+.buildtrace-top-package-grid td:nth-child(3) {
+  width: 5.5rem;
+}
+
+.buildtrace-package-name {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.buildinfo-detail-pane {
   display: grid;
-  grid-template-rows: minmax(10rem, 0.9fr) minmax(10rem, 1fr);
+  grid-template-rows: 25px minmax(0, 1fr);
   min-height: 0;
   min-width: 0;
   overflow: hidden;
 }
 
-.buildinfo-table-section {
-  border-bottom: 1px solid var(--border);
-  display: grid;
-  grid-template-rows: 34px minmax(0, 1fr);
+.buildinfo-detail-tabs {
+  border-top: 0;
+}
+
+.buildinfo-tab-panel {
+  min-height: 0;
+  min-width: 0;
   overflow: hidden;
 }
 
-.buildinfo-table-section table {
+.buildinfo-tab-panel table {
   display: block;
+  height: 100%;
   overflow: auto;
 }
 
-.buildtrace-package-grid {
-  min-width: 44rem;
+.buildinfo-runtime-pane {
+  border-right: 0;
+  height: 100%;
+  overflow: auto;
 }
 
 .buildinfo-runtime-grid {
-  min-width: 52rem;
+  min-width: 42rem;
 }
 
-.buildtrace-package-grid th:nth-child(1),
-.buildtrace-package-grid td:nth-child(1),
-.buildinfo-runtime-grid th:nth-child(2),
-.buildinfo-runtime-grid td:nth-child(2) {
-  width: 42%;
+.buildinfo-runtime-details {
+  padding: 10px 12px;
 }
 
-.buildtrace-package-grid th:nth-child(2),
-.buildtrace-package-grid td:nth-child(2),
-.buildinfo-runtime-grid th:nth-child(1),
-.buildinfo-runtime-grid td:nth-child(1) {
-  width: 7rem;
-}
-
-.buildtrace-package-grid th:nth-child(3),
-.buildtrace-package-grid td:nth-child(3),
-.buildtrace-package-grid th:nth-child(4),
-.buildtrace-package-grid td:nth-child(4) {
-  width: 6.5rem;
-}
-
-.buildinfo-runtime-grid th:nth-child(3),
-.buildinfo-runtime-grid td:nth-child(3),
-.buildinfo-runtime-grid th:nth-child(4),
-.buildinfo-runtime-grid td:nth-child(4) {
-  width: 24%;
-}
-
-.buildtrace-package-grid code,
+.buildinfo-runtime-details code,
 .buildinfo-runtime-grid code {
   overflow-wrap: anywhere;
+}
+
+.buildinfo-runtime-grid th:first-child,
+.buildinfo-runtime-grid td:first-child {
+  width: 38%;
+}
+
+.buildinfo-runtime-grid th:nth-child(2),
+.buildinfo-runtime-grid td:nth-child(2),
+.buildinfo-runtime-grid th:nth-child(3),
+.buildinfo-runtime-grid td:nth-child(3) {
+  width: 31%;
 }
 
 .section-heading {
@@ -2291,7 +2300,7 @@ button:disabled:hover {
   }
 
   .runtime-left-stack,
-  .buildinfo-main-pane,
+  .buildinfo-detail-pane,
   .runtime-summary-grid {
     grid-template-rows: auto;
     overflow: visible;

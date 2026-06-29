@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"golazy.dev/lazy/app/controllers/panel"
@@ -68,8 +70,48 @@ func (c *BuildInfoController) buildInfoViewData(r *http.Request) map[string]any 
 	return map[string]any{
 		"state":      snapshot,
 		"buildinfo":  c.BuildInfoSnapshot(r.Context()),
+		"buildtabs":  newBuildInfoTabs(r.URL.Query().Get("tab")),
 		"buildtrace": newBuildTraceView(snapshot.BuildTrace),
 	}
+}
+
+type buildInfoTabs struct {
+	Tab             string
+	RuntimeTab      bool
+	SettingsTab     bool
+	DependenciesTab bool
+}
+
+func newBuildInfoTabs(tab string) buildInfoTabs {
+	normalized := normalizeBuildInfoTab(tab)
+	return buildInfoTabs{
+		Tab:             normalized,
+		RuntimeTab:      normalized == "runtime",
+		SettingsTab:     normalized == "settings",
+		DependenciesTab: normalized == "dependencies",
+	}
+}
+
+func normalizeBuildInfoTab(tab string) string {
+	normalized := strings.ToLower(strings.TrimSpace(tab))
+	switch normalized {
+	case "settings", "dependencies":
+		return normalized
+	default:
+		return "runtime"
+	}
+}
+
+func (t buildInfoTabs) TabURL(tab string) string {
+	tab = normalizeBuildInfoTab(tab)
+	values := url.Values{}
+	if tab != "runtime" {
+		values.Set("tab", tab)
+	}
+	if encoded := values.Encode(); encoded != "" {
+		return "/_golazy/buildinfo?" + encoded
+	}
+	return "/_golazy/buildinfo"
 }
 
 type buildTraceView struct {
@@ -131,6 +173,9 @@ func newBuildTraceView(summary buildservice.BuildTraceSummary) buildTraceView {
 		view.TopPackageDuration = formatBuildTraceDuration(summary.Packages[0].Duration)
 	}
 	for _, pkg := range summary.Packages {
+		if len(view.Packages) >= 5 {
+			break
+		}
 		view.Packages = append(view.Packages, buildTracePackageRow{
 			Package:  pkg.Package,
 			Phase:    pkg.Phase,

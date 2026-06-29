@@ -31,11 +31,15 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The development panel now includes a BuildInfo tab that shows the running
   app's Go version, module path, dependencies, replacements, and recorded build
   settings from the app lazydev control plane, plus the last lazydev Go build's
-  trace summary with fetch, load, cache, build, link, package, and action
-  timing.
+  trace summary with fetch, load, cache, build, and link timing plus the top
+  five slowest packages.
 - The development panel now includes a Dependencies tab that shows the running
   app's `lazydeps` service graph from the app lazydev control plane, using
   table row metadata as a progressive-enhancement source for an SVG graph.
+- The development panel Dependencies tab can simulate lazydev shutdown by
+  sending 10 requests per second to the app root, marking `/readyz` not ready
+  after the configured delay, and live-coloring dependency nodes as service
+  cancellation progresses.
 - The development panel Cache tab now shows cache size, usage, hit/miss/set
   counters, a searchable key table with age, size, and key metadata, and
   selected cache entry content when the app backend exposes inspectable
@@ -89,9 +93,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `turbo-stream-source` connects, then send targeted row/count updates only
   when a relevant backend event exists instead of repainting whole tabs from
   generic build events.
-- The development panel BuildInfo tab now presents build trace diagnostics as
-  one summary rail plus a slowest-packages table, keeping runtime module and
-  setting details in one compact table instead of several separate panes.
+- The development panel BuildInfo tab now uses a two-sided layout: basic build
+  facts, build phases, and the top five slowest packages on the left, with
+  Runtime Details, Settings, and Dependencies in right-side tabs.
 - The development panel Assets and Routes searches now use debounced backend
   Turbo Frame requests and abort older in-flight searches before they can
   replace newer results. Those tables scroll inside the tab body.

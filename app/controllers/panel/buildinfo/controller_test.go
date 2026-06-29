@@ -53,12 +53,44 @@ func TestBuildInfoViewReadsApplicationControlPlane(t *testing.T) {
 				{Name: buildservice.BuildTracePhaseBuild, Duration: 200 * time.Millisecond, Count: 2},
 				{Name: buildservice.BuildTracePhaseLink, Duration: 50 * time.Millisecond, Count: 1},
 			},
-			Packages: []buildservice.BuildTracePackage{{
-				Package:  "example.test/app/pkg",
-				Phase:    buildservice.BuildTracePhaseBuild,
-				Duration: 200 * time.Millisecond,
-				Count:    2,
-			}},
+			Packages: []buildservice.BuildTracePackage{
+				{
+					Package:  "example.test/app/pkg",
+					Phase:    buildservice.BuildTracePhaseBuild,
+					Duration: 200 * time.Millisecond,
+					Count:    2,
+				},
+				{
+					Package:  "example.test/app/pkg2",
+					Phase:    buildservice.BuildTracePhaseBuild,
+					Duration: 180 * time.Millisecond,
+					Count:    1,
+				},
+				{
+					Package:  "example.test/app/pkg3",
+					Phase:    buildservice.BuildTracePhaseBuild,
+					Duration: 160 * time.Millisecond,
+					Count:    1,
+				},
+				{
+					Package:  "example.test/app/pkg4",
+					Phase:    buildservice.BuildTracePhaseBuild,
+					Duration: 140 * time.Millisecond,
+					Count:    1,
+				},
+				{
+					Package:  "example.test/app/pkg5",
+					Phase:    buildservice.BuildTracePhaseBuild,
+					Duration: 120 * time.Millisecond,
+					Count:    1,
+				},
+				{
+					Package:  "example.test/app/pkg6",
+					Phase:    buildservice.BuildTracePhaseBuild,
+					Duration: 100 * time.Millisecond,
+					Count:    1,
+				},
+			},
 			Actions: []buildservice.BuildTraceAction{{
 				Name:     "Executing action (build example.test/app/pkg)",
 				Phase:    buildservice.BuildTracePhaseBuild,
@@ -94,16 +126,16 @@ func TestBuildInfoViewReadsApplicationControlPlane(t *testing.T) {
 		`data-buildinfo-panel`,
 		`BuildInfo`,
 		`Build 3 - 250.0ms`,
-		`Build Timing`,
-		`Slowest Packages`,
+		`Build Phases`,
+		`Top Packages`,
 		`Runtime Details`,
+		`Settings`,
+		`Dependencies`,
 		`example.test/app/pkg`,
+		`title="example.test/app/pkg"`,
 		`2 dependencies`,
 		`example.test/app/cmd/app`,
 		`go1.26.0`,
-		`vcs.revision`,
-		`golazy.dev`,
-		`../replaced`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("rendered buildinfo frame missing %q:\n%s", want, body)
@@ -111,11 +143,44 @@ func TestBuildInfoViewReadsApplicationControlPlane(t *testing.T) {
 	}
 	for _, unwanted := range []string{
 		`Slow Actions`,
-		`<h2>Settings</h2>`,
-		`<h2>Dependencies</h2>`,
+		`Slowest Packages`,
+		`example.test/app/pkg6`,
+		`vcs.revision`,
+		`../replaced`,
 	} {
 		if strings.Contains(body, unwanted) {
 			t.Fatalf("rendered buildinfo frame contains old panel heading %q:\n%s", unwanted, body)
+		}
+	}
+
+	settingsRequest := httptest.NewRequest(http.MethodGet, "/_golazy/buildinfo?tab=settings", nil)
+	settingsBody, err := controller.RenderPanelPartial(settingsRequest, "buildinfo", "buildinfo_frame", controller.buildInfoViewData(settingsRequest))
+	if err != nil {
+		t.Fatalf("render settings buildinfo frame: %v", err)
+	}
+	for _, want := range []string{
+		`aria-current="page">Settings`,
+		`GOOS`,
+		`vcs.revision`,
+		`abc123`,
+	} {
+		if !strings.Contains(settingsBody, want) {
+			t.Fatalf("rendered settings buildinfo frame missing %q:\n%s", want, settingsBody)
+		}
+	}
+
+	dependenciesRequest := httptest.NewRequest(http.MethodGet, "/_golazy/buildinfo?tab=dependencies", nil)
+	dependenciesBody, err := controller.RenderPanelPartial(dependenciesRequest, "buildinfo", "buildinfo_frame", controller.buildInfoViewData(dependenciesRequest))
+	if err != nil {
+		t.Fatalf("render dependencies buildinfo frame: %v", err)
+	}
+	for _, want := range []string{
+		`aria-current="page">Dependencies`,
+		`golazy.dev`,
+		`../replaced`,
+	} {
+		if !strings.Contains(dependenciesBody, want) {
+			t.Fatalf("rendered dependencies buildinfo frame missing %q:\n%s", want, dependenciesBody)
 		}
 	}
 }
