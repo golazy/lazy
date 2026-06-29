@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -18,9 +19,11 @@ import (
 func TestRequestViewReadsTracesAndRendersRequestDetails(t *testing.T) {
 	var gotMethod string
 	var gotPath string
+	var gotQuery url.Values
 	appControl := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotMethod = r.Method
 		gotPath = r.URL.Path
+		gotQuery = r.URL.Query()
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_, _ = fmt.Fprint(w, `{
 			"directory":".tmp/traces",
@@ -29,6 +32,8 @@ func TestRequestViewReadsTracesAndRendersRequestDetails(t *testing.T) {
 				"method":"GET",
 				"path":"/pools",
 				"status":200,
+				"category":"framework",
+				"handled_by":"lazydispatch.Router",
 				"bytes":2048,
 				"duration_ms":12.5,
 				"trace_file":".tmp/traces/req-123.trace",
@@ -51,10 +56,13 @@ func TestRequestViewReadsTracesAndRendersRequestDetails(t *testing.T) {
 	})
 	controller := &RequestsController{Base: panel.Base{Store: store}}
 
-	request := httptest.NewRequest(http.MethodGet, "/_golazy/requests?q=pools&request=req-123&span=controller&tab=tracing&framework=1", nil)
+	request := httptest.NewRequest(http.MethodGet, "/_golazy/requests?q=pools&type=framework&request=req-123&span=controller&tab=tracing&framework=1", nil)
 	view := controller.requestView(request)
 	if gotMethod != http.MethodGet || gotPath != appRequestTracesPath {
 		t.Fatalf("proxied request = %s %s, want GET %s", gotMethod, gotPath, appRequestTracesPath)
+	}
+	if gotQuery.Get("q") != "pools" || gotQuery.Get("type") != "framework" {
+		t.Fatalf("proxied query = %s, want q=pools&type=framework", gotQuery.Encode())
 	}
 	if view.Error != "" {
 		t.Fatalf("view error = %q", view.Error)
@@ -74,8 +82,8 @@ func TestRequestViewReadsTracesAndRendersRequestDetails(t *testing.T) {
 	if got := view.SelectedSpan.AllocationSummaryText(); !strings.Contains(got, "4.0 KiB total") || !strings.Contains(got, "1.0 KiB self") {
 		t.Fatalf("selected allocation summary = %q, want total and self allocations", got)
 	}
-	if got := view.StreamURL(); !strings.Contains(got, "request=req-123") || !strings.Contains(got, "span=controller") || !strings.Contains(got, "tab=tracing") {
-		t.Fatalf("StreamURL = %q, want selected request/span/tab", got)
+	if got := view.StreamURL(); !strings.Contains(got, "request=req-123") || !strings.Contains(got, "span=controller") || !strings.Contains(got, "tab=tracing") || !strings.Contains(got, "type=framework") {
+		t.Fatalf("StreamURL = %q, want selected request/span/tab/type", got)
 	}
 
 	renderer := newRequestTestRenderer(t)
@@ -90,12 +98,41 @@ func TestRequestViewReadsTracesAndRendersRequestDetails(t *testing.T) {
 	}
 	for _, want := range []string{
 		"/pools",
+		"lazydispatch.Router",
+		`data-turbo-frame="request_detail"`,
+		`<turbo-frame id="request_detail" src="/_golazy/requests?`,
+		`type=framework`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("rendered requests frame does not contain %q:\n%s", want, body)
+		}
+	}
+
+	streamBody, err := controller.streamRequestsInitial(request)
+	if err != nil {
+		t.Fatalf("stream requests initial: %v", err)
+	}
+	clearIndex := strings.Index(streamBody, `targets="[data-request-list]"><template></template>`)
+	rowIndex := strings.Index(streamBody, `/pools`)
+	if clearIndex < 0 || rowIndex < 0 || clearIndex > rowIndex {
+		t.Fatalf("stream body should clear before hydrating rows:\n%s", streamBody)
+	}
+
+	frameRequest := httptest.NewRequest(http.MethodGet, "/_golazy/requests?q=pools&type=framework&request=req-123&span=controller&tab=tracing&framework=1", nil)
+	frameRequest.Header.Set("Turbo-Frame", "request_detail")
+	frameResponse := httptest.NewRecorder()
+	if err := controller.renderRequestDetailFrame(frameResponse, frameRequest); err != nil {
+		t.Fatalf("render request detail frame: %v", err)
+	}
+	detailBody := frameResponse.Body.String()
+	for _, want := range []string{
+		`<turbo-frame id="request_detail">`,
 		"Tracing",
 		"controller pools#Index",
 		"4.0 KiB total, 1.0 KiB self",
 	} {
-		if !strings.Contains(body, want) {
-			t.Fatalf("rendered requests frame does not contain %q:\n%s", want, body)
+		if !strings.Contains(detailBody, want) {
+			t.Fatalf("rendered request detail frame does not contain %q:\n%s", want, detailBody)
 		}
 	}
 }

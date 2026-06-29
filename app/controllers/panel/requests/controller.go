@@ -12,6 +12,8 @@ import (
 
 	"golazy.dev/lazy/app/controllers/panel"
 	"golazy.dev/lazycontroller"
+	"golazy.dev/lazysse"
+	"golazy.dev/lazyturbo"
 )
 
 const appRequestTracesPath = "/requests/traces"
@@ -32,8 +34,11 @@ func (c *RequestsController) Index(w http.ResponseWriter, r *http.Request) error
 			c.Set("defer_panel_lists", true)
 			return nil
 		},
+		lazycontroller.TurboFrame: func() error {
+			return c.renderRequestDetailFrame(w, r)
+		},
 		lazycontroller.SSE: func() error {
-			return c.StreamTurboInitial(w, r, c.streamRequestsInitial)
+			return c.streamRequests(w, r)
 		},
 	})
 }
@@ -41,21 +46,101 @@ func (c *RequestsController) Index(w http.ResponseWriter, r *http.Request) error
 func (c *RequestsController) setRequestsState(r *http.Request) {
 	c.Set("state", c.Snapshot())
 	c.Set("monitoring", c.RequestMonitoringSnapshot(r.Context()))
+	c.Set("cache", c.CacheSnapshot(r.Context()))
 	c.Set("requests", c.requestView(r))
 }
 
 func (c *RequestsController) streamRequestsInitial(r *http.Request) (string, error) {
 	view := c.requestView(r)
+	return c.renderRequestsSnapshot(r, view, true)
+}
+
+func (c *RequestsController) streamRequests(_ http.ResponseWriter, r *http.Request) error {
+	stream, err := c.SSEStream()
+	if err != nil {
+		return err
+	}
+	defer stream.Close()
+	stream.Heartbeat(15 * time.Second)
+
+	view := c.requestView(r)
+	previous := requestSnapshotKey(view)
+	initial, err := c.renderRequestsSnapshot(r, view, true)
+	if err != nil {
+		return err
+	}
+	if err := sendRequestTurboStream(stream, initial); err != nil {
+		return err
+	}
+
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-stream.Done():
+			return nil
+		case <-ticker.C:
+			view := c.requestView(r)
+			next := requestSnapshotKey(view)
+			if next == previous {
+				continue
+			}
+			previous = next
+			body, err := c.renderRequestsSnapshot(r, view, false)
+			if err != nil || body == "" {
+				continue
+			}
+			if err := sendRequestTurboStream(stream, body); err != nil {
+				return err
+			}
+		}
+	}
+}
+
+func (c *RequestsController) renderRequestsSnapshot(r *http.Request, view requestView, clear bool) (string, error) {
 	body, err := c.RenderPanelPartial(r, "requests", "request_rows", map[string]any{
 		"state":      c.Snapshot(),
 		"monitoring": c.RequestMonitoringSnapshot(r.Context()),
+		"cache":      c.CacheSnapshot(r.Context()),
 		"requests":   view,
 	})
 	if err != nil {
 		return "", err
 	}
-	return panel.TurboStreamTargets("update", "[data-request-list]", body) +
+	prefix := ""
+	if clear {
+		prefix = panel.TurboStreamTargets("update", "[data-request-list]", "") +
+			panel.TurboStreamTargets("update", "[data-request-count]", "0 requests")
+	}
+	return prefix +
+		panel.TurboStreamTargets("update", "[data-request-list]", body) +
 		panel.TurboStreamTargets("update", "[data-request-count]", view.RequestCountText()), nil
+}
+
+func sendRequestTurboStream(stream *lazysse.Stream, body string) error {
+	if body == "" {
+		return nil
+	}
+	return stream.Send(lazysse.Event{Data: []string{body}})
+}
+
+func (c *RequestsController) renderRequestDetailFrame(w http.ResponseWriter, r *http.Request) error {
+	if frameID := lazyturbo.FrameID(r); frameID != "request_detail" {
+		return lazycontroller.Error(http.StatusBadRequest, fmt.Errorf("request frame %q is not available", frameID))
+	}
+	view := c.requestView(r)
+	body, err := c.RenderPanelFrame(r, "request_detail", "requests", "request_detail", map[string]any{
+		"state":      c.Snapshot(),
+		"monitoring": c.RequestMonitoringSnapshot(r.Context()),
+		"cache":      c.CacheSnapshot(r.Context()),
+		"requests":   view,
+	})
+	if err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, err = w.Write([]byte(body))
+	return err
 }
 
 func (c *RequestsController) requestView(r *http.Request) requestView {
@@ -64,9 +149,10 @@ func (c *RequestsController) requestView(r *http.Request) requestView {
 		Directory: ".tmp/traces",
 		Query:     strings.TrimSpace(r.URL.Query().Get("q")),
 		Tab:       normalizeRequestTab(r.URL.Query().Get("tab")),
+		Type:      normalizeRequestType(r.URL.Query().Get("type")),
 		Framework: r.URL.Query().Get("framework") == "1",
 	}
-	if err := c.FetchAppControlJSON(r.Context(), appRequestTracesPath, &snapshot); err != nil {
+	if err := c.FetchAppControlJSON(r.Context(), view.ControlPlanePath(), &snapshot); err != nil {
 		view.Error = err.Error()
 		return view
 	}
@@ -74,7 +160,7 @@ func (c *RequestsController) requestView(r *http.Request) requestView {
 		view.Directory = snapshot.Directory
 	}
 	view.Errors = snapshot.Errors
-	view.Requests = filterRequestTraces(snapshot.Traces, view.Query)
+	view.Requests = snapshot.Traces
 	selected := selectRequestTrace(view.Requests, r.URL.Query().Get("request"))
 	if selected == nil {
 		return view
@@ -87,11 +173,40 @@ func (c *RequestsController) requestView(r *http.Request) requestView {
 		view.SelectedSpan = *selectedSpan
 		view.HasSelectedSpan = true
 	}
-	view.Rows = requestRows(view.Requests, selected.RequestID, view.Query, view.Tab, view.Framework)
-	view.TimelineRows = requestSpanRows(*selected, visible, selectedRequestSpanID(selectedSpan), view.Query, view.Tab, view.Framework)
-	view.FlameRows = requestFlameRows(*selected, visible, selectedRequestSpanID(selectedSpan), view.Query, view.Tab, view.Framework)
+	view.Rows = requestRows(view.Requests, selected.RequestID, view.Query, view.Tab, view.Type, view.Framework)
+	view.TimelineRows = requestSpanRows(*selected, visible, selectedRequestSpanID(selectedSpan), view.Query, view.Tab, view.Type, view.Framework)
+	view.FlameRows = requestFlameRows(*selected, visible, selectedRequestSpanID(selectedSpan), view.Query, view.Tab, view.Type, view.Framework)
 	view.Logs = selected.Logs
 	return view
+}
+
+func requestSnapshotKey(view requestView) string {
+	var builder strings.Builder
+	builder.WriteString(view.Error)
+	builder.WriteString("\n")
+	builder.WriteString(strings.Join(view.Errors, "\n"))
+	builder.WriteString("\n")
+	for _, trace := range view.Requests {
+		builder.WriteString(trace.RequestID)
+		builder.WriteString("|")
+		builder.WriteString(trace.Method)
+		builder.WriteString("|")
+		builder.WriteString(trace.Path)
+		builder.WriteString("|")
+		builder.WriteString(strconv.Itoa(trace.Status))
+		builder.WriteString("|")
+		builder.WriteString(trace.HandledBy)
+		builder.WriteString("|")
+		builder.WriteString(trace.Category)
+		builder.WriteString("|")
+		builder.WriteString(strconv.FormatFloat(trace.DurationMS, 'f', -1, 64))
+		builder.WriteString("|")
+		builder.WriteString(strconv.Itoa(len(trace.Spans)))
+		builder.WriteString("|")
+		builder.WriteString(strconv.Itoa(len(trace.Logs)))
+		builder.WriteString("\n")
+	}
+	return builder.String()
 }
 
 type requestTraceSnapshot struct {
@@ -106,6 +221,7 @@ type requestView struct {
 	Errors          []string
 	Query           string
 	Tab             string
+	Type            string
 	Framework       bool
 	Requests        []requestTrace
 	Rows            []requestRow
@@ -119,7 +235,33 @@ type requestView struct {
 }
 
 func (v requestView) StreamURL() string {
-	return requestURL(v.SelectedRequestID(), v.SelectedSpanID(), v.Query, v.Tab, v.Framework)
+	return requestURL(v.SelectedRequestID(), v.SelectedSpanID(), v.Query, v.Tab, v.Type, v.Framework)
+}
+
+func (v requestView) ControlPlanePath() string {
+	values := url.Values{}
+	if v.Query != "" {
+		values.Set("q", v.Query)
+	}
+	if v.Type != "" && v.Type != "all" {
+		values.Set("type", v.Type)
+	}
+	encoded := values.Encode()
+	if encoded == "" {
+		return appRequestTracesPath
+	}
+	return appRequestTracesPath + "?" + encoded
+}
+
+func (v requestView) CurrentURL() string {
+	return requestURL(v.SelectedRequestID(), v.SelectedSpanID(), v.Query, v.Tab, v.Type, v.Framework)
+}
+
+func (v requestView) DetailURL() string {
+	if !v.HasSelected {
+		return ""
+	}
+	return requestURL(v.SelectedRequestID(), v.SelectedSpanID(), v.Query, v.Tab, v.Type, v.Framework)
 }
 
 func (v requestView) SelectedRequestID() string {
@@ -167,7 +309,7 @@ func (v requestView) FrameworkToggleText() string {
 }
 
 func (v requestView) FrameworkToggleURL() string {
-	return requestURL(v.SelectedRequestID(), v.SelectedSpanID(), v.Query, v.Tab, !v.Framework)
+	return requestURL(v.SelectedRequestID(), v.SelectedSpanID(), v.Query, v.Tab, v.Type, !v.Framework)
 }
 
 func (v requestView) TabSelected(tab string) bool {
@@ -187,7 +329,19 @@ func (v requestView) LogsTab() bool {
 }
 
 func (v requestView) TabURL(tab string) string {
-	return requestURL(v.SelectedRequestID(), v.SelectedSpanID(), v.Query, normalizeRequestTab(tab), v.Framework)
+	return requestURL(v.SelectedRequestID(), v.SelectedSpanID(), v.Query, normalizeRequestTab(tab), v.Type, v.Framework)
+}
+
+func (v requestView) TypeSelected(requestType string) bool {
+	return v.Type == normalizeRequestType(requestType)
+}
+
+func (v requestView) TypeURL(requestType string) string {
+	return requestURL(v.SelectedRequestID(), v.SelectedSpanID(), v.Query, v.Tab, normalizeRequestType(requestType), v.Framework)
+}
+
+func (v requestView) TypeValue() string {
+	return v.Type
 }
 
 type requestTrace struct {
@@ -199,6 +353,8 @@ type requestTrace struct {
 	StartedAt  time.Time             `json:"started_at"`
 	DurationMS float64               `json:"duration_ms"`
 	TraceFile  string                `json:"trace_file"`
+	HandledBy  string                `json:"handled_by"`
+	Category   string                `json:"category"`
 	Runtime    requestRuntimeSummary `json:"runtime"`
 	Memory     requestMemorySummary  `json:"memory"`
 	Spans      []requestSpan         `json:"spans"`
@@ -243,11 +399,23 @@ func (t requestTrace) StatusClass() string {
 }
 
 func (t requestTrace) DomainText() string {
-	return "app"
+	if t.HandledBy != "" {
+		return t.HandledBy
+	}
+	return "-"
 }
 
 func (t requestTrace) TypeText() string {
-	return "document"
+	switch normalizeRequestType(t.Category) {
+	case "framework":
+		return "Framework"
+	case "assets":
+		return "Assets"
+	case "other":
+		return "Other"
+	default:
+		return "All"
+	}
 }
 
 func (t requestTrace) InitiatorText() string {
@@ -427,19 +595,13 @@ func normalizeRequestTab(tab string) string {
 	}
 }
 
-func filterRequestTraces(traces []requestTrace, query string) []requestTrace {
-	query = strings.ToLower(strings.TrimSpace(query))
-	if query == "" {
-		return traces
+func normalizeRequestType(requestType string) string {
+	switch strings.ToLower(strings.TrimSpace(requestType)) {
+	case "framework", "assets", "other":
+		return strings.ToLower(strings.TrimSpace(requestType))
+	default:
+		return "all"
 	}
-	filtered := make([]requestTrace, 0, len(traces))
-	for _, trace := range traces {
-		values := []string{trace.RequestID, trace.Method, trace.Path, strconv.Itoa(trace.Status)}
-		if strings.Contains(strings.ToLower(strings.Join(values, " ")), query) {
-			filtered = append(filtered, trace)
-		}
-	}
-	return filtered
 }
 
 func selectRequestTrace(traces []requestTrace, id string) *requestTrace {
@@ -454,12 +616,12 @@ func selectRequestTrace(traces []requestTrace, id string) *requestTrace {
 	return &traces[0]
 }
 
-func requestRows(traces []requestTrace, selected string, query string, tab string, framework bool) []requestRow {
+func requestRows(traces []requestTrace, selected string, query string, tab string, requestType string, framework bool) []requestRow {
 	rows := make([]requestRow, 0, len(traces))
 	for _, trace := range traces {
 		rows = append(rows, requestRow{
 			Trace:    trace,
-			URL:      requestURL(trace.RequestID, "", query, tab, framework),
+			URL:      requestURL(trace.RequestID, "", query, tab, requestType, framework),
 			Selected: trace.RequestID == selected,
 		})
 	}
@@ -496,7 +658,7 @@ func selectRequestSpan(spans []requestSpan, id string) *requestSpan {
 	return &spans[0]
 }
 
-func requestSpanRows(trace requestTrace, spans []requestSpan, selected string, query string, tab string, framework bool) []requestSpanRow {
+func requestSpanRows(trace requestTrace, spans []requestSpan, selected string, query string, tab string, requestType string, framework bool) []requestSpanRow {
 	base := requestTraceBase(trace)
 	duration := math.Max(0.001, trace.DurationMS)
 	spanMap := map[string]requestSpan{}
@@ -509,14 +671,14 @@ func requestSpanRows(trace requestTrace, spans []requestSpan, selected string, q
 	}
 	rows := make([]requestSpanRow, 0, len(spans))
 	for _, span := range spans {
-		rows = append(rows, requestSpanRowFor(trace, span, selected, query, tab, framework, base, duration, spanMap, visibleSet))
+		rows = append(rows, requestSpanRowFor(trace, span, selected, query, tab, requestType, framework, base, duration, spanMap, visibleSet))
 	}
 	return rows
 }
 
-func requestFlameRows(trace requestTrace, spans []requestSpan, selected string, query string, tab string, framework bool) []requestSpanRow {
+func requestFlameRows(trace requestTrace, spans []requestSpan, selected string, query string, tab string, requestType string, framework bool) []requestSpanRow {
 	if selected == "" {
-		return requestSpanRows(trace, spans, selected, query, tab, framework)
+		return requestSpanRows(trace, spans, selected, query, tab, requestType, framework)
 	}
 	selectedSet := descendantRequestSpanIDs(trace.Spans, selected)
 	flameSpans := make([]requestSpan, 0, len(spans))
@@ -525,16 +687,16 @@ func requestFlameRows(trace requestTrace, spans []requestSpan, selected string, 
 			flameSpans = append(flameSpans, span)
 		}
 	}
-	return requestSpanRows(trace, flameSpans, selected, query, tab, framework)
+	return requestSpanRows(trace, flameSpans, selected, query, tab, requestType, framework)
 }
 
-func requestSpanRowFor(trace requestTrace, span requestSpan, selected string, query string, tab string, framework bool, base time.Time, duration float64, spanMap map[string]requestSpan, visibleSet map[string]bool) requestSpanRow {
+func requestSpanRowFor(trace requestTrace, span requestSpan, selected string, query string, tab string, requestType string, framework bool, base time.Time, duration float64, spanMap map[string]requestSpan, visibleSet map[string]bool) requestSpanRow {
 	offset := math.Max(0, span.StartedAt.Sub(base).Seconds()*1000)
 	left := math.Min(100, offset/duration*100)
 	width := math.Min(100, math.Max(0.25, span.DurationMS/duration*100))
 	return requestSpanRow{
 		Span:         span,
-		URL:          requestURL(trace.RequestID, span.SpanID, query, tab, framework),
+		URL:          requestURL(trace.RequestID, span.SpanID, query, tab, requestType, framework),
 		Selected:     span.SpanID == selected,
 		Depth:        visibleRequestDepth(span, spanMap, visibleSet),
 		LeftPercent:  fmt.Sprintf("%.3f%%", left),
@@ -596,10 +758,14 @@ func frameworkRequestSpan(span requestSpan) bool {
 	return name == "router" || strings.HasPrefix(name, "middleware ") || strings.HasPrefix(name, "dispatch ")
 }
 
-func requestURL(requestID string, spanID string, query string, tab string, framework bool) string {
+func requestURL(requestID string, spanID string, query string, tab string, requestType string, framework bool) string {
 	values := url.Values{}
 	if query != "" {
 		values.Set("q", query)
+	}
+	requestType = normalizeRequestType(requestType)
+	if requestType != "all" {
+		values.Set("type", requestType)
 	}
 	tab = normalizeRequestTab(tab)
 	if tab != "headers" {

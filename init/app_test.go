@@ -11,7 +11,7 @@ import (
 	"golazy.dev/lazy/services/buildservice"
 )
 
-func TestPanelRootRedirectsToLogs(t *testing.T) {
+func TestPanelRootRedirectsToApp(t *testing.T) {
 	app := testApp()
 
 	response := httptest.NewRecorder()
@@ -19,7 +19,7 @@ func TestPanelRootRedirectsToLogs(t *testing.T) {
 	if response.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusSeeOther, response.Body.String())
 	}
-	if got, want := response.Header().Get("Location"), "/_golazy/logs"; got != want {
+	if got, want := response.Header().Get("Location"), "/_golazy/app"; got != want {
 		t.Fatalf("Location = %q, want %q", got, want)
 	}
 }
@@ -28,7 +28,7 @@ func TestPanelTabPageLoadsImportmapNavAndPermanentStatus(t *testing.T) {
 	app := testApp()
 
 	response := httptest.NewRecorder()
-	app.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/_golazy/logs", nil))
+	app.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/_golazy/app", nil))
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
 	}
@@ -38,14 +38,15 @@ func TestPanelTabPageLoadsImportmapNavAndPermanentStatus(t *testing.T) {
 		`"app.js": "/_golazy/assets/lazyshaft/app/`,
 		`<script type="module">import "app.js"</script>`,
 		`<nav class="panel-tabs tabbed-pane-header" aria-label="GoLazy panel sections" data-controller="panel-close">`,
-		`<span class="panel-tab">App Logs</span>`,
+		`<span class="panel-tab">App</span>`,
 		`<a href="/_golazy/requests" data-turbo-frame="_top">Requests</a>`,
 		`data-panel-close`,
-		`<turbo-stream-source src="/_golazy/logs"></turbo-stream-source>`,
-		`<section id="logs" class="tool-view is-active" data-view="logs">`,
-		`data-panel-resize-direction-value="right"`,
-		`class="runtime-left-stack" data-panel-resize-target="primary"`,
-		`<section class="runtime-pane output-pane">`,
+		`<turbo-stream-source src="/_golazy/app"></turbo-stream-source>`,
+		`<section id="app" class="tool-view is-active app-view" data-view="app" data-app-panel>`,
+		`<table class="data-grid app-log-grid">`,
+		`<button type="submit" class="toolbar-button">Rebuild</button>`,
+		`<button type="submit" class="toolbar-button">Restart</button>`,
+		`<a class="toolbar-button" href="http://127.0.0.1:3001" target="_blank" rel="noreferrer">Open App</a>`,
 		`<turbo-frame id="status_bar" src="/_golazy/status" data-turbo-permanent></turbo-frame>`,
 	} {
 		if !strings.Contains(body, want) {
@@ -54,6 +55,12 @@ func TestPanelTabPageLoadsImportmapNavAndPermanentStatus(t *testing.T) {
 	}
 	if strings.Contains(body, `<div class="panel-title">GoLazy</div>`) {
 		t.Fatalf("body renders obsolete layout title:\n%s", body)
+	}
+	if strings.Contains(body, `/_golazy/console`) || strings.Contains(body, `>Console<`) {
+		t.Fatalf("body renders removed Console tab:\n%s", body)
+	}
+	if strings.Contains(body, `>App Logs<`) || strings.Contains(body, `/_golazy/logs`) {
+		t.Fatalf("body renders removed App Logs tab:\n%s", body)
 	}
 	if strings.Contains(body, `src="/_golazy/requests"`) {
 		t.Fatalf("body renders inactive tab frame src:\n%s", body)
@@ -68,11 +75,10 @@ func TestPanelFrameRoutes(t *testing.T) {
 		frame string
 		want  string
 	}{
-		{path: "/_golazy/console", frame: "console", want: `data-view="console"`},
-		{path: "/_golazy/logs", frame: "logs", want: `data-view="logs"`},
+		{path: "/_golazy/app", frame: "app", want: `data-view="app"`},
 		{path: "/_golazy/services", frame: "services", want: `data-view="services"`},
 		{path: "/_golazy/traces", frame: "traces", want: `data-traces-panel`},
-		{path: "/_golazy/status", frame: "status_bar", want: `<a class="app-status-chip" href="/_golazy/logs" data-turbo-frame="_top" data-app-status="running">`},
+		{path: "/_golazy/status", frame: "status_bar", want: `<a class="app-status-chip" href="/_golazy/app" data-turbo-frame="_top" data-app-status="running">`},
 	} {
 		request := httptest.NewRequest(http.MethodGet, test.path, nil)
 		request.Header.Set("Turbo-Frame", test.frame)
@@ -82,7 +88,11 @@ func TestPanelFrameRoutes(t *testing.T) {
 			t.Fatalf("%s status = %d, want %d: %s", test.path, response.Code, http.StatusOK, response.Body.String())
 		}
 		body := response.Body.String()
-		if !strings.Contains(body, `<turbo-frame id="`+test.frame+`">`) {
+		frameTag := `<turbo-frame id="` + test.frame + `">`
+		if test.path == "/_golazy/status" {
+			frameTag = `<turbo-frame id="status_bar" data-turbo-permanent>`
+		}
+		if !strings.Contains(body, frameTag) {
 			t.Fatalf("%s body missing frame %q:\n%s", test.path, test.frame, body)
 		}
 		if !strings.Contains(body, test.want) {
@@ -281,6 +291,21 @@ func TestPanelAssetsAndJobsPage(t *testing.T) {
 	} {
 		if !strings.Contains(jobs.Body.String(), want) {
 			t.Fatalf("jobs body missing %q:\n%s", want, jobs.Body.String())
+		}
+	}
+
+	assets := httptest.NewRecorder()
+	app.ServeHTTP(assets, httptest.NewRequest(http.MethodGet, "/_golazy/assets", nil))
+	if assets.Code != http.StatusOK {
+		t.Fatalf("assets status = %d, want %d: %s", assets.Code, http.StatusOK, assets.Body.String())
+	}
+	for _, want := range []string{
+		`<turbo-stream-source src="/_golazy/assets"></turbo-stream-source>`,
+		`<section id="assets" class="tool-view is-active" data-view="assets">`,
+		`<table class="data-grid assets-grid">`,
+	} {
+		if !strings.Contains(assets.Body.String(), want) {
+			t.Fatalf("assets body missing %q:\n%s", want, assets.Body.String())
 		}
 	}
 }

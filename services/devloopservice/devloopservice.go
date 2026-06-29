@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,6 +22,7 @@ import (
 	"golazy.dev/lazy/services/jsservice"
 	"golazy.dev/lazy/services/lifecycleservice"
 	"golazy.dev/lazy/services/tailwindservice"
+	"golazy.dev/lazy/services/taskservice"
 	"golazy.dev/lazy/services/watchservice"
 	"golazy.dev/lazytui/progress"
 )
@@ -279,6 +281,14 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 		Stdout:   stdout,
 		Stderr:   stderr,
 		Register: store.SetServices,
+		RegisterTasks: func(inventory taskservice.Inventory) {
+			tasks := make([]string, 0, len(inventory.Tasks))
+			for task := range inventory.Tasks {
+				tasks = append(tasks, task)
+			}
+			sort.Strings(tasks)
+			store.SetMiseTasks(tasks)
+		},
 		Status: func(service string, state lifecycleservice.State, message string) {
 			store.UpdateService(service, serviceState(state), message)
 		},
@@ -614,6 +624,22 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 					Build:   buildNumber,
 				})
 				err = lifecycle.Restart(ctx, request.Service)
+			case buildservice.ActionStartService:
+				store.AddEvent(buildservice.Event{
+					Type:    buildservice.EventManual,
+					Service: request.Service,
+					Message: fmt.Sprintf("Manual start requested for %s service.", request.Service),
+					Build:   buildNumber,
+				})
+				err = lifecycle.StartService(ctx, request.Service)
+			case buildservice.ActionStopService:
+				store.AddEvent(buildservice.Event{
+					Type:    buildservice.EventManual,
+					Service: request.Service,
+					Message: fmt.Sprintf("Manual stop requested for %s service.", request.Service),
+					Build:   buildNumber,
+				})
+				err = lifecycle.StopService(request.Service)
 			default:
 				err = fmt.Errorf("unknown action %q", request.Action)
 			}

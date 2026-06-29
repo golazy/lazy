@@ -3,10 +3,9 @@ package appinit
 import (
 	panelcontroller "golazy.dev/lazy/app/controllers/panel"
 	"golazy.dev/lazy/app/controllers/panel/actions"
+	panelapp "golazy.dev/lazy/app/controllers/panel/app"
 	"golazy.dev/lazy/app/controllers/panel/assets"
-	"golazy.dev/lazy/app/controllers/panel/console"
 	"golazy.dev/lazy/app/controllers/panel/jobs"
-	"golazy.dev/lazy/app/controllers/panel/logs"
 	"golazy.dev/lazy/app/controllers/panel/requests"
 	"golazy.dev/lazy/app/controllers/panel/routes"
 	"golazy.dev/lazy/app/controllers/panel/services"
@@ -17,7 +16,6 @@ import (
 )
 
 func init() {
-	inflection.Irregular("console", "console")
 	inflection.Irregular("status", "status")
 }
 
@@ -33,13 +31,19 @@ func Draw(router *lazyroutes.Scope) {
 			resource.Get("request-monitoring", (*panelcontroller.Controller).RequestMonitoring)
 			resource.Post("request-monitoring/on", (*panelcontroller.Controller).RequestMonitoringOn)
 			resource.Post("request-monitoring/off", (*panelcontroller.Controller).RequestMonitoringOff)
+			resource.Post("request-traces/clear", (*panelcontroller.Controller).RequestTracesClear)
 			resource.Post("rebuild", (*panelcontroller.Controller).Rebuild)
 			resource.Post("restart", (*panelcontroller.Controller).Restart)
 		})
+		panel.Resources(panelapp.New, func(resource *lazyroutes.Resource) {
+			resource.Singular("app")
+			resource.Plural("app")
+			resource.Path("app")
+		})
 		panel.Resources(requests.New)
-		panel.Resources(console.New)
-		panel.Resources(logs.New)
 		panel.Resources(services.New, func(resource *lazyroutes.Resource) {
+			resource.MemberPost("start", (*services.ServicesController).Start)
+			resource.MemberPost("stop", (*services.ServicesController).Stop)
 			resource.MemberPost("restart", (*services.ServicesController).Restart)
 		})
 		panel.Resources(traces.New)

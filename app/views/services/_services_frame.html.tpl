@@ -11,10 +11,6 @@
     <span class="toolbar-count" data-service-output-count>{{len .service_output_rows}} messages</span>
   </div>
 
-  <div class="type-filter service-task-filter" aria-label="Service task log filters" data-service-task-filter>
-    {{partial "service_task_filters" .}}
-  </div>
-
   <div class="services-layout" data-services-panel>
     <aside class="services-sidebar" aria-label="Development services">
       <ul class="service-list" data-service-list>
@@ -26,11 +22,12 @@
       <table class="data-grid service-output-grid">
         <thead>
           <tr>
-            <th>script</th>
+            <th>source</th>
             <th>run</th>
-            <th>stdout/stderr</th>
+            <th>stream</th>
             <th>timestamp</th>
             <th>message</th>
+            <th>attributes</th>
           </tr>
         </thead>
         <tbody data-service-output>

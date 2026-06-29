@@ -1,14 +1,7 @@
 <section id="actions" class="tool-view is-active" data-view="actions">
   <div class="filter-toolbar">
-    <form method="post" action="/_golazy/rebuild">
-      <button type="submit" class="toolbar-button">Rebuild</button>
-    </form>
-    <form method="post" action="/_golazy/restart">
-      <button type="submit" class="toolbar-button">Restart</button>
-    </form>
-    <a class="toolbar-button" href="/">Open app</a>
     <span class="toolbar-spacer"></span>
-    <span class="toolbar-count">Development actions</span>
+    <span class="toolbar-count">Cache</span>
   </div>
 
   <div class="action-layout">
@@ -44,15 +37,6 @@
         {{else}}
           <li class="muted">{{if $.cache.Error}}{{$.cache.Error}}{{else}}No keys.{{end}}</li>
         {{end}}
-      </ul>
-    </section>
-
-    <section class="runtime-pane">
-      <h2>Action Notes</h2>
-      <ul class="compact-list">
-        <li>Rebuild recompiles the app and restarts the child process.</li>
-        <li>Restart starts the latest successful build without recompiling.</li>
-        <li>Cache controls proxy to the app lazydev control plane.</li>
       </ul>
     </section>
   </div>

@@ -345,6 +345,54 @@ func TestRestartRejectsUnknownService(t *testing.T) {
 	}
 }
 
+func TestStopAndStartSelectedService(t *testing.T) {
+	dir := t.TempDir()
+	writeTask(t, dir, "postgres/start")
+
+	var mu sync.Mutex
+	var starts []string
+	processes := map[string][]*fakeProcess{}
+	starter := func(_ string, task string, _ io.Writer, _ io.Writer, _ time.Duration) (Process, error) {
+		process := newFakeProcess()
+		mu.Lock()
+		starts = append(starts, task)
+		processes[task] = append(processes[task], process)
+		mu.Unlock()
+		return process, nil
+	}
+
+	manager, err := (Service{
+		Dir:     dir,
+		Starter: starter,
+	}).Start(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Stop()
+	if err := waitReady(t, manager); err != nil {
+		t.Fatal(err)
+	}
+
+	mu.Lock()
+	first := processes["postgres:start"][0]
+	mu.Unlock()
+	if err := manager.StopService("postgres"); err != nil {
+		t.Fatal(err)
+	}
+	if !first.Stopped() {
+		t.Fatalf("postgres process was not stopped")
+	}
+	if err := manager.StartService(context.Background(), "postgres"); err != nil {
+		t.Fatal(err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if got := countValues(starts, "postgres:start"); got != 2 {
+		t.Fatalf("postgres starts = %d, want 2; starts = %#v", got, starts)
+	}
+}
+
 func waitReady(t *testing.T, manager *Manager) error {
 	t.Helper()
 	select {

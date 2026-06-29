@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -91,7 +92,7 @@ func TestRequestMonitoringRedirectsAndProxiesApplicationControlPlaneCommands(t *
 	if response.Code != http.StatusSeeOther {
 		t.Fatalf("state status = %d, want %d: %s", response.Code, http.StatusSeeOther, response.Body.String())
 	}
-	if got, want := response.Header().Get("Location"), "/_golazy/traces"; got != want {
+	if got, want := response.Header().Get("Location"), "/_golazy/requests"; got != want {
 		t.Fatalf("state Location = %q, want %q", got, want)
 	}
 
@@ -110,7 +111,7 @@ func TestRequestMonitoringRedirectsAndProxiesApplicationControlPlaneCommands(t *
 		if response.Code != http.StatusSeeOther {
 			t.Fatalf("%s status = %d, want %d: %s", call.name, response.Code, http.StatusSeeOther, response.Body.String())
 		}
-		if got, want := response.Header().Get("Location"), "/_golazy/traces"; got != want {
+		if got, want := response.Header().Get("Location"), "/_golazy/requests"; got != want {
 			t.Fatalf("%s Location = %q, want %q", call.name, got, want)
 		}
 	}
@@ -126,6 +127,49 @@ func TestRequestMonitoringRedirectsAndProxiesApplicationControlPlaneCommands(t *
 		if paths[index] != want[index] {
 			t.Fatalf("proxied paths = %#v, want %#v", paths, want)
 		}
+	}
+}
+
+func TestRequestToolbarCommandsPreserveSafePanelRedirect(t *testing.T) {
+	var paths []string
+	appControl := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = fmt.Fprint(w, `{}`)
+	}))
+	defer appControl.Close()
+
+	store := buildservice.NewStore(10)
+	store.Update(buildservice.Snapshot{
+		State:            buildservice.StateRunning,
+		ControlPlaneAddr: strings.TrimPrefix(appControl.URL, "http://"),
+	})
+	controller := &Controller{Base: Base{Store: store}}
+
+	form := url.Values{"redirect": {"/_golazy/requests?q=pools&type=assets"}}
+	request := httptest.NewRequest(http.MethodPost, "/_golazy/request-traces/clear", strings.NewReader(form.Encode()))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	response := httptest.NewRecorder()
+	if err := controller.RequestTracesClear(response, request); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := response.Header().Get("Location"), "/_golazy/requests?q=pools&type=assets"; got != want {
+		t.Fatalf("safe redirect Location = %q, want %q", got, want)
+	}
+
+	request = httptest.NewRequest(http.MethodPost, "/_golazy/cache/off", strings.NewReader(url.Values{"redirect": {"https://example.test"}}.Encode()))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	response = httptest.NewRecorder()
+	if err := controller.CacheOff(response, request); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := response.Header().Get("Location"), "/_golazy/actions"; got != want {
+		t.Fatalf("unsafe redirect Location = %q, want fallback %q", got, want)
+	}
+
+	want := []string{appRequestTracesClearPath, appCacheOffPath}
+	if len(paths) != len(want) || paths[0] != want[0] || paths[1] != want[1] {
+		t.Fatalf("proxied paths = %#v, want %#v", paths, want)
 	}
 }
 

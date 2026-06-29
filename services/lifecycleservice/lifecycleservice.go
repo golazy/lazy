@@ -56,6 +56,7 @@ type Service struct {
 	Runner            TaskRunner
 	Starter           Starter
 	Register          func([]string)
+	RegisterTasks     func(taskservice.Inventory)
 	Status            func(service string, state State, message string)
 	Output            func(TaskOutput) io.Writer
 	CheckInterval     time.Duration
@@ -96,8 +97,14 @@ func (s Service) Start(ctx context.Context) (*Manager, error) {
 		runs:              map[string]int{},
 	}
 	if len(inventory.Services) == 0 {
+		if s.RegisterTasks != nil {
+			s.RegisterTasks(inventory)
+		}
 		manager.ready <- nil
 		return manager, nil
+	}
+	if s.RegisterTasks != nil {
+		s.RegisterTasks(inventory)
 	}
 	s.register(inventory.Services)
 
@@ -156,13 +163,53 @@ func (m *Manager) Restart(ctx context.Context, service string) error {
 		return fmt.Errorf("unknown service %q", service)
 	}
 
-	process := m.takeProcessForRestart(service)
+	process := m.takeProcessForStop(service)
 	if process != nil {
 		m.service.status(service, StateNotReady, "Restarting service.")
 		m.service.logf(service, "", 0, "lazy: restarting %s service\n", service)
 		process.Stop()
 	}
 	return m.service.startService(ctx, m, m.inventory, service)
+}
+
+func (m *Manager) StartService(ctx context.Context, service string) error {
+	if m == nil {
+		return fmt.Errorf("service manager is not running")
+	}
+	service = strings.TrimSpace(service)
+	if service == "" {
+		return fmt.Errorf("service name is required")
+	}
+	if !m.hasService(service) {
+		return fmt.Errorf("unknown service %q", service)
+	}
+	if m.hasProcess(service) {
+		return fmt.Errorf("%s service is already running", service)
+	}
+	return m.service.startService(ctx, m, m.inventory, service)
+}
+
+func (m *Manager) StopService(service string) error {
+	if m == nil {
+		return fmt.Errorf("service manager is not running")
+	}
+	service = strings.TrimSpace(service)
+	if service == "" {
+		return fmt.Errorf("service name is required")
+	}
+	if !m.hasService(service) {
+		return fmt.Errorf("unknown service %q", service)
+	}
+	process := m.takeProcessForStop(service)
+	if process == nil {
+		m.service.status(service, StateStopped, "Service is not running.")
+		return nil
+	}
+	m.service.status(service, StateStopped, "Stopping service.")
+	m.service.logf(service, "", 0, "lazy: stopping %s service\n", service)
+	process.Stop()
+	m.service.status(service, StateStopped, "Service stopped.")
+	return nil
 }
 
 func (m *Manager) Stop() {
@@ -202,7 +249,7 @@ func (m *Manager) addProcess(name string, process Process) bool {
 	return true
 }
 
-func (m *Manager) takeProcessForRestart(name string) Process {
+func (m *Manager) takeProcessForStop(name string) Process {
 	m.processesMu.Lock()
 	defer m.processesMu.Unlock()
 	process := m.processes[name]
@@ -261,6 +308,12 @@ func (m *Manager) hasService(service string) bool {
 		}
 	}
 	return false
+}
+
+func (m *Manager) hasProcess(service string) bool {
+	m.processesMu.Lock()
+	defer m.processesMu.Unlock()
+	return m.processes[service] != nil
 }
 
 func (m *Manager) nextRun(service string, task string) int {

@@ -5,5 +5,6 @@
     <td>{{.Stream}}</td>
     <td>{{.Time}}</td>
     <td>{{.Message}}</td>
+    <td>{{.Attrs}}</td>
   </tr>
 {{end}}

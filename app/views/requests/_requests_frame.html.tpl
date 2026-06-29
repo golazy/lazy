@@ -2,23 +2,20 @@
   <div class="network-toolbar network-toolbar-container">
     <div class="network-controls">
       <form method="post" action="{{if .monitoring.Enabled}}/_golazy/request-monitoring/off{{else}}/_golazy/request-monitoring/on{{end}}">
-        <button type="submit" class="icon-button record-button" title="{{if .monitoring.Enabled}}Disable detailed request monitoring{{else}}Enable detailed request monitoring{{end}}" aria-pressed="{{.monitoring.Enabled}}">
+        <input type="hidden" name="redirect" value="{{.requests.CurrentURL}}">
+        <button type="submit" class="icon-button record-button" title="Enable tracing" aria-pressed="{{.monitoring.Enabled}}">
           <span class="record-dot"></span>
         </button>
       </form>
-      <button type="button" class="icon-button clear-button" disabled title="Clear request log"></button>
+      <form method="post" action="/_golazy/request-traces/clear">
+        <input type="hidden" name="redirect" value="{{.requests.CurrentURL}}">
+        <button type="submit" class="icon-button clear-button" title="Clear request log"></button>
+      </form>
       <span class="toolbar-divider"></span>
-      <span class="toolbar-count">{{.monitoring.StatusText}}</span>
-      <span class="toolbar-divider"></span>
-      <label class="inline-check">
-        <input type="checkbox" checked disabled>
-        <span>Preserve log</span>
-      </label>
-      <span class="toolbar-divider"></span>
-      <label class="inline-check">
-        <input type="checkbox" disabled>
-        <span>Disable cache</span>
-      </label>
+      <form method="post" action="{{if .cache.Enabled}}/_golazy/cache/off{{else}}/_golazy/cache/on{{end}}">
+        <input type="hidden" name="redirect" value="{{.requests.CurrentURL}}">
+        <button type="submit" class="toolbar-button">{{if .cache.Enabled}}Disable cache{{else}}Enable cache{{end}}</button>
+      </form>
       <button type="button" class="select-button" disabled>No throttling</button>
       <span class="toolbar-spacer"></span>
       <span class="toolbar-count" data-request-count>{{.requests.RequestCountText}}</span>
@@ -37,34 +34,18 @@
         {{if .requests.LogsTab}}
           <input type="hidden" name="tab" value="logs">
         {{end}}
+        <input type="hidden" name="type" value="{{.requests.TypeValue}}">
         <input type="hidden" name="framework" value="{{.requests.FrameworkValue}}">
         <input class="filter-input network-filter" type="search" name="q" placeholder="Filter" value="{{.requests.Query}}">
       </form>
-      <div class="scope-filter" aria-label="Request scope filters">
-        <button type="button" aria-pressed="true" disabled>App</button>
-        <button type="button" aria-pressed="false" disabled>Assets</button>
-        <button type="button" aria-pressed="false" disabled>All</button>
-      </div>
-      <label class="inline-check">
-        <input type="checkbox" disabled>
-        <span>Invert</span>
-      </label>
       <span class="toolbar-spacer"></span>
       <button type="button" class="more-filters" disabled>More filters</button>
     </div>
     <div class="type-filter" aria-label="Request type filters">
-      <button type="button" aria-pressed="true" disabled>All</button>
-      <button type="button" disabled>Fetch/XHR</button>
-      <button type="button" disabled>Doc</button>
-      <button type="button" disabled>CSS</button>
-      <button type="button" disabled>JS</button>
-      <button type="button" disabled>Font</button>
-      <button type="button" disabled>Img</button>
-      <button type="button" disabled>Media</button>
-      <button type="button" disabled>Manifest</button>
-      <button type="button" disabled>Socket</button>
-      <button type="button" disabled>Wasm</button>
-      <button type="button" disabled>Other</button>
+      <a href="{{.requests.TypeURL "all"}}" data-turbo-frame="_top" aria-current="{{if .requests.TypeSelected "all"}}page{{end}}">All</a>
+      <a href="{{.requests.TypeURL "framework"}}" data-turbo-frame="_top" aria-current="{{if .requests.TypeSelected "framework"}}page{{end}}">Framework</a>
+      <a href="{{.requests.TypeURL "assets"}}" data-turbo-frame="_top" aria-current="{{if .requests.TypeSelected "assets"}}page{{end}}">Assets</a>
+      <a href="{{.requests.TypeURL "other"}}" data-turbo-frame="_top" aria-current="{{if .requests.TypeSelected "other"}}page{{end}}">Other</a>
     </div>
   </div>
 
@@ -97,127 +78,13 @@
 
     <aside class="details-pane">
       {{if .requests.HasSelected}}
-        <div class="request-detail-pane">
-          <div class="request-detail-header">
-            <strong>{{.requests.Selected.PathText}}</strong>
-            <span>{{.requests.Selected.MethodText}}</span>
-            <span>{{.requests.Selected.StatusText}}</span>
-            <span>{{.requests.Selected.DurationText}}</span>
-          </div>
-          <nav class="request-detail-tabs" aria-label="Request detail tabs">
-            <a href="{{.requests.TabURL "headers"}}" data-turbo-frame="_top" aria-current="{{if .requests.HeadersTab}}page{{end}}">Headers</a>
-            <a href="{{.requests.TabURL "tracing"}}" data-turbo-frame="_top" aria-current="{{if .requests.TracingTab}}page{{end}}">Tracing</a>
-            <a href="{{.requests.TabURL "logs"}}" data-turbo-frame="_top" aria-current="{{if .requests.LogsTab}}page{{end}}">Logs</a>
-          </nav>
-          <div class="request-detail-body">
-            {{if .requests.HeadersTab}}
-              <section class="runtime-pane request-summary-pane">
-                <h2>General</h2>
-                <dl class="detail-list">
-                  <dt>Path</dt>
-                  <dd>{{.requests.Selected.PathText}}</dd>
-                  <dt>Method</dt>
-                  <dd>{{.requests.Selected.MethodText}}</dd>
-                  <dt>Status</dt>
-                  <dd>{{.requests.Selected.StatusText}}</dd>
-                  <dt>Duration</dt>
-                  <dd>{{.requests.Selected.DurationText}}</dd>
-                  <dt>Allocated</dt>
-                  <dd>{{.requests.Selected.MemoryText}}</dd>
-                  <dt>Runtime</dt>
-                  <dd>{{.requests.Selected.RuntimeText}}</dd>
-                </dl>
-              </section>
-            {{else if .requests.TracingTab}}
-              <div class="request-trace-grid">
-                <section class="runtime-pane request-trace-timeline-pane">
-                  <div class="section-heading">
-                    <h2>Timeline</h2>
-                    <span class="toolbar-count">{{.requests.SpanCountText}}</span>
-                    <a class="toolbar-button" href="{{.requests.FrameworkToggleURL}}" data-turbo-frame="_top">{{.requests.FrameworkToggleText}}</a>
-                  </div>
-                  <div class="trace-timeline" data-trace-timeline>
-                    {{range .requests.TimelineRows}}
-                      <div class="trace-timeline-row" data-framework="{{.Span.Framework}}" data-selected="{{.Selected}}">
-                        <a class="trace-timeline-label" href="{{.URL}}" data-turbo-frame="_top" style="padding-left: {{.LabelPadding}}">{{.Span.Name}}</a>
-                        <a class="trace-timeline-track" href="{{.URL}}" data-turbo-frame="_top">
-                          <span class="trace-timeline-bar{{if eq .Span.Name "http.server.request"}} trace-task-bar{{end}}" style="left: {{.LeftPercent}}; width: {{.WidthPercent}}"></span>
-                        </a>
-                        <span class="trace-timeline-time">{{.Span.DurationText}}</span>
-                      </div>
-                    {{else}}
-                      <div class="empty-state">No trace regions recorded for this request.</div>
-                    {{end}}
-                  </div>
-                </section>
-
-                <section class="runtime-pane request-trace-region-pane">
-                  <h2>Selected Region</h2>
-                  <dl class="detail-list">
-                    <dt>Name</dt>
-                    <dd>{{.requests.SelectedSpan.Name}}</dd>
-                    <dt>Duration</dt>
-                    <dd>{{.requests.SelectedSpan.DurationSummaryText}}</dd>
-                    <dt>Self time</dt>
-                    <dd>{{.requests.SelectedSpan.SelfDurationText}}</dd>
-                    <dt>Allocated</dt>
-                    <dd>{{.requests.SelectedSpan.AllocationSummaryText}}</dd>
-                    <dt>Mallocs</dt>
-                    <dd>{{.requests.SelectedSpan.MallocsSummaryText}}</dd>
-                    <dt>Frees</dt>
-                    <dd>{{.requests.SelectedSpan.FreesSummaryText}}</dd>
-                    <dt>Trace file</dt>
-                    <dd><code>{{.requests.Selected.TraceFile}}</code></dd>
-                  </dl>
-                </section>
-
-                <section class="runtime-pane request-trace-flame-pane">
-                  <h2>Chronological Flamegraph</h2>
-                  <div class="trace-flamegraph" data-trace-flamegraph>
-                    {{range .requests.FlameRows}}
-                      <a class="trace-flame-row" href="{{.URL}}" data-turbo-frame="_top" data-selected="{{.Selected}}" style="margin-left: {{.FlameMargin}}">
-                        <span class="trace-flame-bar" style="margin-left: {{.LeftPercent}}; width: {{.WidthPercent}}"></span>
-                        <span class="trace-flame-label">{{.Span.FlameLabel}}</span>
-                      </a>
-                    {{else}}
-                      <div class="empty-state">Select a timeline region.</div>
-                    {{end}}
-                  </div>
-                </section>
-              </div>
-            {{else if .requests.LogsTab}}
-              <section class="runtime-pane request-logs-pane">
-                <h2>Logs</h2>
-                <table class="data-grid trace-log-grid">
-                  <thead>
-                    <tr>
-                      <th>Time</th>
-                      <th>Level</th>
-                      <th>Message</th>
-                      <th>Span</th>
-                    </tr>
-                  </thead>
-                  <tbody data-request-logs>
-                    {{range .requests.Logs}}
-                      <tr>
-                        <td>{{.TimeText}}</td>
-                        <td>{{.Level}}</td>
-                        <td>{{.Message}}</td>
-                        <td>{{.SpanID}}</td>
-                      </tr>
-                    {{else}}
-                      <tr>
-                        <td colspan="4" class="empty-cell">No logs for this request.</td>
-                      </tr>
-                    {{end}}
-                  </tbody>
-                </table>
-              </section>
-            {{end}}
-          </div>
-        </div>
+        <turbo-frame id="request_detail" src="{{.requests.DetailURL}}" loading="lazy">
+          <div class="empty-state">Loading request details.</div>
+        </turbo-frame>
       {{else}}
-        <div class="empty-state">Select a request to inspect headers, logs, and traces.</div>
+        <turbo-frame id="request_detail">
+          <div class="empty-state">Select a request to inspect headers, logs, and traces.</div>
+        </turbo-frame>
       {{end}}
     </aside>
   </div>

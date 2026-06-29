@@ -92,6 +92,7 @@ func (c *RoutesController) renderRouteList(r *http.Request) (string, error) {
 type routeRow struct {
 	Method    string
 	Path      string
+	Link      string
 	Name      string
 	Target    string
 	Namespace string
@@ -104,6 +105,7 @@ func routeRows(routes lazyroutes.RouteTable) []routeRow {
 		rows = append(rows, routeRow{
 			Method:    route.Method,
 			Path:      route.Path,
+			Link:      routeLink(route),
 			Name:      route.Name,
 			Target:    routeTarget(route),
 			Namespace: route.Namespace,
@@ -111,6 +113,10 @@ func routeRows(routes lazyroutes.RouteTable) []routeRow {
 		})
 	}
 	return rows
+}
+
+func (r routeRow) Linkable() bool {
+	return r.Link != ""
 }
 
 func filterRoutes(routes []routeRow, query string) []routeRow {
@@ -145,6 +151,16 @@ func routeTarget(route lazyroutes.Route) string {
 	default:
 		return ""
 	}
+}
+
+func routeLink(route lazyroutes.Route) string {
+	if route.Method != http.MethodGet || strings.Contains(route.Path, "{") || strings.Contains(route.Path, "}") {
+		return ""
+	}
+	if strings.TrimSpace(route.Path) == "" {
+		return ""
+	}
+	return route.Path
 }
 
 func routeParams(params map[string]bool) string {

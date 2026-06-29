@@ -82,6 +82,8 @@ const (
 	ActionRebuild        Action = "rebuild"
 	ActionRestart        Action = "restart"
 	ActionRestartService Action = "restart_service"
+	ActionStartService   Action = "start_service"
+	ActionStopService    Action = "stop_service"
 )
 
 type ActionRequest struct {
@@ -159,6 +161,7 @@ type Snapshot struct {
 	Changed          []string          `json:"changed,omitempty"`
 	Output           string            `json:"output,omitempty"`
 	Services         []ServiceSnapshot `json:"services,omitempty"`
+	Tasks            []string          `json:"tasks,omitempty"`
 	Events           []Event           `json:"events,omitempty"`
 }
 
@@ -181,7 +184,16 @@ func NewStore(limit int) *Store {
 }
 
 func (s *Store) Update(snapshot Snapshot) {
-	s.record(snapshot, Event{Type: EventState, State: snapshot.State, Message: snapshot.Message, Build: snapshot.BuildCount})
+	s.record(snapshot, Event{
+		Type:      EventState,
+		State:     snapshot.State,
+		Message:   snapshot.Message,
+		Changed:   append([]string(nil), snapshot.Changed...),
+		Build:     snapshot.BuildCount,
+		Duration:  snapshot.Duration,
+		AppAddr:   snapshot.AppAddr,
+		PanelAddr: snapshot.ControlPlaneAddr,
+	})
 }
 
 func (s *Store) AddEvent(event Event) {
@@ -199,6 +211,24 @@ func (s *Store) SetServices(names []string) {
 	}
 	snapshot.Services = services
 	s.record(snapshot, Event{Type: EventManual, Message: "Development services discovered."})
+}
+
+func (s *Store) SetMiseTasks(tasks []string) {
+	snapshot := s.Snapshot()
+	seen := map[string]struct{}{}
+	snapshot.Tasks = snapshot.Tasks[:0]
+	for _, task := range tasks {
+		task = strings.TrimSpace(task)
+		if task == "" {
+			continue
+		}
+		if _, ok := seen[task]; ok {
+			continue
+		}
+		seen[task] = struct{}{}
+		snapshot.Tasks = append(snapshot.Tasks, task)
+	}
+	s.record(snapshot, Event{Type: EventManual, Message: "Mise tasks discovered."})
 }
 
 func (s *Store) UpdateService(name string, state ServiceState, message string) {
@@ -228,6 +258,7 @@ func (s *Store) Snapshot() Snapshot {
 	snapshot := s.snapshot
 	snapshot.Changed = append([]string(nil), snapshot.Changed...)
 	snapshot.Services = append([]ServiceSnapshot(nil), snapshot.Services...)
+	snapshot.Tasks = append([]string(nil), snapshot.Tasks...)
 	snapshot.Events = append([]Event(nil), s.events...)
 	return snapshot
 }
@@ -251,6 +282,9 @@ func (s *Store) record(snapshot Snapshot, event Event) {
 	s.mu.Lock()
 	if snapshot.Services == nil {
 		snapshot.Services = append([]ServiceSnapshot(nil), s.snapshot.Services...)
+	}
+	if snapshot.Tasks == nil {
+		snapshot.Tasks = append([]string(nil), s.snapshot.Tasks...)
 	}
 	s.snapshot = snapshot
 	s.events = append(s.events, event)

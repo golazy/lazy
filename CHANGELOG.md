@@ -23,6 +23,11 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The development panel Services tab now splits service output by lifecycle
   script (`start`, `check`, `create`, `migrate`, and custom task names) and
   shows each task run number, making repeated readiness checks visible.
+- The development panel now includes an App tab with service status, lazy
+  lifecycle events, changed-file groups, and manual rebuild, restart, and
+  open-app controls.
+- The development panel Assets tab now lists lazy asset manifest entries and
+  their public paths from the app lazydev control plane.
 - The `lazy` development proxy now accepts HTTP and HTTPS on the same port.
   Plain HTTP serves the local certificate authority setup and download page,
   while HTTPS serves the development panel and proxied app traffic with HTTP/2
@@ -52,16 +57,22 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   The Tracing detail renders per-region total and self duration plus sampled
   allocation bytes, malloc counts, and free counts when the app sidecar
   provides lazydev allocation samples.
+- The development panel Requests tab now filters request paths and request
+  categories on the app control plane, refreshes new matching requests through
+  its tab stream, clears trace sidecars from the clear button, and lazy-loads
+  request details in a nested Turbo frame.
 - The development iframe client now relies on Turbo Stream sources and
   Stimulus controllers for panel UI behavior, removing the old shared
   `/_golazy/state` fetch loop and `/_golazy/events` panel renderer while
   keeping the host-page reload stream.
 - The development panel now uses a single top tab bar with the close control on
-  the right, app and service status chips in the permanent status bar, a
-  full-height Services page, and an App Logs split resize that expands the left
-  detail stack while the output pane fills the remaining width.
-- The status bar app chip now opens App Logs, and selected service chips keep
+  the right, app and service status chips in the permanent status bar, an App
+  tab for app lifecycle state, and a full-height Services page.
+- The status bar app chip now opens App, and selected service chips keep
   the same background as the rest of the status bar.
+- The development panel no longer renders Console or App Logs tabs. App logs
+  are merged into Services through a synthetic App service, and Actions only
+  exposes cache controls.
 - `lazy docs --json` includes package, value, function, type, and method source
   file and line metadata from `golazy.dev/lazydoc`.
 - The default `lazy` command now discovers local services from `lazy.toml` or
@@ -72,6 +83,12 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Service lifecycle output events now keep the service name, script action, and
   run number so repeated `check` attempts and restart-triggered runs can be
   inspected independently in the panel.
+- Managed service rows in the Services tab now expose restart, stop, and start
+  actions, while the service tree lists discovered lifecycle scripts and
+  separates general mise tasks below the services.
+- Service output in the development panel is capped at 100 rendered rows,
+  batched while streaming, and parses JSON log lines into message and
+  attributes columns.
 - The embedded development panel can now be closed from its toolbar. Panel
   split panes use a reusable Stimulus resize controller with `left`, `right`,
   `top`, and `bottom` directions plus pixel or percentage `min`, `max`, and

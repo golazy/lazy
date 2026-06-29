@@ -1,5 +1,5 @@
 <footer id="status_bar_content" class="status-bar">
-  <a class="app-status-chip" href="{{path_for "logs"}}" data-turbo-frame="_top" data-app-status="{{.state.State}}">
+  <a class="app-status-chip" href="{{path_for "app"}}" data-turbo-frame="_top" data-app-status="{{.state.State}}">
     <span class="service-dot"></span>
     <span>App</span>
   </a>

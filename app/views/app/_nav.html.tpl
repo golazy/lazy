@@ -1,8 +1,7 @@
 <nav class="panel-tabs tabbed-pane-header" aria-label="GoLazy panel sections" data-controller="panel-close">
   <div class="panel-tab-list">
+    <span class="panel-tab">{{link_to "App" (path_for "app") (data "turbo-frame" "_top") (unless_current)}}</span>
     <span class="panel-tab">{{link_to "Requests" (path_for "requests") (data "turbo-frame" "_top") (unless_current)}}</span>
-    <span class="panel-tab">{{link_to "Console" (path_for "console") (data "turbo-frame" "_top") (unless_current)}}</span>
-    <span class="panel-tab">{{link_to "App Logs" (path_for "logs") (data "turbo-frame" "_top") (unless_current)}}</span>
     <span class="panel-tab">{{link_to "Services" (path_for "services") (data "turbo-frame" "_top") (unless_current)}}</span>
     <span class="panel-tab">{{link_to "Routes" (path_for "routes") (data "turbo-frame" "_top") (unless_current)}}</span>
     <span class="panel-tab">{{link_to "Jobs" (path_for "jobs") (data "turbo-frame" "_top") (unless_current)}}</span>
