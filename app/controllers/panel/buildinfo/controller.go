@@ -73,13 +73,16 @@ func (c *BuildInfoController) buildInfoViewData(r *http.Request) map[string]any 
 }
 
 type buildTraceView struct {
-	Available   bool
-	Error       string
-	BuildNumber int
-	Total       string
-	Phases      []buildTracePhaseRow
-	Packages    []buildTracePackageRow
-	Actions     []buildTraceActionRow
+	Available          bool
+	Error              string
+	BuildNumber        int
+	Total              string
+	TopPhase           string
+	TopPhaseDuration   string
+	TopPackage         string
+	TopPackageDuration string
+	Phases             []buildTracePhaseRow
+	Packages           []buildTracePackageRow
 }
 
 type buildTracePhaseRow struct {
@@ -97,13 +100,6 @@ type buildTracePackageRow struct {
 	Width    string
 }
 
-type buildTraceActionRow struct {
-	Name     string
-	Phase    string
-	Package  string
-	Duration string
-}
-
 func newBuildTraceView(summary buildservice.BuildTraceSummary) buildTraceView {
 	view := buildTraceView{
 		Available:   summary.Available,
@@ -117,6 +113,10 @@ func newBuildTraceView(summary buildservice.BuildTraceSummary) buildTraceView {
 
 	phaseMax := maxBuildTracePhaseDuration(summary.Phases)
 	for _, phase := range summary.Phases {
+		if phase.Duration == phaseMax {
+			view.TopPhase = phase.Name
+			view.TopPhaseDuration = formatBuildTraceDuration(phase.Duration)
+		}
 		view.Phases = append(view.Phases, buildTracePhaseRow{
 			Name:     phase.Name,
 			Duration: formatBuildTraceDuration(phase.Duration),
@@ -126,6 +126,10 @@ func newBuildTraceView(summary buildservice.BuildTraceSummary) buildTraceView {
 	}
 
 	packageMax := maxBuildTracePackageDuration(summary.Packages)
+	if len(summary.Packages) > 0 {
+		view.TopPackage = summary.Packages[0].Package
+		view.TopPackageDuration = formatBuildTraceDuration(summary.Packages[0].Duration)
+	}
 	for _, pkg := range summary.Packages {
 		view.Packages = append(view.Packages, buildTracePackageRow{
 			Package:  pkg.Package,
@@ -133,15 +137,6 @@ func newBuildTraceView(summary buildservice.BuildTraceSummary) buildTraceView {
 			Duration: formatBuildTraceDuration(pkg.Duration),
 			Count:    traceCountText(pkg.Count),
 			Width:    buildTraceWidth(pkg.Duration, packageMax),
-		})
-	}
-
-	for _, action := range summary.Actions {
-		view.Actions = append(view.Actions, buildTraceActionRow{
-			Name:     action.Name,
-			Phase:    action.Phase,
-			Package:  action.Package,
-			Duration: formatBuildTraceDuration(action.Duration),
 		})
 	}
 	return view

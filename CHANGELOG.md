@@ -84,6 +84,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `turbo-stream-source` connects, then send targeted row/count updates only
   when a relevant backend event exists instead of repainting whole tabs from
   generic build events.
+- The development panel BuildInfo tab now presents build trace diagnostics as
+  one summary rail plus a slowest-packages table, keeping runtime module and
+  setting details in one compact table instead of several separate panes.
 - The development panel Assets search now uses debounced backend Turbo Frame
   requests and aborts older in-flight searches before they can replace newer
   results. The Assets table scrolls inside the tab body.

@@ -94,8 +94,9 @@ func TestBuildInfoViewReadsApplicationControlPlane(t *testing.T) {
 		`data-buildinfo-panel`,
 		`BuildInfo`,
 		`Build 3 - 250.0ms`,
-		`Why This Build Took Time`,
-		`Slow Packages`,
+		`Build Timing`,
+		`Slowest Packages`,
+		`Runtime Details`,
 		`example.test/app/pkg`,
 		`2 dependencies`,
 		`example.test/app/cmd/app`,
@@ -106,6 +107,15 @@ func TestBuildInfoViewReadsApplicationControlPlane(t *testing.T) {
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("rendered buildinfo frame missing %q:\n%s", want, body)
+		}
+	}
+	for _, unwanted := range []string{
+		`Slow Actions`,
+		`<h2>Settings</h2>`,
+		`<h2>Dependencies</h2>`,
+	} {
+		if strings.Contains(body, unwanted) {
+			t.Fatalf("rendered buildinfo frame contains old panel heading %q:\n%s", unwanted, body)
 		}
 	}
 }
