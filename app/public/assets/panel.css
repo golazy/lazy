@@ -1032,12 +1032,13 @@ button:disabled:hover {
 }
 
 .request-tracing-layout {
+  align-content: start;
   display: grid;
-  grid-template-rows: 34px minmax(11rem, var(--panel-resize-primary-size, 50%)) 6px minmax(9rem, 1fr);
-  height: 100%;
-  min-height: 0;
+  grid-template-rows: 34px minmax(170px, var(--panel-resize-primary-size, 14rem)) 6px max-content;
+  height: auto;
+  min-height: 100%;
   min-width: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .request-trace-status-row {
@@ -1091,6 +1092,10 @@ button:disabled:hover {
 .request-trace-flame-pane {
   border-bottom: 1px solid var(--border);
   border-right: 0;
+}
+
+.request-tracing-layout .request-trace-flame-pane {
+  overflow: visible;
 }
 
 .request-region-grid {

@@ -103,7 +103,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   toggle, a backend-sorted region metrics table, and a flamegraph whose scale
   follows the selected time, allocation, or memory metric. Flamegraph bars now
   use square classical flamegraph colors, keep only the span name inside the
-  bar, and expose full timing/allocation details in tooltips.
+  bar, expose full timing/allocation details in tooltips, and grow to the
+  graph's full height while the region table keeps a compact minimum height.
 - The Chrome extension action now toggles the inspected page's in-page panel
   instead of trying to select the DevTools panel. The in-page panel hides when
   the GoLazy DevTools panel is open, and closed panels show a small yellow
