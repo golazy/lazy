@@ -301,11 +301,6 @@ button:disabled:hover {
   border-color: transparent;
 }
 
-.record-button {
-  border-color: var(--sys-color-error);
-  border-radius: 50%;
-}
-
 .record-dot {
   border: 2px solid var(--sys-color-error);
   border-radius: 50%;
