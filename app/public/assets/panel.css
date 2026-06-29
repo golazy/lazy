@@ -704,6 +704,51 @@ button:disabled:hover {
   width: 12%;
 }
 
+.dependencies-layout {
+  display: grid;
+  grid-template-columns: minmax(13rem, 18rem) minmax(24rem, 1.2fr) minmax(18rem, 0.8fr);
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.dependencies-table-pane {
+  padding: 0;
+}
+
+.dependencies-table-pane h2 {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  margin: 0;
+  padding: 6px 8px;
+  position: sticky;
+  top: 0;
+}
+
+.dependencies-grid,
+.dependency-edge-grid {
+  min-width: 30rem;
+}
+
+.dependencies-grid th:nth-child(1),
+.dependencies-grid td:nth-child(1) {
+  width: 28%;
+}
+
+.dependencies-grid th:nth-child(2),
+.dependencies-grid td:nth-child(2),
+.dependencies-grid th:nth-child(3),
+.dependencies-grid td:nth-child(3) {
+  width: 36%;
+}
+
+.dependency-edge-grid th:nth-child(1),
+.dependency-edge-grid td:nth-child(1),
+.dependency-edge-grid th:nth-child(2),
+.dependency-edge-grid td:nth-child(2) {
+  width: 50%;
+}
+
 .details-pane {
   background: var(--base);
   min-width: 0;
@@ -1950,6 +1995,7 @@ button:disabled:hover {
 @media (max-width: 820px) {
   .split-view,
   .buildinfo-layout,
+  .dependencies-layout,
   .runtime-grid,
   .runtime-summary-grid,
   .action-layout {

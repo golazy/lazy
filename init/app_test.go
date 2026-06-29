@@ -101,6 +101,7 @@ func TestPanelTabPageLoadsImportmapNavAndPermanentStatus(t *testing.T) {
 		`<span class="panel-tab">App</span>`,
 		`<a href="/_golazy/requests" data-turbo-frame="_top">Requests</a>`,
 		`<a href="/_golazy/buildinfo" data-turbo-frame="_top">BuildInfo</a>`,
+		`<a href="/_golazy/dependencies" data-turbo-frame="_top">Dependencies</a>`,
 		`data-panel-close`,
 		`<turbo-stream-source src="/_golazy/app"></turbo-stream-source>`,
 		`<section id="app" class="tool-view is-active app-view" data-view="app" data-app-panel>`,
@@ -139,6 +140,7 @@ func TestPanelFrameRoutes(t *testing.T) {
 		{path: "/_golazy/app", frame: "app", want: `data-view="app"`},
 		{path: "/_golazy/services", frame: "services", want: `data-view="services"`},
 		{path: "/_golazy/traces", frame: "traces", want: `data-traces-panel`},
+		{path: "/_golazy/dependencies", frame: "dependencies", want: `data-dependencies-panel`},
 		{path: "/_golazy/status", frame: "status_bar", want: `<a class="app-status-chip" href="/_golazy/app" data-turbo-frame="_top" data-app-status="running">`},
 	} {
 		request := httptest.NewRequest(http.MethodGet, test.path, nil)
@@ -277,6 +279,57 @@ func TestPanelRoutesStreamHydratesApplicationRoutes(t *testing.T) {
 	}
 	if strings.Contains(payload, `action="replace" target="routes"`) {
 		t.Fatalf("stream replaced whole routes frame:\n%s", payload)
+	}
+}
+
+func TestPanelDependenciesPageFetchesApplicationGraph(t *testing.T) {
+	var gotPath string
+	appControl := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = w.Write([]byte(`{
+			"nodes":["app","db","posts"],
+			"edges":[
+				{"from":"app","to":"db"},
+				{"from":"app","to":"posts"},
+				{"from":"posts","to":"db"}
+			]
+		}`))
+	}))
+	defer appControl.Close()
+
+	store := buildservice.NewStore(10)
+	store.Update(buildservice.Snapshot{
+		State:            buildservice.StateRunning,
+		Message:          "running",
+		ControlPlaneAddr: strings.TrimPrefix(appControl.URL, "http://"),
+	})
+	app := App(Config{
+		Store:             store,
+		Actions:           buildservice.NewActions(),
+		ForceDetailErrors: true,
+	})
+
+	response := httptest.NewRecorder()
+	app.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/_golazy/dependencies", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	if gotPath != "/dependencies" {
+		t.Fatalf("app control path = %q, want /dependencies", gotPath)
+	}
+	body := response.Body.String()
+	for _, want := range []string{
+		`<turbo-stream-source src="/_golazy/dependencies"></turbo-stream-source>`,
+		`<section id="dependencies" class="tool-view is-active dependencies-view" data-view="dependencies" data-dependencies-panel>`,
+		`2 services`,
+		`<td><code>posts</code></td>`,
+		`<td><code>db</code></td>`,
+		`<td><code>app</code></td>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("body missing %q:\n%s", want, body)
+		}
 	}
 }
 

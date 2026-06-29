@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 )
@@ -11,6 +12,7 @@ import (
 const appJobsControlPath = "/jobs"
 const appCacheEntryPath = "/cache/entry"
 const appBuildInfoPath = "/buildinfo"
+const appDependenciesPath = "/dependencies"
 
 type CacheSnapshot struct {
 	Enabled bool         `json:"enabled"`
@@ -118,6 +120,25 @@ type BuildInfoSnapshot struct {
 	Error     string             `json:"-"`
 }
 
+type DependencyGraphSnapshot struct {
+	Nodes []DependencyNode `json:"nodes"`
+	Edges []DependencyEdge `json:"edges"`
+	Error string           `json:"-"`
+}
+
+type DependencyNode string
+
+type DependencyEdge struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+}
+
+type DependencyNodeRow struct {
+	Name      string
+	DependsOn string
+	UsedBy    string
+}
+
 type BuildInfoModule struct {
 	Path    string           `json:"path"`
 	Version string           `json:"version"`
@@ -172,6 +193,61 @@ func (s BuildInfoSnapshot) StatusText() string {
 		return "1 dependency"
 	}
 	return fmt.Sprintf("%d dependencies", len(s.Deps))
+}
+
+func (s DependencyGraphSnapshot) StatusText() string {
+	if s.Error != "" {
+		return "Dependencies unavailable"
+	}
+	count := s.ServiceCount()
+	if count == 1 {
+		return "1 service"
+	}
+	return fmt.Sprintf("%d services", count)
+}
+
+func (s DependencyGraphSnapshot) ServiceCount() int {
+	count := 0
+	for _, node := range s.Nodes {
+		if string(node) != "app" {
+			count++
+		}
+	}
+	return count
+}
+
+func (s DependencyGraphSnapshot) EdgeCount() int {
+	return len(s.Edges)
+}
+
+func (s DependencyGraphSnapshot) NodeRows() []DependencyNodeRow {
+	dependencies := map[string][]string{}
+	dependents := map[string][]string{}
+	for _, node := range s.Nodes {
+		name := string(node)
+		dependencies[name] = nil
+		dependents[name] = nil
+	}
+	for _, edge := range s.Edges {
+		if edge.From == "" || edge.To == "" {
+			continue
+		}
+		dependencies[edge.From] = append(dependencies[edge.From], edge.To)
+		dependents[edge.To] = append(dependents[edge.To], edge.From)
+	}
+
+	rows := make([]DependencyNodeRow, 0, len(s.Nodes))
+	for _, node := range s.Nodes {
+		name := string(node)
+		deps := uniqueSorted(dependencies[name])
+		users := uniqueSorted(dependents[name])
+		rows = append(rows, DependencyNodeRow{
+			Name:      name,
+			DependsOn: dependencyNamesText(deps),
+			UsedBy:    dependencyNamesText(users),
+		})
+	}
+	return rows
 }
 
 func (m BuildInfoModule) VersionText() string {
@@ -252,9 +328,54 @@ func (b *Base) BuildInfoSnapshot(ctx context.Context) BuildInfoSnapshot {
 	return snapshot
 }
 
+func (b *Base) DependencyGraphSnapshot(ctx context.Context) DependencyGraphSnapshot {
+	var snapshot DependencyGraphSnapshot
+	if err := b.FetchAppControlJSON(ctx, appDependenciesPath, &snapshot); err != nil {
+		snapshot.Error = err.Error()
+	}
+	if snapshot.Nodes == nil {
+		snapshot.Nodes = []DependencyNode{}
+	}
+	if snapshot.Edges == nil {
+		snapshot.Edges = []DependencyEdge{}
+	}
+	return snapshot
+}
+
 func formatTime(value time.Time) string {
 	if value.IsZero() {
 		return ""
 	}
 	return value.Local().Format("2006-01-02 15:04:05")
+}
+
+func uniqueSorted(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	sort.Strings(out)
+	return out
+}
+
+func dependencyNamesText(values []string) string {
+	if len(values) == 0 {
+		return "-"
+	}
+	return strings.Join(values, ", ")
 }
