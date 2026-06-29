@@ -93,6 +93,35 @@ func TestServerNormalizesPanelRootSlash(t *testing.T) {
 	}
 }
 
+func TestServerServesExtensionHandshakeBeforePanel(t *testing.T) {
+	panel := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("panel handled extension handshake path %q", r.URL.Path)
+	})
+	server, err := New("127.0.0.1:0", panel, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Shutdown(t.Context())
+
+	request := httptest.NewRequest(http.MethodGet, "https://lazy.test"+ExtensionHandshakePath, nil)
+	request.Header.Set("Origin", "chrome-extension://golazy")
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", response.Code)
+	}
+	if got := response.Body.String(); got != ExtensionHandshakeBody {
+		t.Fatalf("body = %q, want %q", got, ExtensionHandshakeBody)
+	}
+	if got := response.Header().Get("Access-Control-Allow-Origin"); got != "*" {
+		t.Fatalf("Access-Control-Allow-Origin = %q, want *", got)
+	}
+	if got := response.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("Cache-Control = %q, want no-store", got)
+	}
+}
+
 func TestServerAddsRequestTraceHeadersToProxiedRequests(t *testing.T) {
 	headers := make(chan http.Header, 1)
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -24,6 +24,10 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Plain HTTP serves the local certificate authority setup and download page,
   while HTTPS serves the development panel and proxied app traffic with HTTP/2
   available after the browser trusts the generated local CA.
+- The `lazy` development proxy now serves `/_golazy/extension` as a tiny
+  Chrome DevTools extension handshake. The extension probes that endpoint and
+  embeds the site's `/_golazy/` panel when the exact `i love being lazy` body
+  is returned.
 
 ### Changed
 

@@ -29,6 +29,8 @@ import (
 const ReloadPath = "/__lazy/reload"
 const PanelPrefix = "/_golazy"
 const PanelClientPath = "/_golazy/assets/panel.js"
+const ExtensionHandshakePath = "/_golazy/extension"
+const ExtensionHandshakeBody = "i love being lazy"
 const HTTPSProbePath = "/_golazy/https-ready"
 const CertificateDownloadPath = "/_golazy/local-development-ca.pem"
 const requestIDHeader = "X-Request-ID"
@@ -165,6 +167,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		serveHTTPSProbe(w, r)
 		return
 	}
+	if r.URL.Path == ExtensionHandshakePath {
+		serveExtensionHandshake(w, r)
+		return
+	}
 	if r.URL.Path == ReloadPath {
 		s.broker.serveHTTP(w, r)
 		return
@@ -240,6 +246,27 @@ func serveHTTPSProbe(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func serveExtensionHandshake(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.Header().Set("Cache-Control", "no-store")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.Header().Set("Allow", "GET, HEAD, OPTIONS")
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Content-Length", strconv.Itoa(len(ExtensionHandshakeBody)))
+	if r.Method != http.MethodHead {
+		_, _ = io.WriteString(w, ExtensionHandshakeBody)
+	}
 }
 
 func (s *Server) serveCertificateDownload(w http.ResponseWriter, r *http.Request) {
