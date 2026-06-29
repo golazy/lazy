@@ -111,7 +111,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `size` values.
 - Development panel data tables now use a reusable Stimulus column-resize
   controller, with per-header minimum widths and resize handles across the
-  panel's shared table component.
+  panel's shared table component. Tables remember resized widths in browser
+  local storage, and rightward drags now continue compressing later columns
+  after the immediate right column reaches its minimum.
 - Embedded development panels can now be resized from their top edge, and the
   proxied page's bottom padding follows the selected panel height.
 - `lazy js` and `lazy tailwind` now choose Node package managers from active
