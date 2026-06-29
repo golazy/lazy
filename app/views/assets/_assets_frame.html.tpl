@@ -1,28 +1,12 @@
 <section id="assets" class="tool-view is-active" data-view="assets">
   <div class="filter-toolbar">
-    <form method="get" action="{{path_for "assets"}}" class="inline-form">
+    <form method="get" action="{{path_for "assets"}}" class="inline-form" data-controller="debounced-form" data-action="input->debounced-form#queue submit->debounced-form#submit" data-debounced-form-delay-value="600" data-debounced-form-frame-value="assets_table" data-turbo-frame="assets_table">
       <input class="filter-input" type="search" name="q" placeholder="Filter assets" value="{{.assets_query}}">
     </form>
     <span class="toolbar-spacer"></span>
-    <span class="toolbar-count" data-assets-count>{{if .assets_error}}Assets unavailable{{else}}{{.assets_visible}} / {{.assets_total}} assets{{end}}</span>
+    <span class="toolbar-count" data-assets-count>{{.assets_count_text}}</span>
   </div>
-  <table class="data-grid assets-grid" data-controller="table-resize">
-    <thead>
-      <tr>
-        <th>Public Path</th>
-        <th>Permanent Path</th>
-        <th>Type</th>
-        <th>Size</th>
-        <th>Source</th>
-        <th>Kind</th>
-        <th>Status</th>
-      </tr>
-    </thead>
-    <tbody data-assets-list>
-      {{if .defer_panel_lists}}
-      {{else}}
-        {{partial "asset_rows" .}}
-      {{end}}
-    </tbody>
-  </table>
+  <turbo-frame id="assets_table" class="assets-table-frame">
+    {{partial "assets_table" .}}
+  </turbo-frame>
 </section>

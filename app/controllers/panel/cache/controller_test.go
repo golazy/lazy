@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"golazy.dev/lazy/app"
 	"golazy.dev/lazy/app/controllers/panel"
@@ -26,8 +27,8 @@ func TestCacheViewReadsApplicationControlPlaneAndRendersSelection(t *testing.T) 
 				"enabled":true,
 				"stats":{"entries":2,"max_entries":20,"size_bytes":1048576,"hits":4,"misses":1,"sets":2,"evictions":0},
 				"entries":[
-					{"key":"build-test-post-1","size_bytes":18,"updated_at":"2026-06-29T12:00:00Z"},
-					{"key":"build-test-home","size_bytes":8,"updated_at":"2026-06-29T12:00:00Z"}
+					{"key":"build-test-post-1","size_bytes":18,"updated_at":"2026-06-29T12:00:00Z","hits":3,"sets":1},
+					{"key":"build-test-home","size_bytes":8,"updated_at":"2026-06-29T12:00:00Z","hits":1,"sets":1}
 				]
 			}`)
 		case "/cache/entry":
@@ -69,14 +70,50 @@ func TestCacheViewReadsApplicationControlPlaneAndRendersSelection(t *testing.T) 
 		t.Fatalf("render cache frame: %v", err)
 	}
 	for _, want := range []string{
-		`Size: 1.0MB`,
-		`Usage: 10%`,
+		`Size: <span data-cache-size>1.0MB</span>`,
+		`Usage: <span data-cache-usage>10%</span>`,
 		`<table class="data-grid cache-key-grid" data-controller="table-resize">`,
+		`<th data-table-resize-min-width-value="48">Hits</th>`,
 		`build-test-post-1`,
+		`>3</td>`,
 		`&lt;p&gt;cached post&lt;/p&gt;`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("rendered cache frame missing %q:\n%s", want, body)
+		}
+	}
+
+	known := map[string]struct{}{}
+	stream, err := controller.renderCacheEventStream(request, cacheEvent{
+		Enabled: true,
+		Stats: panel.CacheStats{
+			Entries:    3,
+			MaxEntries: 20,
+			SizeBytes:  2097152,
+			Hits:       5,
+			Misses:     1,
+			Sets:       3,
+		},
+		Entry: &panel.CacheEntry{
+			Key:       "build-test-post-2",
+			SizeBytes: 32,
+			UpdatedAt: time.Now(),
+			Hits:      1,
+			Sets:      1,
+		},
+	}, known)
+	if err != nil {
+		t.Fatalf("render cache event stream: %v", err)
+	}
+	for _, want := range []string{
+		`targets="[data-cache-size]"`,
+		`2.0MB`,
+		`targets="[data-cache-list]"`,
+		`build-test-post-2`,
+		`<td>1</td>`,
+	} {
+		if !strings.Contains(stream, want) {
+			t.Fatalf("cache event stream missing %q:\n%s", want, stream)
 		}
 	}
 }

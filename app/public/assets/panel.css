@@ -727,7 +727,7 @@ button:disabled:hover {
 }
 
 .cache-key-grid {
-  min-width: 24rem;
+  min-width: 32rem;
 }
 
 .cache-key-grid th:nth-child(1),
@@ -738,7 +738,11 @@ button:disabled:hover {
 .cache-key-grid th:nth-child(2),
 .cache-key-grid td:nth-child(2),
 .cache-key-grid th:nth-child(3),
-.cache-key-grid td:nth-child(3) {
+.cache-key-grid td:nth-child(3),
+.cache-key-grid th:nth-child(4),
+.cache-key-grid td:nth-child(4),
+.cache-key-grid th:nth-child(5),
+.cache-key-grid td:nth-child(5) {
   width: 5rem;
 }
 
@@ -754,6 +758,17 @@ button:disabled:hover {
   display: grid;
   grid-template-rows: 34px minmax(0, 1fr);
   overflow: hidden;
+}
+
+.assets-table-frame {
+  display: block;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+}
+
+.assets-grid {
+  min-width: 54rem;
 }
 
 .detail-header {

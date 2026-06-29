@@ -1,14 +1,14 @@
-<section id="cache" class="tool-view is-active" data-view="cache">
+<section id="cache" class="tool-view is-active" data-view="cache" data-cache-panel>
   <div class="network-toolbar network-toolbar-container cache-toolbar">
     <div class="network-controls cache-summary-bar">
-      <span>Size: {{.cache.SizeText}}</span>
-      <span>Usage: {{.cache.UsageText}}</span>
-      <span>Keys: {{.cache.KeyCount}}</span>
-      <span>Hits: {{.cache.Snapshot.Stats.Hits}}</span>
-      <span>Misses: {{.cache.Snapshot.Stats.Misses}}</span>
-      <span>Sets: {{.cache.Snapshot.Stats.Sets}}</span>
-      <span>Evictions: {{.cache.Snapshot.Stats.Evictions}}</span>
-      <span>Cache/Hit: {{.cache.HitRateText}}</span>
+      <span>Size: <span data-cache-size>{{.cache.SizeText}}</span></span>
+      <span>Usage: <span data-cache-usage>{{.cache.UsageText}}</span></span>
+      <span>Keys: <span data-cache-key-count>{{.cache.KeyCount}}</span></span>
+      <span>Hits: <span data-cache-hits>{{.cache.Snapshot.Stats.Hits}}</span></span>
+      <span>Misses: <span data-cache-misses>{{.cache.Snapshot.Stats.Misses}}</span></span>
+      <span>Sets: <span data-cache-sets>{{.cache.Snapshot.Stats.Sets}}</span></span>
+      <span>Evictions: <span data-cache-evictions>{{.cache.Snapshot.Stats.Evictions}}</span></span>
+      <span>Cache/Hit: <span data-cache-hit-rate>{{.cache.HitRateText}}</span></span>
       <span class="toolbar-spacer"></span>
       <form method="post" action="{{if .cache.Enabled}}/_golazy/cache/off{{else}}/_golazy/cache/on{{end}}">
         <input type="hidden" name="redirect" value="{{.cache.CurrentURL}}">
@@ -23,7 +23,7 @@
         <input class="filter-input network-filter" type="search" name="q" placeholder="Search cache keys" value="{{.cache.Query}}">
       </form>
       <span class="toolbar-spacer"></span>
-      <span class="toolbar-count">{{.cache.StatusText}}</span>
+      <span class="toolbar-count" data-cache-status>{{.cache.StatusText}}</span>
     </div>
   </div>
 
@@ -35,19 +35,14 @@
             <th data-table-resize-min-width-value="180">Key</th>
             <th data-table-resize-min-width-value="64">Age</th>
             <th data-table-resize-min-width-value="64">Size</th>
+            <th data-table-resize-min-width-value="48">Hits</th>
+            <th data-table-resize-min-width-value="48">Sets</th>
           </tr>
         </thead>
-        <tbody>
-          {{range .cache.Entries}}
-            <tr class="{{if eq .Key $.cache.SelectedKey}}is-selected{{end}}">
-              <td><a href="{{$.cache.KeyURL .Key}}" data-turbo-frame="_top"><code>{{.Key}}</code></a></td>
-              <td>{{.AgeText}}</td>
-              <td>{{.SizeText}}</td>
-            </tr>
+        <tbody data-cache-list>
+          {{if .cache.Defer}}
           {{else}}
-            <tr>
-              <td colspan="3" class="muted">{{$.cache.EmptyText}}</td>
-            </tr>
+            {{partial "cache_rows" .}}
           {{end}}
         </tbody>
       </table>

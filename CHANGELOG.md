@@ -29,8 +29,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The development panel Assets tab now lists lazy asset manifest entries and
   their public paths from the app lazydev control plane.
 - The development panel Cache tab now shows cache size, usage, hit/miss/set
-  counters, a searchable key table with age and size, and selected cache entry
-  content when the app backend exposes inspectable entries.
+  counters, a searchable key table with age, size, and key metadata, and
+  selected cache entry content when the app backend exposes inspectable
+  entries.
 - The `lazy` development proxy now accepts HTTP and HTTPS on the same port.
   Plain HTTP serves the local certificate authority setup and download page,
   while HTTPS serves the development panel and proxied app traffic with HTTP/2
@@ -70,6 +71,13 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `turbo-stream-source` connects, then send targeted row/count updates only
   when a relevant backend event exists instead of repainting whole tabs from
   generic build events.
+- The development panel Assets search now uses debounced backend Turbo Frame
+  requests and aborts older in-flight searches before they can replace newer
+  results. The Assets table scrolls inside the tab body.
+- The development panel Cache tab now renders an empty shell first, hydrates
+  from its tab stream, relays app lazydev cache hit/miss/set events, updates
+  summary counters individually, and appends or replaces key rows as metadata
+  changes.
 - The development panel Requests tab now reads captured request sidecars,
   lists request paths, and exposes Headers, Tracing, and Logs detail tabs.
   The Tracing detail renders per-region total and self duration plus sampled

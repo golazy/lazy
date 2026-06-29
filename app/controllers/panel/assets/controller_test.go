@@ -58,14 +58,32 @@ func TestAssetsViewReadsApplicationControlPlaneManifest(t *testing.T) {
 		t.Fatalf("render assets frame: %v", err)
 	}
 	for _, want := range []string{
+		`data-controller="debounced-form"`,
+		`data-turbo-frame="assets_table"`,
+		`<turbo-frame id="assets_table" class="assets-table-frame">`,
 		`<table class="data-grid assets-grid" data-controller="table-resize">`,
 		`<tbody data-assets-list>`,
+		`1 / 2 assets`,
 		`/assets/app.js`,
 		`/assets/app-123.js`,
 		`Generated`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("rendered assets frame missing %q:\n%s", want, body)
+		}
+	}
+
+	frame, err := controller.RenderPanelFrame(request, "assets_table", "assets", "assets_table", data)
+	if err != nil {
+		t.Fatalf("render assets table frame: %v", err)
+	}
+	for _, want := range []string{
+		`<turbo-frame id="assets_table">`,
+		`<span hidden data-assets-frame-count>1 / 2 assets</span>`,
+		`/assets/app.js`,
+	} {
+		if !strings.Contains(frame, want) {
+			t.Fatalf("rendered assets table frame missing %q:\n%s", want, frame)
 		}
 	}
 }

@@ -34,6 +34,8 @@ type CacheEntry struct {
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
 	LastAccessedAt time.Time `json:"last_accessed_at"`
+	Hits           uint64    `json:"hits"`
+	Sets           uint64    `json:"sets"`
 }
 
 type CacheEntryDetail struct {

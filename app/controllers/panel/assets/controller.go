@@ -10,6 +10,7 @@ import (
 
 	"golazy.dev/lazy/app/controllers/panel"
 	"golazy.dev/lazycontroller"
+	"golazy.dev/lazyturbo"
 )
 
 const appAssetsPath = "/assets"
@@ -29,6 +30,9 @@ func (c *AssetsController) Index(w http.ResponseWriter, r *http.Request) error {
 			c.setAssetsState(r)
 			c.Set("defer_panel_lists", true)
 			return nil
+		},
+		lazycontroller.TurboFrame: func() error {
+			return c.renderAssetsTableFrame(w, r)
 		},
 		lazycontroller.SSE: func() error {
 			return c.StreamTurboInitial(w, r, c.streamAssetsInitial)
@@ -52,11 +56,25 @@ func (c *AssetsController) streamAssetsInitial(r *http.Request) (string, error) 
 		panel.TurboStreamTargets("update", "[data-assets-count]", assetCountText(variables)), nil
 }
 
+func (c *AssetsController) renderAssetsTableFrame(w http.ResponseWriter, r *http.Request) error {
+	if frameID := lazyturbo.FrameID(r); frameID != "assets_table" {
+		return lazycontroller.Error(http.StatusBadRequest, fmt.Errorf("assets frame %q is not available", frameID))
+	}
+	variables := c.assetsViewData(r)
+	body, err := c.RenderPanelFrame(r, "assets_table", "assets", "assets_table", variables)
+	if err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, err = w.Write([]byte(body))
+	return err
+}
+
 func (c *AssetsController) assetsViewData(r *http.Request) map[string]any {
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	var manifest assetManifest
 	if err := c.FetchAppControlJSON(r.Context(), appAssetsPath, &manifest); err != nil {
-		return map[string]any{
+		data := map[string]any{
 			"state":          c.Snapshot(),
 			"assets_error":   err.Error(),
 			"assets_query":   query,
@@ -65,10 +83,12 @@ func (c *AssetsController) assetsViewData(r *http.Request) map[string]any {
 			"assets_visible": 0,
 			"assets":         []assetRow{},
 		}
+		data["assets_count_text"] = assetCountText(data)
+		return data
 	}
 	rows := assetRows(manifest.Assets)
 	filtered := filterAssets(rows, query)
-	return map[string]any{
+	data := map[string]any{
 		"state":          c.Snapshot(),
 		"assets_query":   query,
 		"assets_stream":  assetStreamURL(query),
@@ -76,6 +96,8 @@ func (c *AssetsController) assetsViewData(r *http.Request) map[string]any {
 		"assets_visible": len(filtered),
 		"assets":         filtered,
 	}
+	data["assets_count_text"] = assetCountText(data)
+	return data
 }
 
 type assetManifest struct {
