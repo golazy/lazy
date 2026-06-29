@@ -139,8 +139,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `size` values.
 - Development panel data tables now use a reusable Stimulus column-resize
   controller, with per-header minimum widths and resize handles across the
-  panel's shared table component. Grouped or multi-row table headers resize by
-  leaf column instead of treating header groups as physical columns. Tables
+  panel's shared table component. Grouped or multi-row table headers can resize
+  their covered leaf columns proportionally instead of treating header groups as
+  separate physical columns. Tables
   remember resized widths in browser local storage, and rightward drags now
   continue compressing later columns after the immediate right column reaches
   its minimum. Tables also scale their columns proportionally when their pane

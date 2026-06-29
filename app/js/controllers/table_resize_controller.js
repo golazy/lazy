@@ -22,10 +22,12 @@ export default class extends Controller {
   start(event) {
     if (event.button !== undefined && event.button !== 0) return
     const handle = event.currentTarget
-    this.activeIndex = Number.parseInt(handle.dataset.columnIndex, 10)
-    if (!Number.isFinite(this.activeIndex)) return
+    this.activeStartIndex = Number.parseInt(handle.dataset.columnStartIndex || handle.dataset.columnIndex, 10)
+    this.activeEndIndex = Number.parseInt(handle.dataset.columnEndIndex || handle.dataset.columnIndex, 10)
+    if (!Number.isFinite(this.activeStartIndex) || !Number.isFinite(this.activeEndIndex)) return
 
     event.preventDefault()
+    this.activeIndex = this.activeEndIndex
     this.startX = event.clientX
     this.startWidths = this.widths()
     this.minimums = this.minimumWidths()
@@ -46,6 +48,8 @@ export default class extends Controller {
     if (this.activeIndex === undefined) return
     this.storeWidths()
     this.activeIndex = undefined
+    this.activeStartIndex = undefined
+    this.activeEndIndex = undefined
     this.table.classList.remove("is-column-resizing")
     window.removeEventListener("pointermove", this.boundMove)
     window.removeEventListener("pointerup", this.boundStop)
@@ -53,7 +57,9 @@ export default class extends Controller {
   }
 
   installColumns() {
-    this.headers = this.headerCells()
+    const headerModel = this.headerModel()
+    this.headers = headerModel.leaves.map(cell => cell.header)
+    this.headerHandles = headerModel.handles
     if (this.headers.length === 0) return
 
     let colgroup = this.table.querySelector("colgroup")
@@ -75,10 +81,12 @@ export default class extends Controller {
 
   installHandles() {
     this.removeHandles()
-    this.headers?.forEach((header, index) => {
+    this.headerHandles?.forEach(({ header, startIndex, endIndex }) => {
       const handle = document.createElement("span")
       handle.className = "table-resize-handle"
-      handle.dataset.columnIndex = String(index)
+      handle.dataset.columnIndex = String(endIndex)
+      handle.dataset.columnStartIndex = String(startIndex)
+      handle.dataset.columnEndIndex = String(endIndex)
       handle.setAttribute("role", "separator")
       handle.setAttribute("aria-orientation", "vertical")
       handle.setAttribute("tabindex", "-1")
@@ -91,9 +99,9 @@ export default class extends Controller {
     this.table?.querySelectorAll("thead .table-resize-handle")?.forEach(handle => handle.remove())
   }
 
-  headerCells() {
+  headerModel() {
     const rows = Array.from(this.table.tHead?.rows || [])
-    if (rows.length === 0) return []
+    if (rows.length === 0) return { leaves: [], handles: [] }
 
     const grid = []
     const cells = []
@@ -118,10 +126,27 @@ export default class extends Controller {
       })
     })
 
-    return cells
+    const leaves = cells
       .filter(cell => cell.colSpan === 1 && cell.rowIndex + cell.rowSpan >= rows.length)
       .sort((left, right) => left.columnIndex - right.columnIndex)
-      .map(cell => cell.header)
+    const leafIndexByColumn = new Map(leaves.map((cell, index) => [cell.columnIndex, index]))
+    const handles = cells
+      .map(cell => {
+        const leafIndexes = []
+        for (let columnIndex = cell.columnIndex; columnIndex < cell.columnIndex + cell.colSpan; columnIndex++) {
+          const leafIndex = leafIndexByColumn.get(columnIndex)
+          if (leafIndex !== undefined) leafIndexes.push(leafIndex)
+        }
+        if (leafIndexes.length === 0) return null
+        return {
+          header: cell.header,
+          startIndex: leafIndexes[0],
+          endIndex: leafIndexes[leafIndexes.length - 1],
+        }
+      })
+      .filter(Boolean)
+
+    return { leaves, handles }
   }
 
   installRowSelection() {
@@ -158,12 +183,16 @@ export default class extends Controller {
 
   applyResize(delta) {
     const widths = this.startWidths.slice()
+    const startIndex = this.activeStartIndex
+    const endIndex = this.activeEndIndex
+    if (!Number.isFinite(startIndex) || !Number.isFinite(endIndex)) return
+
     if (delta >= 0) {
-      if (this.activeIndex === widths.length - 1) {
-        widths[this.activeIndex] += delta
+      if (endIndex === widths.length - 1) {
+        this.growRange(widths, startIndex, endIndex, delta)
       } else {
         let remaining = delta
-        let index = this.activeIndex + 1
+        let index = endIndex + 1
         let totalShrink = 0
         while (remaining > 0 && index < widths.length) {
           const shrink = Math.min(remaining, Math.max(0, widths[index] - this.minimums[index]))
@@ -172,15 +201,16 @@ export default class extends Controller {
           remaining -= shrink
           if (remaining > 0) index++
         }
-        widths[this.activeIndex] += totalShrink
+        this.growRange(widths, startIndex, endIndex, totalShrink)
       }
       this.setWidths(widths)
       return
     }
 
-    let remaining = -delta
-    let index = this.activeIndex
-    let totalShrink = 0
+    const requestedShrink = -delta
+    let totalShrink = this.shrinkRange(widths, startIndex, endIndex, requestedShrink)
+    let remaining = requestedShrink - totalShrink
+    let index = startIndex - 1
     while (remaining > 0 && index >= 0) {
       const shrink = Math.min(remaining, Math.max(0, widths[index] - this.minimums[index]))
       widths[index] -= shrink
@@ -188,10 +218,56 @@ export default class extends Controller {
       remaining -= shrink
       if (remaining > 0) index--
     }
-    if (this.activeIndex < widths.length - 1) {
-      widths[this.activeIndex + 1] += totalShrink
+    if (endIndex < widths.length - 1) {
+      widths[endIndex + 1] += totalShrink
     }
     this.setWidths(widths)
+  }
+
+  rangeIndexes(startIndex, endIndex) {
+    const indexes = []
+    for (let index = startIndex; index <= endIndex; index++) indexes.push(index)
+    return indexes
+  }
+
+  growRange(widths, startIndex, endIndex, amount) {
+    if (amount <= 0) return
+
+    const indexes = this.rangeIndexes(startIndex, endIndex)
+    const total = indexes.reduce((sum, index) => sum + widths[index], 0)
+    const denominator = total > 0 ? total : indexes.length
+    indexes.forEach(index => {
+      const weight = total > 0 ? widths[index] : 1
+      widths[index] += amount * weight / denominator
+    })
+  }
+
+  shrinkRange(widths, startIndex, endIndex, amount) {
+    const requested = Math.max(0, amount)
+    let remaining = requested
+    let active = this.rangeIndexes(startIndex, endIndex).filter(index => widths[index] > this.minimums[index])
+    while (remaining > 0.01 && active.length > 0) {
+      const activeTotal = active.reduce((sum, index) => sum + widths[index], 0)
+      if (activeTotal <= 0) break
+
+      let clamped = false
+      for (const index of active) {
+        const shrink = remaining * widths[index] / activeTotal
+        if (widths[index] - shrink <= this.minimums[index]) {
+          remaining -= widths[index] - this.minimums[index]
+          widths[index] = this.minimums[index]
+          clamped = true
+        }
+      }
+      active = active.filter(index => widths[index] > this.minimums[index])
+      if (!clamped) {
+        for (const index of active) {
+          widths[index] -= remaining * widths[index] / activeTotal
+        }
+        remaining = 0
+      }
+    }
+    return requested - remaining
   }
 
   widths() {
