@@ -116,7 +116,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   controller, with per-header minimum widths and resize handles across the
   panel's shared table component. Tables remember resized widths in browser
   local storage, and rightward drags now continue compressing later columns
-  after the immediate right column reaches its minimum.
+  after the immediate right column reaches its minimum. Tables also scale their
+  columns proportionally when their pane resizes, and frame-targeted row links
+  update selected-row styling immediately.
 - Embedded development panels can now be resized from their top edge, and the
   proxied page's bottom padding follows the selected panel height.
 - `lazy js` and `lazy tailwind` now choose Node package managers from active

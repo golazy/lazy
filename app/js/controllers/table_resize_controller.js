@@ -5,12 +5,17 @@ export default class extends Controller {
     this.table = this.element
     this.boundMove = event => this.move(event)
     this.boundStop = () => this.stop()
+    this.boundSelectRow = event => this.selectRow(event)
     this.installColumns()
     this.installHandles()
+    this.installRowSelection()
+    this.installResizeObserver()
   }
 
   disconnect() {
     this.stop()
+    this.table?.removeEventListener("click", this.boundSelectRow)
+    this.resizeObserver?.disconnect()
     this.headers?.forEach(header => header.querySelector(".table-resize-handle")?.remove())
   }
 
@@ -65,7 +70,7 @@ export default class extends Controller {
     this.cols = Array.from(colgroup.children)
     const widths = this.headers.map(header => Math.max(10, header.getBoundingClientRect().width))
     this.storageKey = this.storageKeyForTable()
-    this.setWidths(this.storedWidths() || widths)
+    this.setWidths(this.widthsForAvailableSpace(this.storedWidths() || widths))
   }
 
   installHandles() {
@@ -79,6 +84,38 @@ export default class extends Controller {
       handle.setAttribute("tabindex", "-1")
       handle.addEventListener("pointerdown", event => this.start(event))
       header.append(handle)
+    })
+  }
+
+  installRowSelection() {
+    this.table.addEventListener("click", this.boundSelectRow)
+  }
+
+  installResizeObserver() {
+    if (!window.ResizeObserver) return
+
+    const target = this.resizeTarget()
+    this.lastAvailableWidth = Math.round(this.availableWidth())
+    this.resizeObserver = new window.ResizeObserver(() => this.fitAvailableSpace())
+    this.resizeObserver.observe(target)
+  }
+
+  selectRow(event) {
+    const link = event.target?.closest?.("a[data-turbo-frame]")
+    if (!link || !this.table.contains(link) || link.dataset.turboFrame === "_top") return
+
+    const row = link.closest("tbody tr")
+    if (!row || !this.table.contains(row)) return
+
+    const rows = Array.from(row.parentElement.querySelectorAll("tr[aria-selected], tr.is-selected"))
+    const useClassSelection = rows.some(candidate => candidate.classList.contains("is-selected")) || !row.hasAttribute("aria-selected")
+    rows.forEach(candidate => {
+      if (candidate.hasAttribute("aria-selected")) {
+        candidate.setAttribute("aria-selected", candidate === row ? "true" : "false")
+      }
+      if (useClassSelection) {
+        candidate.classList.toggle("is-selected", candidate === row)
+      }
     })
   }
 
@@ -140,6 +177,85 @@ export default class extends Controller {
     this.currentWidths = normalized
     const total = normalized.reduce((sum, width) => sum + width, 0)
     this.table.style.width = `${total}px`
+  }
+
+  fitAvailableSpace() {
+    if (this.activeIndex !== undefined || !this.cols?.length) return
+
+    const available = Math.round(this.availableWidth())
+    if (!Number.isFinite(available) || available <= 0 || available === this.lastAvailableWidth) return
+    this.lastAvailableWidth = available
+    this.setWidths(this.widthsForAvailableSpace(this.widths()))
+  }
+
+  widthsForAvailableSpace(widths) {
+    const available = this.availableWidth()
+    if (!Number.isFinite(available) || available <= 0) return widths
+    return this.widthsForTotal(widths, Math.round(available))
+  }
+
+  widthsForTotal(widths, targetTotal) {
+    const minimums = this.minimums || this.minimumWidths()
+    const minimumTotal = minimums.reduce((sum, width) => sum + width, 0)
+    const target = Math.max(minimumTotal, targetTotal)
+    const normalized = widths.map((width, index) => Math.max(minimums[index], Number(width) || minimums[index]))
+    const currentTotal = normalized.reduce((sum, width) => sum + width, 0)
+    if (!Number.isFinite(currentTotal) || currentTotal <= 0) return minimums
+    if (Math.abs(currentTotal - target) < 1) return this.roundWidths(normalized, target, minimums)
+
+    if (target > currentTotal) {
+      return this.roundWidths(normalized.map(width => width * target / currentTotal), target, minimums)
+    }
+
+    const adjusted = normalized.slice()
+    let remainingShrink = currentTotal - target
+    let active = adjusted.map((_, index) => index).filter(index => adjusted[index] > minimums[index])
+    while (remainingShrink > 0.01 && active.length > 0) {
+      const activeTotal = active.reduce((sum, index) => sum + adjusted[index], 0)
+      let clamped = false
+      for (const index of active) {
+        const shrink = remainingShrink * adjusted[index] / activeTotal
+        if (adjusted[index] - shrink <= minimums[index]) {
+          remainingShrink -= adjusted[index] - minimums[index]
+          adjusted[index] = minimums[index]
+          clamped = true
+        }
+      }
+      active = active.filter(index => adjusted[index] > minimums[index])
+      if (!clamped) {
+        for (const index of active) {
+          adjusted[index] -= remainingShrink * adjusted[index] / activeTotal
+        }
+        remainingShrink = 0
+      }
+    }
+    return this.roundWidths(adjusted, target, minimums)
+  }
+
+  roundWidths(widths, targetTotal, minimums) {
+    const rounded = widths.map((width, index) => Math.max(minimums[index], Math.round(width)))
+    let delta = targetTotal - rounded.reduce((sum, width) => sum + width, 0)
+    let index = 0
+    while (delta > 0 && rounded.length > 0) {
+      rounded[index % rounded.length] += 1
+      delta--
+      index++
+    }
+    while (delta < 0) {
+      const shrinkable = rounded.findIndex((width, widthIndex) => width > minimums[widthIndex])
+      if (shrinkable < 0) break
+      rounded[shrinkable] -= 1
+      delta++
+    }
+    return rounded
+  }
+
+  resizeTarget() {
+    return this.table.parentElement || this.table
+  }
+
+  availableWidth() {
+    return this.resizeTarget().getBoundingClientRect().width
   }
 
   storageKeyForTable() {
