@@ -8,6 +8,7 @@ const embeddedPanelResizeHandleHeight = 8
 const embeddedPanelHeightKey = "golazy:devpanel:height"
 const embeddedPanelClosedKey = "golazy:devpanel:closed"
 const pageReadyMessage = "golazy:page:devpanel-ready"
+const visitMessage = "golazy:devpanel:visit"
 
 export default class DevPanelController {
   static connect(root, options = {}) {
@@ -82,6 +83,9 @@ export default class DevPanelController {
       switch (event.data?.type) {
       case "golazy:devpanel:close":
         this.closePanel()
+        break
+      case visitMessage:
+        this.visitApp(event.data?.url)
         break
       case "golazy:extension:installed":
         this.setExtensionInstalled(true)
@@ -231,6 +235,29 @@ export default class DevPanelController {
       return
     }
     this.openPanel()
+  }
+
+  visitApp(value) {
+    const url = this.appVisitURL(value)
+    if (!url) return
+    const path = `${url.pathname}${url.search}${url.hash}`
+    const turbo = window.Turbo
+    if (turbo && typeof turbo.visit === "function") {
+      turbo.visit(path)
+      return
+    }
+    window.location.href = url.href
+  }
+
+  appVisitURL(value) {
+    if (typeof value !== "string" || value.trim() === "") return null
+    try {
+      const url = new URL(value, window.location.href)
+      if (url.origin !== window.location.origin) return null
+      return url
+    } catch {
+      return null
+    }
   }
 
   setDevToolsPanelOpen(open) {

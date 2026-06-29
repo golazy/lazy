@@ -77,6 +77,11 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   fresh data. Browser-facing panel endpoints render HTML, Turbo Frames, or
   Turbo Stream HTML; internal app-control JSON is read server-side and enriched
   before rendering.
+- The development panel now stores the last top-level tab in session storage
+  and restores it when the embedded panel loads at the default App tab. The
+  Routes tab also sends static GET route clicks to the injected host script,
+  which visits the app path with `Turbo.visit` when available and falls back to
+  normal browser navigation otherwise.
 - The development panel layout now uses Turbo morph refreshes with scroll
   preservation, so refreshes can patch the panel document without resetting the
   user's scroll position.

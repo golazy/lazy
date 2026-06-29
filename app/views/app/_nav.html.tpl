@@ -1,4 +1,4 @@
-<nav class="panel-tabs tabbed-pane-header" aria-label="GoLazy panel sections" data-controller="panel-close">
+<nav class="panel-tabs tabbed-pane-header" aria-label="GoLazy panel sections" data-controller="panel-close panel-nav" data-panel-nav-default-path-value="{{path_for "app"}}">
   <div class="panel-tab-list">
     <span class="panel-tab">{{link_to "App" (path_for "app") (data "turbo-frame" "_top") (unless_current)}}</span>
     <span class="panel-tab">{{link_to "Requests" (path_for "requests") (data "turbo-frame" "_top") (unless_current)}}</span>

@@ -3,7 +3,7 @@
     <td><code>{{.Method}}</code></td>
     <td>
       {{if .Linkable}}
-        <a href="{{.Link}}" target="_top" data-turbo-frame="_top"><code>{{.Path}}</code></a>
+        <a href="{{.Link}}" target="_top" data-turbo-frame="_top" data-controller="route-visit" data-action="click->route-visit#visit" data-route-visit-url-value="{{.Link}}"><code>{{.Path}}</code></a>
       {{else}}
         <code>{{.Path}}</code>
       {{end}}

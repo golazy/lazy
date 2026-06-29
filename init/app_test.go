@@ -96,8 +96,10 @@ func TestPanelTabPageLoadsImportmapNavAndPermanentStatus(t *testing.T) {
 	for _, want := range []string{
 		`<script type="importmap">`,
 		`"app.js": "/_golazy/assets/lazyshaft/app/`,
+		`"controllers/panel_nav_controller.js": "/_golazy/assets/lazyshaft/app/controllers/panel_nav_controller-`,
+		`"controllers/route_visit_controller.js": "/_golazy/assets/lazyshaft/app/controllers/route_visit_controller-`,
 		`<script type="module">import "app.js"</script>`,
-		`<nav class="panel-tabs tabbed-pane-header" aria-label="GoLazy panel sections" data-controller="panel-close">`,
+		`<nav class="panel-tabs tabbed-pane-header" aria-label="GoLazy panel sections" data-controller="panel-close panel-nav" data-panel-nav-default-path-value="/_golazy/app">`,
 		`<span class="panel-tab">App</span>`,
 		`<a href="/_golazy/requests" data-turbo-frame="_top">Requests</a>`,
 		`<a href="/_golazy/buildinfo" data-turbo-frame="_top">BuildInfo</a>`,
@@ -248,7 +250,7 @@ func TestPanelRoutesStreamHydratesApplicationRoutes(t *testing.T) {
 	server := httptest.NewServer(app)
 	defer server.Close()
 
-	request, err := http.NewRequest(http.MethodGet, server.URL+"/_golazy/routes?q=post_id", nil)
+	request, err := http.NewRequest(http.MethodGet, server.URL+"/_golazy/routes?q=posts", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -268,10 +270,11 @@ func TestPanelRoutesStreamHydratesApplicationRoutes(t *testing.T) {
 	}
 	for _, want := range []string{
 		`data: <turbo-stream action="update" targets="[data-routes-list]">`,
+		`<a href="/posts" target="_top" data-turbo-frame="_top" data-controller="route-visit" data-action="click->route-visit#visit" data-route-visit-url-value="/posts"><code>/posts</code></a>`,
 		`<code>/posts/{post_id}</code>`,
 		`posts#Show`,
 		`<turbo-stream action="update" targets="[data-routes-count]">`,
-		`1 / 3 routes`,
+		`2 / 3 routes`,
 	} {
 		if !strings.Contains(payload, want) {
 			t.Fatalf("stream payload missing %q:\n%s", want, payload)
@@ -405,6 +408,9 @@ func TestPanelAssetsAndJobsPage(t *testing.T) {
 		"DevPanelController",
 		"golazy:page:devpanel-ready",
 		"golazy:devpanel:height",
+		"golazy:devpanel:visit",
+		"appVisitURL",
+		"turbo.visit(path)",
 		"installLauncher",
 		"golazyDevPanelLauncherBound",
 		"shouldShowLauncher",
