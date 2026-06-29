@@ -17,6 +17,7 @@ type upgradeInvocation struct {
 	command string
 	args    []string
 	dir     string
+	env     []string
 }
 
 func TestUpgradeTo011AddsMiseTaskFiles(t *testing.T) {
@@ -253,6 +254,18 @@ func TestUpgradeTo017RewritesAppJavaScriptImports(t *testing.T) {
 	writeUpgradeFile(t, filepath.Join(dir, "app", "js", "app.js"), `import HelloController from "/js/controllers/hello_controller.js"
 import("/js/controllers/lazy_controller.js")
 `)
+	writeUpgradeFile(t, filepath.Join(dir, "test", "application_test.go"), `package test
+
+func TestAssets(t *testing.T) {
+	assertContains(`+"`"+`import "/js/app.js"`+"`"+`)
+	assertContains("\"/js/app.js\"")
+	imports := map[string]string{
+		"/js/app.js": "/assets/lazyshaft/app/app-12345678.js",
+		"/js/controllers/hello_controller.js": "/assets/lazyshaft/app/controllers/hello_controller-12345678.js",
+	}
+	_ = imports
+}
+`)
 	writeUpgradeFile(t, filepath.Join(dir, "app", "controllers", "posts", "posts_controller.go"), `package posts
 
 type PostsController struct{}
@@ -286,6 +299,18 @@ func (c *PostsController) Show() error {
 	assertUpgradeFileContent(t, filepath.Join(dir, "app", "js", "app.js"), `import HelloController from "controllers/hello_controller.js"
 import("controllers/lazy_controller.js")
 `)
+	assertUpgradeFileContent(t, filepath.Join(dir, "test", "application_test.go"), `package test
+
+func TestAssets(t *testing.T) {
+	assertContains(`+"`"+`import "app.js"`+"`"+`)
+	assertContains("\"app.js\"")
+	imports := map[string]string{
+		"app.js": "/assets/lazyshaft/app/app-12345678.js",
+		"controllers/hello_controller.js": "/assets/lazyshaft/app/controllers/hello_controller-12345678.js",
+	}
+	_ = imports
+}
+`)
 	assertUpgradeFileContent(t, filepath.Join(dir, "app", "controllers", "posts", "posts_controller.go"), `package posts
 
 type PostsController struct{}
@@ -306,6 +331,45 @@ func (c *PostsController) Show() error {
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("stderr = %q", stderr.String())
+	}
+}
+
+func TestUpgradeTo017RefreshesJavaScriptAssetsBeforeTests(t *testing.T) {
+	dir := t.TempDir()
+	writeUpgradeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n\ngo 1.26.0\n\nrequire golazy.dev v0.1.16\n")
+	writeUpgradeFile(t, filepath.Join(dir, "js.toml"), `[entrypoint.turbo]
+module = "@hotwired/turbo"
+`)
+
+	var calls []upgradeInvocation
+	code, err := (Command{
+		Dir:    dir,
+		Runner: goGetRunner(t, &calls),
+	}).Execute()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != 0 {
+		t.Fatalf("code = %d, want 0", code)
+	}
+
+	want := []upgradeInvocation{
+		{command: "go", args: []string{"get", "golazy.dev@v0.1.17"}, dir: dir},
+		{command: "go", args: []string{"mod", "tidy"}, dir: dir},
+		{command: "lazy", args: []string{"js"}, dir: dir, env: []string{"LAZY_MULTIVERSION=off"}},
+		{command: "go", args: []string{"test", "./..."}, dir: dir},
+		{command: "go", args: []string{"vet", "./..."}, dir: dir},
+	}
+	if len(calls) != len(want) {
+		t.Fatalf("calls = %#v, want %#v", calls, want)
+	}
+	for index := range want {
+		if calls[index].command != want[index].command ||
+			calls[index].dir != want[index].dir ||
+			!slices.Equal(calls[index].args, want[index].args) ||
+			!slices.Equal(calls[index].env, want[index].env) {
+			t.Fatalf("call %d = %#v, want %#v", index, calls[index], want[index])
+		}
 	}
 }
 
@@ -882,6 +946,7 @@ func goGetRunner(t *testing.T, calls *[]upgradeInvocation) execservice.Runner {
 				command: command,
 				args:    slices.Clone(args),
 				dir:     options.Dir,
+				env:     slices.Clone(options.Env),
 			})
 		}
 		if command == "go" && len(args) == 2 && args[0] == "get" {

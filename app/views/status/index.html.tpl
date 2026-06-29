@@ -1,1 +1,3 @@
-{{ turbo_frame "status_bar" . }}
+<turbo-frame id="status_bar" data-turbo-permanent>
+  {{ partial "status_bar_frame" . }}
+</turbo-frame>

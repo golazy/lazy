@@ -2,6 +2,7 @@ package requests
 
 import (
 	"fmt"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -124,6 +125,9 @@ func TestRequestViewReadsTracesAndRendersRequestDetails(t *testing.T) {
 		"/pools",
 		"lazydispatch.Router",
 		"lazyassets.Registry",
+		`data-controller="debounced-form"`,
+		`data-debounced-form-delay-value="250"`,
+		`data-debounced-form-stream-source-value="[data-request-stream-source]"`,
 		`data-turbo-frame="request_detail"`,
 		`<turbo-frame id="request_detail" src="/_golazy/requests?`,
 		`domain=lazydispatch.Router`,
@@ -136,6 +140,23 @@ func TestRequestViewReadsTracesAndRendersRequestDetails(t *testing.T) {
 	}
 	if strings.Contains(body, "More filters") || strings.Contains(body, `aria-label="Request type filters"`) {
 		t.Fatalf("rendered requests frame still contains removed category filter UI:\n%s", body)
+	}
+
+	views, err := app.Views()
+	if err != nil {
+		t.Fatalf("open app views: %v", err)
+	}
+	indexTemplate, err := fs.ReadFile(views, "requests/index.html.tpl")
+	if err != nil {
+		t.Fatalf("read requests index template: %v", err)
+	}
+	for _, want := range []string{
+		`<turbo-stream-source src="{{.requests.StreamURL}}"`,
+		`data-request-stream-source`,
+	} {
+		if !strings.Contains(string(indexTemplate), want) {
+			t.Fatalf("requests index template does not contain %q:\n%s", want, indexTemplate)
+		}
 	}
 
 	streamBody, err := controller.streamRequestsInitial(request)

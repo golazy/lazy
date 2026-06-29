@@ -662,6 +662,8 @@ func (e stepExecutor) rewriteAppJavaScriptImportSpecifiers() error {
 	roots := []string{
 		filepath.Join(e.dir, "app", "views"),
 		filepath.Join(e.dir, "app", "js"),
+		filepath.Join(e.dir, "test"),
+		filepath.Join(e.dir, "tests"),
 	}
 	var rewritten []string
 	for _, root := range roots {
@@ -688,7 +690,7 @@ func (e stepExecutor) rewriteAppJavaScriptImportSpecifiers() error {
 				}
 			}
 			switch filepath.Ext(path) {
-			case ".js", ".tpl", ".html":
+			case ".go", ".js", ".tpl", ".html":
 				// Continue below.
 			default:
 				return nil
@@ -745,12 +747,20 @@ func (e stepExecutor) rewriteAppJavaScriptImportSpecifiersInFile(path string) (b
 var appJavaScriptImportSpecifierReplacer = strings.NewReplacer(
 	`import "/js/app.js"`, `import "app.js"`,
 	`import '/js/app.js'`, `import 'app.js'`,
+	`\"/js/app.js\"`, `\"app.js\"`,
+	`\'/js/app.js\'`, `\'app.js\'`,
+	`"/js/app.js"`, `"app.js"`,
+	`'/js/app.js'`, `'app.js'`,
 	`from "/js/`, `from "`,
 	`from '/js/`, `from '`,
 	`import "/js/`, `import "`,
 	`import '/js/`, `import '`,
 	`import("/js/`, `import("`,
 	`import('/js/`, `import('`,
+	`\"/js/controllers/`, `\"controllers/`,
+	`\'/js/controllers/`, `\'controllers/`,
+	`"/js/controllers/`, `"controllers/`,
+	`'/js/controllers/`, `'controllers/`,
 )
 
 func fileMode(path string) os.FileMode {
@@ -759,6 +769,11 @@ func fileMode(path string) os.FileMode {
 		return 0o644
 	}
 	return info.Mode().Perm()
+}
+
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }
 
 func (e stepExecutor) replaceFileIfHash(relative string, previous string, target string, mode os.FileMode) error {
@@ -1495,28 +1510,69 @@ func (e stepExecutor) runFollowups() error {
 	calls := []struct {
 		command string
 		args    []string
+		env     []string
 	}{
 		{command: "go", args: []string{"mod", "tidy"}},
-		{command: "go", args: []string{"test", "./..."}},
-		{command: "go", args: []string{"vet", "./..."}},
 	}
+	if e.to == "v0.1.17" && fileExists(filepath.Join(e.dir, "js.toml")) {
+		calls = append(calls, struct {
+			command string
+			args    []string
+			env     []string
+		}{
+			command: e.lazyCommand(),
+			args:    []string{"js"},
+			env:     []string{"LAZY_MULTIVERSION=off"},
+		})
+	}
+	calls = append(calls,
+		struct {
+			command string
+			args    []string
+			env     []string
+		}{command: "go", args: []string{"test", "./..."}},
+		struct {
+			command string
+			args    []string
+			env     []string
+		}{command: "go", args: []string{"vet", "./..."}},
+	)
 	for _, call := range calls {
 		displayCommand := call.command
+		if filepath.Base(displayCommand) != displayCommand {
+			displayCommand = filepath.Base(displayCommand)
+		}
 		displayArgs := call.args
+		displayPrefix := ""
+		if len(call.env) != 0 {
+			displayPrefix = strings.Join(call.env, " ") + " "
+		}
 		if e.dryRun || e.skipCommands {
-			fmt.Fprintf(e.stdout, "  would run %s %s\n", displayCommand, strings.Join(displayArgs, " "))
+			fmt.Fprintf(e.stdout, "  would run %s%s %s\n", displayPrefix, displayCommand, strings.Join(displayArgs, " "))
 			continue
 		}
-		fmt.Fprintf(e.stdout, "  running %s %s\n", displayCommand, strings.Join(displayArgs, " "))
+		fmt.Fprintf(e.stdout, "  running %s%s %s\n", displayPrefix, displayCommand, strings.Join(displayArgs, " "))
 		if err := e.runner(call.command, call.args, execservice.Options{
 			Dir:    e.dir,
 			Stdout: e.stdout,
 			Stderr: e.stderr,
+			Env:    call.env,
 		}); err != nil {
 			return fmt.Errorf("%s %s: %w", displayCommand, strings.Join(displayArgs, " "), err)
 		}
 	}
 	return nil
+}
+
+func (e stepExecutor) lazyCommand() string {
+	if e.customRunner {
+		return "lazy"
+	}
+	current, err := os.Executable()
+	if err != nil {
+		return "lazy"
+	}
+	return current
 }
 
 const v010MiseToml = `[tools]

@@ -7,6 +7,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.17] - 2026-06-29
+
 ### Added
 
 - `lazy dump <dataset>` and `lazy load <dataset>` coordinate service
@@ -76,11 +78,11 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   exporters into the child app. Detailed request monitoring is off by default
   and can be enabled from the development panel.
 - The development panel now visits one resource-backed page per top-level tab,
-  keeps the status bar mounted as a permanent Turbo Frame, and uses one
-  permanent status `turbo-stream-source` plus one tab-scoped stream source for
-  fresh data. Browser-facing panel endpoints render HTML, Turbo Frames, or
-  Turbo Stream HTML; internal app-control JSON is read server-side and enriched
-  before rendering.
+  keeps the status bar mounted as a permanent Turbo Frame with its status
+  `turbo-stream-source` inside that frame, and uses one tab-scoped stream
+  source for fresh tab data. Browser-facing panel endpoints render HTML, Turbo
+  Frames, or Turbo Stream HTML; internal app-control JSON is read server-side
+  and enriched before rendering.
 - The development panel now stores the last top-level tab in session storage
   and restores it when the embedded panel loads at the default App tab. The
   Routes tab also sends static GET route clicks to the injected host script,
@@ -165,12 +167,11 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   controller, with per-header minimum widths and resize handles across the
   panel's shared table component. Grouped or multi-row table headers can resize
   their covered leaf columns proportionally instead of treating header groups as
-  separate physical columns. Tables
-  remember resized widths in browser local storage, and rightward drags now
-  continue compressing later columns after the immediate right column reaches
-  its minimum. Tables also scale their columns proportionally when their pane
-  resizes, and frame-targeted row links update selected-row styling
-  immediately.
+  separate physical columns. Tables remember resized widths in browser local
+  storage, and rightward drags now continue compressing later columns after the
+  immediate right column reaches its minimum. Tables also scale their columns
+  proportionally when their pane resizes, and frame-targeted row links update
+  selected-row styling immediately.
 - Embedded development panels can now be resized from their top edge, and the
   proxied page's bottom padding follows the selected panel height.
 - `lazy js` and `lazy tailwind` now choose Node package managers from active
@@ -502,7 +503,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The CLI version now comes from the checked-in `VERSION` file embedded into
   the binary at build time.
 
-[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.16...HEAD
+[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.17...HEAD
+[0.1.17]: https://github.com/golazy/lazy/compare/v0.1.16...v0.1.17
 [0.1.16]: https://github.com/golazy/lazy/compare/v0.1.15...v0.1.16
 [0.1.15]: https://github.com/golazy/lazy/compare/v0.1.14...v0.1.15
 [0.1.14]: https://github.com/golazy/lazy/compare/v0.1.13...v0.1.14

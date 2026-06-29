@@ -561,12 +561,25 @@ func TestPanelStatusStreamThroughAppMiddleware(t *testing.T) {
 		}
 	}()
 
-	store.Update(buildservice.Snapshot{
-		State:      buildservice.StateRunning,
-		Message:    "updated",
-		BuildCount: 4,
-		AppAddr:    "127.0.0.1:3001",
-	})
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		ticker := time.NewTicker(25 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				store.Update(buildservice.Snapshot{
+					State:      buildservice.StateRunning,
+					Message:    "updated",
+					BuildCount: 4,
+					AppAddr:    "127.0.0.1:3001",
+				})
+			}
+		}
+	}()
 
 	select {
 	case got := <-payload:
