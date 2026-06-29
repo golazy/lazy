@@ -7,6 +7,12 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- `lazy upgrade` now migrates `v0.1.17 -> v0.1.18` static
+  `lazyapp.Config.Jobs` configs by wrapping `lazyjobs.Config{...}` with
+  `lazyapp.Jobs(...)`.
+
 ## [0.1.17] - 2026-06-29
 
 ### Added

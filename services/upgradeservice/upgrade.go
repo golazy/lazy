@@ -40,6 +40,7 @@ var releaseVersions = []string{
 	"v0.1.15",
 	"v0.1.16",
 	"v0.1.17",
+	"v0.1.18",
 }
 
 const firstUpgradeAwareVersion = "v0.1.10"
@@ -264,6 +265,8 @@ func (c Command) runStepWithStreams(dir string, from string, to string, force bo
 		err = executor.upgradeTo016()
 	case from == "v0.1.16" && to == "v0.1.17":
 		err = executor.upgradeTo017()
+	case from == "v0.1.17" && to == "v0.1.18":
+		err = executor.upgradeTo018()
 	default:
 		err = fmt.Errorf("upgrade from %s to %s is not implemented; use the versioned upgrade guide", from, to)
 	}
@@ -396,6 +399,8 @@ func hasBuiltInStep(from string, to string) bool {
 		return true
 	case from == "v0.1.16" && to == "v0.1.17":
 		return true
+	case from == "v0.1.17" && to == "v0.1.18":
+		return true
 	default:
 		return false
 	}
@@ -454,6 +459,74 @@ func (e stepExecutor) upgradeTo017() error {
 		return err
 	}
 	return e.rewriteAppJavaScriptImportSpecifiers()
+}
+
+func (e stepExecutor) upgradeTo018() error {
+	return e.rewriteStaticJobConfigs()
+}
+
+func (e stepExecutor) rewriteStaticJobConfigs() error {
+	path := filepath.Join(e.dir, "init", "app.go")
+	changed, err := lazycodeservice.RewriteFile(path, e.dryRun, rewriteStaticJobConfigsFile)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			fmt.Fprintln(e.stdout, "  init/app.go not present; skipping lazyapp.Config jobs rewrite")
+			return nil
+		}
+		return err
+	}
+	switch {
+	case changed && e.dryRun:
+		fmt.Fprintln(e.stdout, "  would wrap static lazyapp.Config Jobs config with lazyapp.Jobs")
+	case changed:
+		fmt.Fprintln(e.stdout, "  wrapped static lazyapp.Config Jobs config with lazyapp.Jobs")
+	default:
+		fmt.Fprintln(e.stdout, "  lazyapp.Config Jobs already uses an initializer")
+	}
+	return nil
+}
+
+func rewriteStaticJobConfigsFile(_ *token.FileSet, file *ast.File) (bool, error) {
+	changed := false
+	ast.Inspect(file, func(node ast.Node) bool {
+		literal, ok := node.(*ast.CompositeLit)
+		if !ok || !isLazyappConfig(literal.Type) {
+			return true
+		}
+		for _, element := range literal.Elts {
+			keyValue, ok := element.(*ast.KeyValueExpr)
+			if !ok {
+				continue
+			}
+			key, ok := keyValue.Key.(*ast.Ident)
+			if !ok || key.Name != "Jobs" || !isLazyjobsConfig(keyValue.Value) {
+				continue
+			}
+			keyValue.Value = &ast.CallExpr{
+				Fun: &ast.SelectorExpr{
+					X:   ast.NewIdent("lazyapp"),
+					Sel: ast.NewIdent("Jobs"),
+				},
+				Args: []ast.Expr{keyValue.Value},
+			}
+			changed = true
+		}
+		return true
+	})
+	return changed, nil
+}
+
+func isLazyjobsConfig(expr ast.Expr) bool {
+	literal, ok := expr.(*ast.CompositeLit)
+	if !ok {
+		return false
+	}
+	selector, ok := literal.Type.(*ast.SelectorExpr)
+	if !ok || selector.Sel.Name != "Config" {
+		return false
+	}
+	ident, ok := selector.X.(*ast.Ident)
+	return ok && ident.Name == "lazyjobs"
 }
 
 func (e stepExecutor) rewriteControllerAPICalls() error {
