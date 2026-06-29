@@ -37,6 +37,7 @@ func TestInjectScriptAddsExternalPanelClientBeforeBodyClose(t *testing.T) {
 		`id="golazy-dev-panel-launcher"`,
 		`iframe src="/_golazy/"`,
 		`img src="/_golazy/assets/logo-square.svg"`,
+		`padding: 5px`,
 		`hidden`,
 	} {
 		if !bytes.Contains(got, []byte(want)) {

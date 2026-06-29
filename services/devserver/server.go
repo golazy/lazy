@@ -101,17 +101,18 @@ var clientPanel = []byte(`<div id="golazy-dev-panel-root" data-golazy-dev-panel-
     }
     #golazy-dev-panel-launcher {
       align-items: center;
-      background: #ffffff;
+      background: #fbbc04;
       border: 1px solid rgba(32, 33, 36, 0.18);
       border-radius: 12px;
       bottom: calc(16px + env(safe-area-inset-bottom));
+      box-sizing: border-box;
       box-shadow: 0 3px 10px rgba(32, 33, 36, 0.24);
       cursor: pointer;
       display: flex;
       height: 46px;
       justify-content: center;
       overflow: hidden;
-      padding: 0;
+      padding: 5px;
       position: fixed;
       right: calc(16px + env(safe-area-inset-right));
       width: 46px;
@@ -119,15 +120,16 @@ var clientPanel = []byte(`<div id="golazy-dev-panel-root" data-golazy-dev-panel-
     }
     #golazy-dev-panel-launcher:hover,
     #golazy-dev-panel-launcher:focus-visible {
-      background: #ffffff;
+      background: #fbbc04;
       border-color: rgba(32, 33, 36, 0.34);
       outline: 2px solid rgba(32, 33, 36, 0.4);
       outline-offset: 2px;
     }
     #golazy-dev-panel-launcher img {
       display: block;
-      height: 46px;
-      width: 46px;
+      height: 100%;
+      object-fit: contain;
+      width: 100%;
     }
   </style>
   <div id="golazy-dev-panel-padding" data-golazy-dev-panel-padding aria-hidden="true" hidden></div>
