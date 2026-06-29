@@ -83,9 +83,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   The Tracing detail renders per-region total and self duration plus sampled
   allocation bytes, malloc counts, and free counts when the app sidecar
   provides lazydev allocation samples.
-- The development panel Requests tab now filters request paths and request
-  categories on the app control plane, refreshes new matching requests through
-  its tab stream, clears trace sidecars from the clear button, and lazy-loads
+- The development panel Requests tab now combines its path filter and request
+  domain chips in one toolbar row, refreshes new matching requests through its
+  tab stream, clears trace sidecars from the clear button, and lazy-loads
   request details in a nested Turbo frame.
 - The Requests Tracing detail now renders a status strip, an Include golazy
   toggle, a backend-sorted region metrics table, and a flamegraph whose scale
@@ -128,11 +128,13 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `size` values.
 - Development panel data tables now use a reusable Stimulus column-resize
   controller, with per-header minimum widths and resize handles across the
-  panel's shared table component. Tables remember resized widths in browser
-  local storage, and rightward drags now continue compressing later columns
-  after the immediate right column reaches its minimum. Tables also scale their
-  columns proportionally when their pane resizes, and frame-targeted row links
-  update selected-row styling immediately.
+  panel's shared table component. Grouped or multi-row table headers resize by
+  leaf column instead of treating header groups as physical columns. Tables
+  remember resized widths in browser local storage, and rightward drags now
+  continue compressing later columns after the immediate right column reaches
+  its minimum. Tables also scale their columns proportionally when their pane
+  resizes, and frame-targeted row links update selected-row styling
+  immediately.
 - Embedded development panels can now be resized from their top edge, and the
   proxied page's bottom padding follows the selected panel height.
 - `lazy js` and `lazy tailwind` now choose Node package managers from active

@@ -47,7 +47,7 @@
               <input type="hidden" name="request" value="{{.requests.SelectedRequestID}}">
               {{if .requests.HasSelectedSpan}}<input type="hidden" name="span" value="{{.requests.SelectedSpanID}}">{{end}}
               <input type="hidden" name="tab" value="tracing">
-              <input type="hidden" name="type" value="{{.requests.TypeValue}}">
+              {{if .requests.DomainValue}}<input type="hidden" name="domain" value="{{.requests.DomainValue}}">{{end}}
               <input type="hidden" name="sort" value="{{.requests.SortValue}}">
               {{if .requests.Query}}<input type="hidden" name="q" value="{{.requests.Query}}">{{end}}
               <label><input type="checkbox" name="framework" value="1" {{if .requests.Framework}}checked{{end}} onchange="this.form.requestSubmit()"> Include golazy</label>

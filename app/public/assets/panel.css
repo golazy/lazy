@@ -233,12 +233,12 @@ pre {
 }
 
 .tool-view[data-view="requests"] {
-  grid-template-rows: 93px minmax(0, 1fr);
+  grid-template-rows: 62px minmax(0, 1fr);
 }
 
 .network-toolbar {
   display: grid;
-  grid-template-rows: 31px 31px 31px;
+  grid-template-rows: 31px 31px;
   min-width: 0;
   overflow: hidden;
 }
@@ -374,6 +374,10 @@ button:disabled:hover {
   min-width: 12rem;
 }
 
+.filter-row .inline-form {
+  flex: 1 1 22rem;
+}
+
 .filter-input:focus {
   border-color: var(--sys-color-state-focus-ring);
   box-shadow: 0 0 0 1px var(--sys-color-state-focus-ring);
@@ -506,6 +510,13 @@ button:disabled:hover {
   min-width: 0;
   overflow: auto hidden;
   padding: 3px 6px;
+}
+
+.filter-row .type-filter {
+  background: transparent;
+  border-bottom: 0;
+  flex: 1 1 auto;
+  padding: 0;
 }
 
 .type-filter button,

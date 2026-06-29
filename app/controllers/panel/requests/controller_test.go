@@ -44,6 +44,15 @@ func TestRequestViewReadsTracesAndRendersRequestDetails(t *testing.T) {
 					{"name":"controller pools#Index","span_id":"controller","parent_id":"root","started_at":"2026-06-29T08:00:00.001Z","ended_at":"2026-06-29T08:00:00.006Z","duration_ms":5,"self_duration_ms":2,"memory":{"total_alloc_bytes_delta":4096,"mallocs_delta":12,"frees_delta":3,"self_total_alloc_bytes_delta":1024,"self_mallocs_delta":4,"self_frees_delta":1}}
 				],
 				"logs":[{"time":"2026-06-29T08:00:00Z","level":"info","message":"handled","span_id":"controller"}]
+			},{
+				"request_id":"req-asset",
+				"method":"GET",
+				"path":"/assets/app.js",
+				"status":200,
+				"category":"assets",
+				"handled_by":"lazyassets.Registry",
+				"bytes":1024,
+				"duration_ms":2.5
 			}]
 		}`)
 	}))
@@ -56,13 +65,13 @@ func TestRequestViewReadsTracesAndRendersRequestDetails(t *testing.T) {
 	})
 	controller := &RequestsController{Base: panel.Base{Store: store}}
 
-	request := httptest.NewRequest(http.MethodGet, "/_golazy/requests?q=pools&type=framework&request=req-123&span=controller&tab=tracing&framework=1", nil)
+	request := httptest.NewRequest(http.MethodGet, "/_golazy/requests?q=pools&domain=lazydispatch.Router&request=req-123&span=controller&tab=tracing&framework=1", nil)
 	view := controller.requestView(request)
 	if gotMethod != http.MethodGet || gotPath != appRequestTracesPath {
 		t.Fatalf("proxied request = %s %s, want GET %s", gotMethod, gotPath, appRequestTracesPath)
 	}
-	if gotQuery.Get("q") != "pools" || gotQuery.Get("type") != "framework" {
-		t.Fatalf("proxied query = %s, want q=pools&type=framework", gotQuery.Encode())
+	if gotQuery.Get("q") != "pools" || gotQuery.Get("type") != "" || gotQuery.Get("domain") != "" {
+		t.Fatalf("proxied query = %s, want only q=pools", gotQuery.Encode())
 	}
 	if view.Error != "" {
 		t.Fatalf("view error = %q", view.Error)
@@ -76,14 +85,17 @@ func TestRequestViewReadsTracesAndRendersRequestDetails(t *testing.T) {
 	if len(view.Rows) != 1 || view.Rows[0].Trace.PathText() != "/pools" {
 		t.Fatalf("rows = %#v, want /pools request row", view.Rows)
 	}
+	if len(view.DomainFilters) != 2 || view.DomainFilters[0].Label != "lazyassets.Registry" || view.DomainFilters[1].Label != "lazydispatch.Router" || !view.DomainFilters[1].Selected {
+		t.Fatalf("domain filters = %#v, want sorted domains with lazydispatch selected", view.DomainFilters)
+	}
 	if !view.HasSelectedSpan || view.SelectedSpan.SpanID != "controller" {
 		t.Fatalf("selected span = %#v, want controller", view.SelectedSpan)
 	}
 	if got := view.SelectedSpan.AllocationSummaryText(); !strings.Contains(got, "4.0 KiB total") || !strings.Contains(got, "1.0 KiB self") {
 		t.Fatalf("selected allocation summary = %q, want total and self allocations", got)
 	}
-	if got := view.StreamURL(); !strings.Contains(got, "request=req-123") || !strings.Contains(got, "span=controller") || !strings.Contains(got, "tab=tracing") || !strings.Contains(got, "type=framework") {
-		t.Fatalf("StreamURL = %q, want selected request/span/tab/type", got)
+	if got := view.StreamURL(); !strings.Contains(got, "request=req-123") || !strings.Contains(got, "span=controller") || !strings.Contains(got, "tab=tracing") || !strings.Contains(got, "domain=lazydispatch.Router") || strings.Contains(got, "type=") {
+		t.Fatalf("StreamURL = %q, want selected request/span/tab/domain and no type", got)
 	}
 
 	renderer := newRequestTestRenderer(t)
@@ -99,13 +111,17 @@ func TestRequestViewReadsTracesAndRendersRequestDetails(t *testing.T) {
 	for _, want := range []string{
 		"/pools",
 		"lazydispatch.Router",
+		"lazyassets.Registry",
 		`data-turbo-frame="request_detail"`,
 		`<turbo-frame id="request_detail" src="/_golazy/requests?`,
-		`type=framework`,
+		`domain=lazydispatch.Router`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("rendered requests frame does not contain %q:\n%s", want, body)
 		}
+	}
+	if strings.Contains(body, "More filters") || strings.Contains(body, `aria-label="Request type filters"`) {
+		t.Fatalf("rendered requests frame still contains removed category filter UI:\n%s", body)
 	}
 
 	streamBody, err := controller.streamRequestsInitial(request)
@@ -118,7 +134,7 @@ func TestRequestViewReadsTracesAndRendersRequestDetails(t *testing.T) {
 		t.Fatalf("stream body should clear before hydrating rows:\n%s", streamBody)
 	}
 
-	frameRequest := httptest.NewRequest(http.MethodGet, "/_golazy/requests?q=pools&type=framework&request=req-123&span=controller&tab=tracing&framework=1", nil)
+	frameRequest := httptest.NewRequest(http.MethodGet, "/_golazy/requests?q=pools&domain=lazydispatch.Router&request=req-123&span=controller&tab=tracing&framework=1", nil)
 	frameRequest.Header.Set("Turbo-Frame", "request_detail")
 	frameResponse := httptest.NewRecorder()
 	if err := controller.renderRequestDetailFrame(frameResponse, frameRequest); err != nil {

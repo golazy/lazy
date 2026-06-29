@@ -16,7 +16,7 @@ export default class extends Controller {
     this.stop()
     this.table?.removeEventListener("click", this.boundSelectRow)
     this.resizeObserver?.disconnect()
-    this.headers?.forEach(header => header.querySelector(".table-resize-handle")?.remove())
+    this.removeHandles()
   }
 
   start(event) {
@@ -53,7 +53,7 @@ export default class extends Controller {
   }
 
   installColumns() {
-    this.headers = Array.from(this.table.querySelectorAll("thead th"))
+    this.headers = this.headerCells()
     if (this.headers.length === 0) return
 
     let colgroup = this.table.querySelector("colgroup")
@@ -74,8 +74,8 @@ export default class extends Controller {
   }
 
   installHandles() {
+    this.removeHandles()
     this.headers?.forEach((header, index) => {
-      header.querySelector(".table-resize-handle")?.remove()
       const handle = document.createElement("span")
       handle.className = "table-resize-handle"
       handle.dataset.columnIndex = String(index)
@@ -85,6 +85,43 @@ export default class extends Controller {
       handle.addEventListener("pointerdown", event => this.start(event))
       header.append(handle)
     })
+  }
+
+  removeHandles() {
+    this.table?.querySelectorAll("thead .table-resize-handle")?.forEach(handle => handle.remove())
+  }
+
+  headerCells() {
+    const rows = Array.from(this.table.tHead?.rows || [])
+    if (rows.length === 0) return []
+
+    const grid = []
+    const cells = []
+    rows.forEach((row, rowIndex) => {
+      grid[rowIndex] ||= []
+      let columnIndex = 0
+      Array.from(row.cells).forEach(header => {
+        while (grid[rowIndex][columnIndex]) columnIndex++
+
+        const colSpan = Math.max(1, Number.parseInt(header.getAttribute("colspan") || header.colSpan || "1", 10) || 1)
+        const rowSpan = Math.max(1, Number.parseInt(header.getAttribute("rowspan") || header.rowSpan || "1", 10) || 1)
+        cells.push({ header, rowIndex, columnIndex, colSpan, rowSpan })
+
+        for (let rowOffset = 0; rowOffset < rowSpan; rowOffset++) {
+          const targetRow = rowIndex + rowOffset
+          grid[targetRow] ||= []
+          for (let columnOffset = 0; columnOffset < colSpan; columnOffset++) {
+            grid[targetRow][columnIndex + columnOffset] = header
+          }
+        }
+        columnIndex += colSpan
+      })
+    })
+
+    return cells
+      .filter(cell => cell.colSpan === 1 && cell.rowIndex + cell.rowSpan >= rows.length)
+      .sort((left, right) => left.columnIndex - right.columnIndex)
+      .map(cell => cell.header)
   }
 
   installRowSelection() {

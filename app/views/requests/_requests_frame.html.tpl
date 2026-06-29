@@ -34,18 +34,16 @@
         {{if .requests.LogsTab}}
           <input type="hidden" name="tab" value="logs">
         {{end}}
-        <input type="hidden" name="type" value="{{.requests.TypeValue}}">
+        {{if .requests.DomainValue}}<input type="hidden" name="domain" value="{{.requests.DomainValue}}">{{end}}
         <input type="hidden" name="framework" value="{{.requests.FrameworkValue}}">
+        <input type="hidden" name="sort" value="{{.requests.SortValue}}">
         <input class="filter-input network-filter" type="search" name="q" placeholder="Filter" value="{{.requests.Query}}">
       </form>
-      <span class="toolbar-spacer"></span>
-      <button type="button" class="more-filters" disabled>More filters</button>
-    </div>
-    <div class="type-filter" aria-label="Request type filters">
-      <a href="{{.requests.TypeURL "all"}}" data-turbo-frame="_top" aria-current="{{if .requests.TypeSelected "all"}}page{{end}}">All</a>
-      <a href="{{.requests.TypeURL "framework"}}" data-turbo-frame="_top" aria-current="{{if .requests.TypeSelected "framework"}}page{{end}}">Framework</a>
-      <a href="{{.requests.TypeURL "assets"}}" data-turbo-frame="_top" aria-current="{{if .requests.TypeSelected "assets"}}page{{end}}">Assets</a>
-      <a href="{{.requests.TypeURL "other"}}" data-turbo-frame="_top" aria-current="{{if .requests.TypeSelected "other"}}page{{end}}">Other</a>
+      <div class="type-filter domain-filter" aria-label="Request domains">
+        {{range .requests.DomainFilters}}
+          <a href="{{.URL}}" data-turbo-frame="_top" aria-current="{{if .Selected}}page{{end}}">{{.Label}}</a>
+        {{end}}
+      </div>
     </div>
   </div>
 

@@ -150,7 +150,7 @@ func (c *RequestsController) requestView(r *http.Request) requestView {
 		Directory: ".tmp/traces",
 		Query:     strings.TrimSpace(r.URL.Query().Get("q")),
 		Tab:       normalizeRequestTab(r.URL.Query().Get("tab")),
-		Type:      normalizeRequestType(r.URL.Query().Get("type")),
+		Domain:    normalizeRequestDomain(r.URL.Query().Get("domain")),
 		Framework: r.URL.Query().Get("framework") == "1",
 		Sort:      normalizeRequestSort(r.URL.Query().Get("sort")),
 	}
@@ -163,6 +163,8 @@ func (c *RequestsController) requestView(r *http.Request) requestView {
 	}
 	view.Errors = snapshot.Errors
 	view.Requests = snapshot.Traces
+	view.DomainFilters = requestDomainFilters(view.Requests, view.Domain, view.Query, view.Tab, view.Framework, view.Sort)
+	view.Requests = filterRequestTracesByDomain(view.Requests, view.Domain)
 	selected := selectRequestTrace(view.Requests, r.URL.Query().Get("request"))
 	if selected == nil {
 		return view
@@ -175,9 +177,9 @@ func (c *RequestsController) requestView(r *http.Request) requestView {
 		view.SelectedSpan = *selectedSpan
 		view.HasSelectedSpan = true
 	}
-	view.Rows = requestRows(view.Requests, selected.RequestID, view.Query, view.Tab, view.Type, view.Framework, view.Sort)
-	view.RegionRows = requestRegionRows(*selected, visible, selectedRequestSpanID(selectedSpan), view.Query, view.Tab, view.Type, view.Framework, view.Sort)
-	view.FlameRows = requestFlameRows(*selected, visible, selectedRequestSpanID(selectedSpan), view.Query, view.Tab, view.Type, view.Framework, view.Sort)
+	view.Rows = requestRows(view.Requests, selected.RequestID, view.Query, view.Tab, view.Domain, view.Framework, view.Sort)
+	view.RegionRows = requestRegionRows(*selected, visible, selectedRequestSpanID(selectedSpan), view.Query, view.Tab, view.Domain, view.Framework, view.Sort)
+	view.FlameRows = requestFlameRows(*selected, visible, selectedRequestSpanID(selectedSpan), view.Query, view.Tab, view.Domain, view.Framework, view.Sort)
 	view.FrameworkSummary = requestFrameworkSummary(visible)
 	view.Logs = selected.Logs
 	return view
@@ -224,11 +226,12 @@ type requestView struct {
 	Errors           []string
 	Query            string
 	Tab              string
-	Type             string
+	Domain           string
 	Framework        bool
 	Sort             string
 	Requests         []requestTrace
 	Rows             []requestRow
+	DomainFilters    []requestDomainFilter
 	Selected         requestTrace
 	HasSelected      bool
 	SelectedSpan     requestSpan
@@ -240,16 +243,13 @@ type requestView struct {
 }
 
 func (v requestView) StreamURL() string {
-	return requestURL(v.SelectedRequestID(), v.SelectedSpanID(), v.Query, v.Tab, v.Type, v.Framework, v.Sort)
+	return requestURL(v.SelectedRequestID(), v.SelectedSpanID(), v.Query, v.Tab, v.Domain, v.Framework, v.Sort)
 }
 
 func (v requestView) ControlPlanePath() string {
 	values := url.Values{}
 	if v.Query != "" {
 		values.Set("q", v.Query)
-	}
-	if v.Type != "" && v.Type != "all" {
-		values.Set("type", v.Type)
 	}
 	encoded := values.Encode()
 	if encoded == "" {
@@ -259,14 +259,14 @@ func (v requestView) ControlPlanePath() string {
 }
 
 func (v requestView) CurrentURL() string {
-	return requestURL(v.SelectedRequestID(), v.SelectedSpanID(), v.Query, v.Tab, v.Type, v.Framework, v.Sort)
+	return requestURL(v.SelectedRequestID(), v.SelectedSpanID(), v.Query, v.Tab, v.Domain, v.Framework, v.Sort)
 }
 
 func (v requestView) DetailURL() string {
 	if !v.HasSelected {
 		return ""
 	}
-	return requestURL(v.SelectedRequestID(), v.SelectedSpanID(), v.Query, v.Tab, v.Type, v.Framework, v.Sort)
+	return requestURL(v.SelectedRequestID(), v.SelectedSpanID(), v.Query, v.Tab, v.Domain, v.Framework, v.Sort)
 }
 
 func (v requestView) SelectedRequestID() string {
@@ -314,7 +314,7 @@ func (v requestView) FrameworkToggleText() string {
 }
 
 func (v requestView) FrameworkToggleURL() string {
-	return requestURL(v.SelectedRequestID(), v.SelectedSpanID(), v.Query, v.Tab, v.Type, !v.Framework, v.Sort)
+	return requestURL(v.SelectedRequestID(), v.SelectedSpanID(), v.Query, v.Tab, v.Domain, !v.Framework, v.Sort)
 }
 
 func (v requestView) TabSelected(tab string) bool {
@@ -334,19 +334,11 @@ func (v requestView) LogsTab() bool {
 }
 
 func (v requestView) TabURL(tab string) string {
-	return requestURL(v.SelectedRequestID(), v.SelectedSpanID(), v.Query, normalizeRequestTab(tab), v.Type, v.Framework, v.Sort)
+	return requestURL(v.SelectedRequestID(), v.SelectedSpanID(), v.Query, normalizeRequestTab(tab), v.Domain, v.Framework, v.Sort)
 }
 
-func (v requestView) TypeSelected(requestType string) bool {
-	return v.Type == normalizeRequestType(requestType)
-}
-
-func (v requestView) TypeURL(requestType string) string {
-	return requestURL(v.SelectedRequestID(), v.SelectedSpanID(), v.Query, v.Tab, normalizeRequestType(requestType), v.Framework, v.Sort)
-}
-
-func (v requestView) TypeValue() string {
-	return v.Type
+func (v requestView) DomainValue() string {
+	return v.Domain
 }
 
 func (v requestView) SortValue() string {
@@ -358,7 +350,7 @@ func (v requestView) SortSelected(sort string) bool {
 }
 
 func (v requestView) SortURL(sort string) string {
-	return requestURL(v.SelectedRequestID(), v.SelectedSpanID(), v.Query, v.Tab, v.Type, v.Framework, normalizeRequestSort(sort))
+	return requestURL(v.SelectedRequestID(), v.SelectedSpanID(), v.Query, v.Tab, v.Domain, v.Framework, normalizeRequestSort(sort))
 }
 
 func (v requestView) TraceStatusText() string {
@@ -655,6 +647,12 @@ type requestRow struct {
 	Selected bool
 }
 
+type requestDomainFilter struct {
+	Label    string
+	URL      string
+	Selected bool
+}
+
 type requestSpanRow struct {
 	Span             requestSpan
 	URL              string
@@ -702,6 +700,10 @@ func normalizeRequestType(requestType string) string {
 	}
 }
 
+func normalizeRequestDomain(domain string) string {
+	return strings.TrimSpace(domain)
+}
+
 func normalizeRequestSort(value string) string {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "time-self", "alloc-total", "alloc-self", "memory-total", "memory-self":
@@ -734,16 +736,60 @@ func selectRequestTrace(traces []requestTrace, id string) *requestTrace {
 	return &traces[0]
 }
 
-func requestRows(traces []requestTrace, selected string, query string, tab string, requestType string, framework bool, sortKey string) []requestRow {
+func requestRows(traces []requestTrace, selected string, query string, tab string, domain string, framework bool, sortKey string) []requestRow {
 	rows := make([]requestRow, 0, len(traces))
 	for _, trace := range traces {
 		rows = append(rows, requestRow{
 			Trace:    trace,
-			URL:      requestURL(trace.RequestID, "", query, tab, requestType, framework, sortKey),
+			URL:      requestURL(trace.RequestID, "", query, tab, domain, framework, sortKey),
 			Selected: trace.RequestID == selected,
 		})
 	}
 	return rows
+}
+
+func requestDomainFilters(traces []requestTrace, selected string, query string, tab string, framework bool, sortKey string) []requestDomainFilter {
+	selected = normalizeRequestDomain(selected)
+	seen := map[string]bool{}
+	domains := make([]string, 0)
+	for _, trace := range traces {
+		domain := normalizeRequestDomain(trace.HandledBy)
+		if domain == "" || seen[domain] {
+			continue
+		}
+		seen[domain] = true
+		domains = append(domains, domain)
+	}
+	sort.Strings(domains)
+
+	filters := make([]requestDomainFilter, 0, len(domains))
+	for _, domain := range domains {
+		next := domain
+		selectedDomain := domain == selected
+		if selectedDomain {
+			next = ""
+		}
+		filters = append(filters, requestDomainFilter{
+			Label:    domain,
+			URL:      requestURL("", "", query, tab, next, framework, sortKey),
+			Selected: selectedDomain,
+		})
+	}
+	return filters
+}
+
+func filterRequestTracesByDomain(traces []requestTrace, domain string) []requestTrace {
+	domain = normalizeRequestDomain(domain)
+	if domain == "" {
+		return traces
+	}
+	filtered := make([]requestTrace, 0, len(traces))
+	for _, trace := range traces {
+		if normalizeRequestDomain(trace.HandledBy) == domain {
+			filtered = append(filtered, trace)
+		}
+	}
+	return filtered
 }
 
 func visibleRequestSpans(spans []requestSpan, framework bool) []requestSpan {
@@ -776,8 +822,8 @@ func selectRequestSpan(spans []requestSpan, id string) *requestSpan {
 	return &spans[0]
 }
 
-func requestRegionRows(trace requestTrace, spans []requestSpan, selected string, query string, tab string, requestType string, framework bool, sortKey string) []requestSpanRow {
-	rows := requestSpanRows(trace, spans, selected, query, tab, requestType, framework, sortKey, false)
+func requestRegionRows(trace requestTrace, spans []requestSpan, selected string, query string, tab string, domain string, framework bool, sortKey string) []requestSpanRow {
+	rows := requestSpanRows(trace, spans, selected, query, tab, domain, framework, sortKey, false)
 	sort.SliceStable(rows, func(i, j int) bool {
 		return requestSpanSortValue(rows[i].Span, sortKey) > requestSpanSortValue(rows[j].Span, sortKey)
 	})
@@ -791,7 +837,7 @@ func requestRegionRows(trace requestTrace, spans []requestSpan, selected string,
 	return rows
 }
 
-func requestSpanRows(trace requestTrace, spans []requestSpan, selected string, query string, tab string, requestType string, framework bool, sortKey string, metricScale bool) []requestSpanRow {
+func requestSpanRows(trace requestTrace, spans []requestSpan, selected string, query string, tab string, domain string, framework bool, sortKey string, metricScale bool) []requestSpanRow {
 	base := requestTraceBase(trace)
 	duration := math.Max(0.001, trace.DurationMS)
 	spanMap := map[string]requestSpan{}
@@ -810,17 +856,17 @@ func requestSpanRows(trace requestTrace, spans []requestSpan, selected string, q
 		}
 	}
 	for _, span := range spans {
-		rows = append(rows, requestSpanRowFor(trace, span, selected, query, tab, requestType, framework, sortKey, base, duration, maxValue, metricScale, spanMap, visibleSet))
+		rows = append(rows, requestSpanRowFor(trace, span, selected, query, tab, domain, framework, sortKey, base, duration, maxValue, metricScale, spanMap, visibleSet))
 	}
 	return rows
 }
 
-func requestFlameRows(trace requestTrace, spans []requestSpan, selected string, query string, tab string, requestType string, framework bool, sortKey string) []requestSpanRow {
+func requestFlameRows(trace requestTrace, spans []requestSpan, selected string, query string, tab string, domain string, framework bool, sortKey string) []requestSpanRow {
 	if requestSortFamily(sortKey) == "time" {
-		return requestSpanRows(trace, spans, selected, query, tab, requestType, framework, sortKey, false)
+		return requestSpanRows(trace, spans, selected, query, tab, domain, framework, sortKey, false)
 	}
 	ordered := requestMetricTreeSpans(spans, sortKey)
-	return requestSpanRows(trace, ordered, selected, query, tab, requestType, framework, sortKey, true)
+	return requestSpanRows(trace, ordered, selected, query, tab, domain, framework, sortKey, true)
 }
 
 func requestMetricTreeSpans(spans []requestSpan, sortKey string) []requestSpan {
@@ -859,7 +905,7 @@ func requestMetricTreeSpans(spans []requestSpan, sortKey string) []requestSpan {
 	return ordered
 }
 
-func requestSpanRowFor(trace requestTrace, span requestSpan, selected string, query string, tab string, requestType string, framework bool, sortKey string, base time.Time, duration float64, maxValue float64, metricScale bool, spanMap map[string]requestSpan, visibleSet map[string]bool) requestSpanRow {
+func requestSpanRowFor(trace requestTrace, span requestSpan, selected string, query string, tab string, domain string, framework bool, sortKey string, base time.Time, duration float64, maxValue float64, metricScale bool, spanMap map[string]requestSpan, visibleSet map[string]bool) requestSpanRow {
 	offset := math.Max(0, span.StartedAt.Sub(base).Seconds()*1000)
 	left := math.Min(100, offset/duration*100)
 	width := math.Min(100, math.Max(0.25, span.DurationMS/duration*100))
@@ -870,7 +916,7 @@ func requestSpanRowFor(trace requestTrace, span requestSpan, selected string, qu
 	parent := spanMap[span.ParentID]
 	return requestSpanRow{
 		Span:             span,
-		URL:              requestURL(trace.RequestID, span.SpanID, query, tab, requestType, framework, sortKey),
+		URL:              requestURL(trace.RequestID, span.SpanID, query, tab, domain, framework, sortKey),
 		Selected:         span.SpanID == selected,
 		Depth:            visibleRequestDepth(span, spanMap, visibleSet),
 		LeftPercent:      fmt.Sprintf("%.3f%%", left),
@@ -965,14 +1011,14 @@ func frameworkRequestSpan(span requestSpan) bool {
 	return name == "router" || strings.HasPrefix(name, "middleware ") || strings.HasPrefix(name, "dispatch ")
 }
 
-func requestURL(requestID string, spanID string, query string, tab string, requestType string, framework bool, sortKey string) string {
+func requestURL(requestID string, spanID string, query string, tab string, domain string, framework bool, sortKey string) string {
 	values := url.Values{}
 	if query != "" {
 		values.Set("q", query)
 	}
-	requestType = normalizeRequestType(requestType)
-	if requestType != "all" {
-		values.Set("type", requestType)
+	domain = normalizeRequestDomain(domain)
+	if domain != "" {
+		values.Set("domain", domain)
 	}
 	tab = normalizeRequestTab(tab)
 	if tab != "headers" {
