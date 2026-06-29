@@ -59,6 +59,8 @@ func TestAssetsViewReadsApplicationControlPlaneManifest(t *testing.T) {
 	}
 	for _, want := range []string{
 		`data-controller="debounced-form"`,
+		`data-debounced-form-count-source-value="[data-assets-frame-count]"`,
+		`data-debounced-form-count-target-value="[data-assets-count]"`,
 		`data-debounced-form-delay-value="250"`,
 		`data-turbo-frame="assets_table"`,
 		`<turbo-frame id="assets_table" class="assets-table-frame">`,

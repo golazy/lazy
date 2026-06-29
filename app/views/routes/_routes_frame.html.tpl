@@ -1,40 +1,13 @@
 <section id="routes" class="tool-view is-active" data-view="routes">
   <div class="filter-toolbar">
-    <form method="get" action="{{path_for "routes"}}">
+    <form method="get" action="{{path_for "routes"}}" data-controller="debounced-form" data-action="input->debounced-form#queue submit->debounced-form#submit" data-debounced-form-count-source-value="[data-routes-frame-count]" data-debounced-form-count-target-value="[data-routes-count]" data-debounced-form-delay-value="250" data-debounced-form-frame-value="routes_table" data-turbo-frame="routes_table">
       <input class="filter-input" type="search" name="q" value="{{.routes_query}}" placeholder="Filter routes">
     </form>
     <span class="toolbar-spacer"></span>
-    <span class="toolbar-count" data-routes-count>
-      {{if .routes_error}}
-        Routes unavailable
-      {{else}}
-        {{if .routes_query}}{{.routes_visible}} / {{end}}{{.routes_total}} routes
-      {{end}}
-    </span>
+    <span class="toolbar-count" data-routes-count>{{.routes_count_text}}</span>
   </div>
 
-  {{if .routes_error}}
-    <div class="empty-state">Route table unavailable: {{.routes_error}}</div>
-  {{else}}
-    <div class="details-pane">
-      <table class="data-grid routes-grid" data-controller="table-resize">
-        <thead>
-          <tr>
-            <th>Method</th>
-            <th>Path</th>
-            <th>Name</th>
-            <th>Target</th>
-            <th>Params</th>
-            <th>Namespace</th>
-          </tr>
-        </thead>
-        <tbody data-routes-list>
-          {{if .defer_panel_lists}}
-          {{else}}
-            {{partial "route_rows" .}}
-          {{end}}
-        </tbody>
-      </table>
-    </div>
-  {{end}}
+  <turbo-frame id="routes_table" class="routes-table-frame">
+    {{partial "routes_table" .}}
+  </turbo-frame>
 </section>

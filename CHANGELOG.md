@@ -92,9 +92,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The development panel BuildInfo tab now presents build trace diagnostics as
   one summary rail plus a slowest-packages table, keeping runtime module and
   setting details in one compact table instead of several separate panes.
-- The development panel Assets search now uses debounced backend Turbo Frame
-  requests and aborts older in-flight searches before they can replace newer
-  results. The Assets table scrolls inside the tab body.
+- The development panel Assets and Routes searches now use debounced backend
+  Turbo Frame requests and abort older in-flight searches before they can
+  replace newer results. Those tables scroll inside the tab body.
 - The development panel Cache tab now renders an empty shell first, hydrates
   from its tab stream, relays app lazydev cache hit/miss/set events, updates
   summary counters individually, and appends or replaces key rows as metadata

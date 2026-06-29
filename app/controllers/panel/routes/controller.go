@@ -2,6 +2,7 @@ package routes
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 	"golazy.dev/lazy/services/buildservice"
 	"golazy.dev/lazycontroller"
 	"golazy.dev/lazyroutes"
+	"golazy.dev/lazyturbo"
 )
 
 const appRoutesPath = "/routes"
@@ -31,6 +33,9 @@ func (c *RoutesController) Index(w http.ResponseWriter, r *http.Request) error {
 			c.Set("defer_panel_lists", true)
 			return nil
 		},
+		lazycontroller.TurboFrame: func() error {
+			return c.renderRoutesTableFrame(w, r)
+		},
 		lazycontroller.SSE: func() error {
 			return c.StreamTurboWithInitial(w, r, c.streamRoutesInitial, c.streamRoutes)
 		},
@@ -47,7 +52,7 @@ func (c *RoutesController) routesViewData(r *http.Request) map[string]any {
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	var routes lazyroutes.RouteTable
 	if err := c.FetchAppControlJSON(r.Context(), appRoutesPath, &routes); err != nil {
-		return map[string]any{
+		data := map[string]any{
 			"state":          c.Snapshot(),
 			"routes_error":   err.Error(),
 			"routes_query":   query,
@@ -55,17 +60,35 @@ func (c *RoutesController) routesViewData(r *http.Request) map[string]any {
 			"routes_visible": 0,
 			"routes":         []routeRow{},
 		}
+		data["routes_count_text"] = routeCountText(data)
+		return data
 	}
 
 	rows := routeRows(routes)
 	filtered := filterRoutes(rows, query)
-	return map[string]any{
+	data := map[string]any{
 		"state":          c.Snapshot(),
 		"routes_query":   query,
 		"routes_total":   len(rows),
 		"routes_visible": len(filtered),
 		"routes":         filtered,
 	}
+	data["routes_count_text"] = routeCountText(data)
+	return data
+}
+
+func (c *RoutesController) renderRoutesTableFrame(w http.ResponseWriter, r *http.Request) error {
+	if frameID := lazyturbo.FrameID(r); frameID != "routes_table" {
+		return lazycontroller.Error(http.StatusBadRequest, fmt.Errorf("routes frame %q is not available", frameID))
+	}
+	variables := c.routesViewData(r)
+	body, err := c.RenderPanelFrame(r, "routes_table", "routes", "routes_table", variables)
+	if err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, err = w.Write([]byte(body))
+	return err
 }
 
 func (c *RoutesController) streamRoutesInitial(r *http.Request) (string, error) {

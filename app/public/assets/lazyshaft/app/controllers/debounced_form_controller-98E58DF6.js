@@ -2,6 +2,8 @@ import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
   static values = {
+    countSource: String,
+    countTarget: String,
     delay: { type: Number, default: 250 },
     frame: String,
   }
@@ -74,10 +76,12 @@ export default class extends Controller {
     const replacement = Array.from(template.content.querySelectorAll("turbo-frame")).find(candidate => candidate.id === frame.id)
     if (!replacement) return
 
-    const count = replacement.querySelector("[data-assets-frame-count]")
-    const visibleCount = document.querySelector("[data-assets-count]")
-    if (count && visibleCount) {
-      visibleCount.textContent = count.textContent
+    if (this.hasCountSourceValue && this.hasCountTargetValue) {
+      const count = replacement.querySelector(this.countSourceValue)
+      const visibleCount = document.querySelector(this.countTargetValue)
+      if (count && visibleCount) {
+        visibleCount.textContent = count.textContent
+      }
     }
 
     frame.replaceChildren(...Array.from(replacement.childNodes))

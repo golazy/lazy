@@ -923,6 +923,13 @@ button:disabled:hover {
   overflow: auto;
 }
 
+.routes-table-frame {
+  display: block;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+}
+
 .assets-grid {
   min-width: 54rem;
 }
