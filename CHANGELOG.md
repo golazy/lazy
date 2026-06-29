@@ -39,6 +39,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The `lazy` development proxy now serves Chromium Automatic Workspace Folders
   metadata at `/.well-known/appspecific/com.chrome.devtools.json`, pointing
   Chrome DevTools at the app's `app/js` source folder.
+- `lazy upgrade` now migrates `v0.1.16 -> v0.1.17` controller calls from
+  `SetLayout` to `Layout` and rewrites common `CacheKey` / `CacheKeyF` action
+  returns for the new boolean cache-hit contract.
 
 ### Changed
 
@@ -64,6 +67,13 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   categories on the app control plane, refreshes new matching requests through
   its tab stream, clears trace sidecars from the clear button, and lazy-loads
   request details in a nested Turbo frame.
+- The Requests Tracing detail now renders a status strip, an Include golazy
+  toggle, a backend-sorted region metrics table, and a flamegraph whose scale
+  follows the selected time, allocation, or memory metric.
+- The Chrome extension action now toggles the inspected page's in-page panel
+  instead of trying to select the DevTools panel. The in-page panel hides when
+  the GoLazy DevTools panel is open, and closed panels show a small yellow
+  GoLazy launcher only when the extension is not installed.
 - The development iframe client now relies on Turbo Stream sources and
   Stimulus controllers for panel UI behavior, removing the old shared
   `/_golazy/state` fetch loop and `/_golazy/events` panel renderer while

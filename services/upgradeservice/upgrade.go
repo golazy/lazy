@@ -450,7 +450,212 @@ func (e stepExecutor) upgradeTo016() error {
 }
 
 func (e stepExecutor) upgradeTo017() error {
+	if err := e.rewriteControllerAPICalls(); err != nil {
+		return err
+	}
 	return e.rewriteAppJavaScriptImportSpecifiers()
+}
+
+func (e stepExecutor) rewriteControllerAPICalls() error {
+	var rewritten []string
+	if err := filepath.WalkDir(e.dir, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			switch entry.Name() {
+			case ".git", ".golazy", "node_modules":
+				return filepath.SkipDir
+			default:
+				return nil
+			}
+		}
+		if filepath.Ext(path) != ".go" {
+			return nil
+		}
+		changed, err := lazycodeservice.RewriteFile(path, e.dryRun, rewriteControllerAPIFile)
+		if err != nil {
+			return err
+		}
+		if changed {
+			relative, relErr := filepath.Rel(e.dir, path)
+			if relErr != nil {
+				return relErr
+			}
+			rewritten = append(rewritten, relative)
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	if len(rewritten) == 0 {
+		fmt.Fprintln(e.stdout, "  no controller API calls to rewrite")
+		return nil
+	}
+	slices.Sort(rewritten)
+	for _, path := range rewritten {
+		if e.dryRun {
+			fmt.Fprintf(e.stdout, "  would rewrite controller API calls in %s\n", path)
+		} else {
+			fmt.Fprintf(e.stdout, "  rewrote controller API calls in %s\n", path)
+		}
+	}
+	return nil
+}
+
+func rewriteControllerAPIFile(_ *token.FileSet, file *ast.File) (bool, error) {
+	changed := false
+	ast.Inspect(file, func(node ast.Node) bool {
+		selector, ok := node.(*ast.SelectorExpr)
+		if ok && selector.Sel.Name == "SetLayout" {
+			selector.Sel.Name = "Layout"
+			changed = true
+		}
+		return true
+	})
+	for _, decl := range file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Body == nil || !funcReturnsOnlyError(fn) {
+			continue
+		}
+		if rewriteCacheKeyReturnsInBlock(fn.Body) {
+			changed = true
+		}
+	}
+	return changed, nil
+}
+
+func funcReturnsOnlyError(fn *ast.FuncDecl) bool {
+	if fn.Type.Results == nil || len(fn.Type.Results.List) != 1 {
+		return false
+	}
+	result := fn.Type.Results.List[0]
+	if len(result.Names) > 1 {
+		return false
+	}
+	ident, ok := result.Type.(*ast.Ident)
+	return ok && ident.Name == "error"
+}
+
+func rewriteCacheKeyReturnsInBlock(block *ast.BlockStmt) bool {
+	if block == nil {
+		return false
+	}
+	changed := false
+	statements := make([]ast.Stmt, 0, len(block.List))
+	for _, statement := range block.List {
+		switch stmt := statement.(type) {
+		case *ast.ReturnStmt:
+			if len(stmt.Results) == 1 {
+				if call, ok := cacheKeyCall(stmt.Results[0]); ok {
+					statements = append(statements, cacheKeyHitReturnStmt(call), returnNilStmt())
+					changed = true
+					continue
+				}
+			}
+		case *ast.IfStmt:
+			if replacement, ok := rewriteCacheKeyErrorIf(stmt); ok {
+				statements = append(statements, replacement)
+				changed = true
+				continue
+			}
+			if rewriteCacheKeyReturnsInBlock(stmt.Body) {
+				changed = true
+			}
+			if rewriteCacheKeyReturnsInElse(stmt.Else) {
+				changed = true
+			}
+		case *ast.ForStmt:
+			if rewriteCacheKeyReturnsInBlock(stmt.Body) {
+				changed = true
+			}
+		case *ast.RangeStmt:
+			if rewriteCacheKeyReturnsInBlock(stmt.Body) {
+				changed = true
+			}
+		}
+		statements = append(statements, statement)
+	}
+	block.List = statements
+	return changed
+}
+
+func rewriteCacheKeyReturnsInElse(statement ast.Stmt) bool {
+	switch stmt := statement.(type) {
+	case *ast.BlockStmt:
+		return rewriteCacheKeyReturnsInBlock(stmt)
+	case *ast.IfStmt:
+		changed := rewriteCacheKeyReturnsInBlock(stmt.Body)
+		if rewriteCacheKeyReturnsInElse(stmt.Else) {
+			changed = true
+		}
+		return changed
+	default:
+		return false
+	}
+}
+
+func rewriteCacheKeyErrorIf(stmt *ast.IfStmt) (ast.Stmt, bool) {
+	assign, ok := stmt.Init.(*ast.AssignStmt)
+	if !ok || assign.Tok != token.DEFINE || len(assign.Lhs) != 1 || len(assign.Rhs) != 1 {
+		return nil, false
+	}
+	errIdent, ok := assign.Lhs[0].(*ast.Ident)
+	if !ok {
+		return nil, false
+	}
+	call, ok := cacheKeyCall(assign.Rhs[0])
+	if !ok || !conditionIsErrNotNil(stmt.Cond, errIdent.Name) || !blockReturnsIdent(stmt.Body, errIdent.Name) {
+		return nil, false
+	}
+	return cacheKeyHitReturnStmt(call), true
+}
+
+func conditionIsErrNotNil(expr ast.Expr, name string) bool {
+	binary, ok := expr.(*ast.BinaryExpr)
+	if !ok || binary.Op != token.NEQ {
+		return false
+	}
+	return identName(binary.X) == name && isNilIdent(binary.Y) ||
+		identName(binary.Y) == name && isNilIdent(binary.X)
+}
+
+func blockReturnsIdent(block *ast.BlockStmt, name string) bool {
+	if block == nil || len(block.List) != 1 {
+		return false
+	}
+	ret, ok := block.List[0].(*ast.ReturnStmt)
+	if !ok || len(ret.Results) != 1 {
+		return false
+	}
+	return identName(ret.Results[0]) == name
+}
+
+func cacheKeyCall(expr ast.Expr) (*ast.CallExpr, bool) {
+	call, ok := expr.(*ast.CallExpr)
+	if !ok {
+		return nil, false
+	}
+	selector, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return nil, false
+	}
+	return call, selector.Sel.Name == "CacheKey" || selector.Sel.Name == "CacheKeyF"
+}
+
+func cacheKeyHitReturnStmt(call *ast.CallExpr) ast.Stmt {
+	return &ast.IfStmt{
+		Cond: call,
+		Body: &ast.BlockStmt{List: []ast.Stmt{returnNilStmt()}},
+	}
+}
+
+func identName(expr ast.Expr) string {
+	ident, ok := expr.(*ast.Ident)
+	if !ok {
+		return ""
+	}
+	return ident.Name
 }
 
 func (e stepExecutor) rewriteAppJavaScriptImportSpecifiers() error {

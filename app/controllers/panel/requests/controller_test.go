@@ -129,7 +129,11 @@ func TestRequestViewReadsTracesAndRendersRequestDetails(t *testing.T) {
 		`<turbo-frame id="request_detail">`,
 		"Tracing",
 		"controller pools#Index",
-		"4.0 KiB total, 1.0 KiB self",
+		"12.5ms, 12 allocs, 4.0 KiB",
+		"request-region-grid",
+		"sort=memory-self",
+		"4.0 KiB",
+		"1.0 KiB",
 	} {
 		if !strings.Contains(detailBody, want) {
 			t.Fatalf("rendered request detail frame does not contain %q:\n%s", want, detailBody)

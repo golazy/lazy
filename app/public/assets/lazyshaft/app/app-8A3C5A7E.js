@@ -9,6 +9,7 @@ application.register("panel-resize", PanelResizeController)
 
 const panelPath = "/_golazy/"
 const embeddedPanelID = "golazy-dev-panel"
+const embeddedPanelLauncherID = "golazy-dev-panel-launcher"
 const embeddedPanelDefaultHeight = 320
 const embeddedPanelMinHeight = 180
 const embeddedPanelMaxRatio = 0.85
@@ -18,9 +19,9 @@ const embeddedPanelClosedKey = "golazy:devpanel:closed"
 const clientState = window.__golazyDevPanelClient || {}
 window.__golazyDevPanelClient = clientState
 
+installEmbeddedPanelMessages()
 installEmbeddedPanel()
 installTurboPersistence()
-installEmbeddedPanelMessages()
 installReloadClient()
 function installReloadClient() {
   if (location.pathname.startsWith("/_golazy")) return
@@ -48,11 +49,18 @@ function installReloadClient() {
 
 function installEmbeddedPanel() {
   if (location.pathname.startsWith("/_golazy")) return
+  if (isDevToolsPanelOpen()) {
+    removeEmbeddedPanel({ remember: false })
+    removeEmbeddedPanelLauncher()
+    return
+  }
   if (isEmbeddedPanelClosed()) {
     releasePanelSpace()
+    installEmbeddedPanelLauncher()
     return
   }
 
+  removeEmbeddedPanelLauncher()
   const existing = document.getElementById(embeddedPanelID)
   if (existing) {
     const height = currentEmbeddedPanelHeight()
@@ -136,6 +144,73 @@ function installEmbeddedPanel() {
   document.body.append(host)
   updateResizeHandleA11y(handle, height)
   installEmbeddedPanelViewportResize()
+}
+
+function installEmbeddedPanelLauncher() {
+  if (location.pathname.startsWith("/_golazy")) return
+  if (isDevToolsPanelOpen() || isExtensionInstalled()) return
+  if (!document.body) {
+    document.addEventListener("DOMContentLoaded", installEmbeddedPanelLauncher, { once: true })
+    return
+  }
+  if (document.getElementById(embeddedPanelID) || document.getElementById(embeddedPanelLauncherID)) return
+
+  const launcher = document.createElement("button")
+  launcher.id = embeddedPanelLauncherID
+  launcher.type = "button"
+  launcher.setAttribute("aria-label", "Open GoLazy development panel")
+  launcher.title = "Open GoLazy development panel"
+  launcher.innerHTML = `
+    <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+      <circle cx="32" cy="32" r="30"></circle>
+      <path d="M24 16h21v8H24c-5.1 0-8.5 3.5-8.5 8.1 0 4.7 3.4 8.2 8.5 8.2h7.1v-5.5h-8.4v-7.6h17.2v20.9H24c-10 0-17.1-6.8-17.1-16 0-9.3 7.1-16.1 17.1-16.1Z"></path>
+      <path d="M42.4 30.2 55.8 16h-9.7L33.3 30.2h9.1Zm-9.8 17.9h22.1v-8H42.6l12.9-14.3h-9.7L32.6 40.6v7.5Z"></path>
+    </svg>
+  `
+  launcher.addEventListener("click", openEmbeddedPanel)
+  const style = document.createElement("style")
+  style.textContent = `
+    #${embeddedPanelLauncherID} {
+      align-items: center;
+      background: #fbbc04;
+      border: 1px solid rgba(32, 33, 36, 0.22);
+      border-radius: 999px;
+      bottom: calc(16px + env(safe-area-inset-bottom));
+      box-shadow: 0 3px 10px rgba(32, 33, 36, 0.24);
+      cursor: pointer;
+      display: flex;
+      height: 44px;
+      justify-content: center;
+      padding: 0;
+      position: fixed;
+      right: calc(16px + env(safe-area-inset-right));
+      width: 44px;
+      z-index: 2147483646;
+    }
+    #${embeddedPanelLauncherID}:hover,
+    #${embeddedPanelLauncherID}:focus-visible {
+      background: #fdd663;
+      outline: 2px solid rgba(32, 33, 36, 0.4);
+      outline-offset: 2px;
+    }
+    #${embeddedPanelLauncherID} svg {
+      display: block;
+      height: 31px;
+      width: 31px;
+    }
+    #${embeddedPanelLauncherID} circle {
+      fill: transparent;
+    }
+    #${embeddedPanelLauncherID} path {
+      fill: #202124;
+    }
+  `
+  launcher.append(style)
+  document.body.append(launcher)
+}
+
+function removeEmbeddedPanelLauncher() {
+  document.getElementById(embeddedPanelLauncherID)?.remove()
 }
 
 function reservePanelSpace(height) {
@@ -274,15 +349,84 @@ function installEmbeddedPanelMessages() {
   clientState.embeddedPanelMessagesInstalled = true
   window.addEventListener("message", event => {
     if (event.origin !== window.location.origin) return
-    if (event.data?.type !== "golazy:devpanel:close") return
-    closeEmbeddedPanel()
+    switch (event.data?.type) {
+    case "golazy:devpanel:close":
+      closeEmbeddedPanel()
+      break
+    case "golazy:extension:installed":
+      clientState.extensionInstalled = true
+      removeEmbeddedPanelLauncher()
+      break
+    case "golazy:extension:toggle-inpage-panel":
+      toggleEmbeddedPanel()
+      break
+    case "golazy:extension:devtools-open":
+      setDevToolsPanelOpen(event.data.open === true)
+      break
+    }
   })
+  if (window.__golazyDevToolsOpen === true) {
+    setDevToolsPanelOpen(true)
+  }
 }
 
 function closeEmbeddedPanel() {
-  rememberEmbeddedPanelClosed()
+  removeEmbeddedPanel({ remember: true })
+  installEmbeddedPanelLauncher()
+}
+
+function openEmbeddedPanel() {
+  if (isDevToolsPanelOpen()) return
+  rememberEmbeddedPanelOpen()
+  removeEmbeddedPanelLauncher()
+  installEmbeddedPanel()
+}
+
+function toggleEmbeddedPanel() {
+  if (isDevToolsPanelOpen()) {
+    removeEmbeddedPanel({ remember: false })
+    return
+  }
+  if (document.getElementById(embeddedPanelID)) {
+    closeEmbeddedPanel()
+    return
+  }
+  openEmbeddedPanel()
+}
+
+function removeEmbeddedPanel(options = {}) {
+  if (options.remember) {
+    rememberEmbeddedPanelClosed()
+  }
   document.getElementById(embeddedPanelID)?.remove()
   releasePanelSpace()
+}
+
+function rememberEmbeddedPanelOpen() {
+  try {
+    window.sessionStorage.removeItem(embeddedPanelClosedKey)
+  } catch {
+    // Opening should still work when sessionStorage is unavailable.
+  }
+}
+
+function isExtensionInstalled() {
+  return clientState.extensionInstalled === true
+}
+
+function isDevToolsPanelOpen() {
+  return clientState.devToolsOpen === true || window.__golazyDevToolsOpen === true
+}
+
+function setDevToolsPanelOpen(open) {
+  clientState.devToolsOpen = open === true
+  window.__golazyDevToolsOpen = clientState.devToolsOpen
+  if (clientState.devToolsOpen) {
+    removeEmbeddedPanel({ remember: false })
+    removeEmbeddedPanelLauncher()
+    return
+  }
+  installEmbeddedPanel()
 }
 
 function isEmbeddedPanelClosed() {
@@ -306,9 +450,13 @@ function installTurboPersistence() {
   clientState.turboPersistenceInstalled = true
   document.addEventListener("turbo:before-render", event => {
     const host = document.getElementById(embeddedPanelID)
+    const launcher = document.getElementById(embeddedPanelLauncherID)
     const newBody = event.detail?.newBody
     if (host && newBody && !newBody.querySelector(`#${embeddedPanelID}`)) {
       newBody.append(host)
+    }
+    if (launcher && newBody && !newBody.querySelector(`#${embeddedPanelLauncherID}`)) {
+      newBody.append(launcher)
     }
   })
   document.addEventListener("turbo:render", installEmbeddedPanel)

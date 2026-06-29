@@ -253,6 +253,15 @@ func TestUpgradeTo017RewritesAppJavaScriptImports(t *testing.T) {
 	writeUpgradeFile(t, filepath.Join(dir, "app", "js", "app.js"), `import HelloController from "/js/controllers/hello_controller.js"
 import("/js/controllers/lazy_controller.js")
 `)
+	writeUpgradeFile(t, filepath.Join(dir, "app", "controllers", "posts", "posts_controller.go"), `package posts
+
+type PostsController struct{}
+
+func (c *PostsController) Show() error {
+	c.SetLayout("admin")
+	return c.CacheKey(1, "stamp")
+}
+`)
 
 	var calls []upgradeInvocation
 	var stdout bytes.Buffer
@@ -276,6 +285,18 @@ import("/js/controllers/lazy_controller.js")
 `)
 	assertUpgradeFileContent(t, filepath.Join(dir, "app", "js", "app.js"), `import HelloController from "controllers/hello_controller.js"
 import("controllers/lazy_controller.js")
+`)
+	assertUpgradeFileContent(t, filepath.Join(dir, "app", "controllers", "posts", "posts_controller.go"), `package posts
+
+type PostsController struct{}
+
+func (c *PostsController) Show() error {
+	c.Layout("admin")
+	if c.CacheKey(1, "stamp") {
+		return nil
+	}
+	return nil
+}
 `)
 	if len(calls) != 1 || !slices.Equal(calls[0].args, []string{"get", "golazy.dev@v0.1.17"}) {
 		t.Fatalf("calls = %#v, want go get golazy.dev@v0.1.17", calls)

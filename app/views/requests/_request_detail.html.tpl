@@ -35,58 +35,79 @@
           </dl>
         </section>
       {{else if .requests.TracingTab}}
-        <div class="request-trace-grid">
-          <section class="runtime-pane request-trace-timeline-pane">
-            <div class="section-heading">
-              <h2>Timeline</h2>
-              <span class="toolbar-count">{{.requests.SpanCountText}}</span>
-              <a class="toolbar-button" href="{{.requests.FrameworkToggleURL}}" data-turbo-frame="request_detail">{{.requests.FrameworkToggleText}}</a>
-            </div>
-            <div class="trace-timeline" data-trace-timeline>
-              {{range .requests.TimelineRows}}
-                <div class="trace-timeline-row" data-framework="{{.Span.Framework}}" data-selected="{{.Selected}}">
-                  <a class="trace-timeline-label" href="{{.URL}}" data-turbo-frame="request_detail" style="padding-left: {{.LabelPadding}}">{{.Span.Name}}</a>
-                  <a class="trace-timeline-track" href="{{.URL}}" data-turbo-frame="request_detail">
-                    <span class="trace-timeline-bar{{if eq .Span.Name "http.server.request"}} trace-task-bar{{end}}" style="left: {{.LeftPercent}}; width: {{.WidthPercent}}"></span>
-                  </a>
-                  <span class="trace-timeline-time">{{.Span.DurationText}}</span>
-                </div>
-              {{else}}
-                <div class="empty-state">No trace regions recorded for this request.</div>
+        <div class="request-tracing-layout" data-controller="panel-resize" data-panel-resize-direction-value="bottom" data-panel-resize-min-value="170px" data-panel-resize-max-value="72%">
+          <div class="request-trace-status-row">
+            <div class="request-trace-status">
+              <strong>{{.requests.TraceStatusText}}</strong>
+              {{if .requests.FrameworkStatusText}}
+                <span>{{.requests.FrameworkStatusText}}</span>
               {{end}}
             </div>
+            <form method="get" action="{{path_for "requests"}}" class="request-framework-toggle">
+              <input type="hidden" name="request" value="{{.requests.SelectedRequestID}}">
+              {{if .requests.HasSelectedSpan}}<input type="hidden" name="span" value="{{.requests.SelectedSpanID}}">{{end}}
+              <input type="hidden" name="tab" value="tracing">
+              <input type="hidden" name="type" value="{{.requests.TypeValue}}">
+              <input type="hidden" name="sort" value="{{.requests.SortValue}}">
+              {{if .requests.Query}}<input type="hidden" name="q" value="{{.requests.Query}}">{{end}}
+              <label><input type="checkbox" name="framework" value="1" {{if .requests.Framework}}checked{{end}} onchange="this.form.requestSubmit()"> Include golazy</label>
+            </form>
+          </div>
+
+          <section class="runtime-pane request-trace-table-pane" data-panel-resize-target="primary">
+            <table class="data-grid request-region-grid">
+              <thead>
+                <tr>
+                  <th rowspan="2"></th>
+                  <th rowspan="2">Region</th>
+                  <th colspan="2">Time</th>
+                  <th colspan="2">Allocations</th>
+                  <th colspan="2">Memory</th>
+                </tr>
+                <tr>
+                  <th><a href="{{.requests.SortURL "time-total"}}" data-turbo-frame="request_detail" aria-current="{{if .requests.SortSelected "time-total"}}true{{end}}">Total</a></th>
+                  <th><a href="{{.requests.SortURL "time-self"}}" data-turbo-frame="request_detail" aria-current="{{if .requests.SortSelected "time-self"}}true{{end}}">Self</a></th>
+                  <th><a href="{{.requests.SortURL "alloc-total"}}" data-turbo-frame="request_detail" aria-current="{{if .requests.SortSelected "alloc-total"}}true{{end}}">Total</a></th>
+                  <th><a href="{{.requests.SortURL "alloc-self"}}" data-turbo-frame="request_detail" aria-current="{{if .requests.SortSelected "alloc-self"}}true{{end}}">Self</a></th>
+                  <th><a href="{{.requests.SortURL "memory-total"}}" data-turbo-frame="request_detail" aria-current="{{if .requests.SortSelected "memory-total"}}true{{end}}">Total</a></th>
+                  <th><a href="{{.requests.SortURL "memory-self"}}" data-turbo-frame="request_detail" aria-current="{{if .requests.SortSelected "memory-self"}}true{{end}}">Self</a></th>
+                </tr>
+              </thead>
+              <tbody>
+                {{range .requests.RegionRows}}
+                  <tr aria-selected="{{.Selected}}" data-framework="{{.Span.Framework}}">
+                    <td><span class="request-region-meter"><span style="width: {{.BarPercent}}"></span></span></td>
+                    <td><a href="{{.URL}}" data-turbo-frame="request_detail" style="padding-left: {{.LabelPadding}}">{{.Span.Name}}</a></td>
+                    <td>{{.Span.TotalTimeText}}</td>
+                    <td>{{.Span.SelfDurationText}}</td>
+                    <td>{{.Span.TotalAllocText}}</td>
+                    <td>{{.Span.SelfAllocText}}</td>
+                    <td>{{.Span.TotalMemoryText}}</td>
+                    <td>{{.Span.SelfMemoryText}}</td>
+                  </tr>
+                {{else}}
+                  <tr>
+                    <td colspan="8" class="empty-cell">No trace regions recorded for this request.</td>
+                  </tr>
+                {{end}}
+              </tbody>
+            </table>
           </section>
 
-          <section class="runtime-pane request-trace-region-pane">
-            <h2>Selected Region</h2>
-            <dl class="detail-list">
-              <dt>Name</dt>
-              <dd>{{.requests.SelectedSpan.Name}}</dd>
-              <dt>Duration</dt>
-              <dd>{{.requests.SelectedSpan.DurationSummaryText}}</dd>
-              <dt>Self time</dt>
-              <dd>{{.requests.SelectedSpan.SelfDurationText}}</dd>
-              <dt>Allocated</dt>
-              <dd>{{.requests.SelectedSpan.AllocationSummaryText}}</dd>
-              <dt>Mallocs</dt>
-              <dd>{{.requests.SelectedSpan.MallocsSummaryText}}</dd>
-              <dt>Frees</dt>
-              <dd>{{.requests.SelectedSpan.FreesSummaryText}}</dd>
-              <dt>Trace file</dt>
-              <dd><code>{{.requests.Selected.TraceFile}}</code></dd>
-            </dl>
-          </section>
+          <div class="split-resize-handle" data-panel-resize-target="handle" data-action="pointerdown->panel-resize#start keydown->panel-resize#nudge" aria-label="Resize trace rows"></div>
 
           <section class="runtime-pane request-trace-flame-pane">
-            <h2>Chronological Flamegraph</h2>
-            <div class="trace-flamegraph" data-trace-flamegraph>
+            <div class="request-flame-axis">
+              <span>{{.requests.FlameAxisText}}</span>
+            </div>
+            <div class="trace-flamegraph request-flamegraph" data-trace-flamegraph>
               {{range .requests.FlameRows}}
-                <a class="trace-flame-row" href="{{.URL}}" data-turbo-frame="request_detail" data-selected="{{.Selected}}" style="margin-left: {{.FlameMargin}}">
+                <a class="trace-flame-row" href="{{.URL}}" data-turbo-frame="request_detail" data-selected="{{.Selected}}" data-goroutine-change="{{.GoroutineChanged}}" style="margin-left: {{.FlameMargin}}">
                   <span class="trace-flame-bar" style="margin-left: {{.LeftPercent}}; width: {{.WidthPercent}}"></span>
                   <span class="trace-flame-label">{{.Span.FlameLabel}}</span>
                 </a>
               {{else}}
-                <div class="empty-state">Select a timeline region.</div>
+                <div class="empty-state">No trace regions recorded for this request.</div>
               {{end}}
             </div>
           </section>

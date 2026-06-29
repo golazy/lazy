@@ -794,32 +794,146 @@ button:disabled:hover {
   min-height: 100%;
 }
 
-.request-trace-grid {
+.request-tracing-layout {
   display: grid;
-  grid-template-columns: minmax(22rem, 1fr) minmax(17rem, 23rem);
-  grid-template-rows: minmax(12rem, 1fr) minmax(9rem, 0.75fr);
-  min-height: 100%;
+  grid-template-rows: 34px minmax(11rem, var(--panel-resize-primary-size, 50%)) 6px minmax(9rem, 1fr);
+  height: 100%;
+  min-height: 0;
   min-width: 0;
+  overflow: hidden;
 }
 
-.request-trace-timeline-pane,
-.request-trace-region-pane,
+.request-trace-status-row {
+  align-items: center;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-width: 0;
+  padding: 0 8px;
+}
+
+.request-trace-status {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.request-trace-status strong,
+.request-trace-status span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.request-trace-status span {
+  color: var(--text-muted);
+}
+
+.request-framework-toggle {
+  align-items: center;
+  color: var(--text);
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 12px;
+  gap: 6px;
+}
+
+.request-framework-toggle label {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.request-trace-table-pane,
 .request-trace-flame-pane {
   border-bottom: 1px solid var(--border);
-  border-right: 1px solid var(--border);
+  border-right: 0;
 }
 
-.request-trace-timeline-pane {
+.request-region-grid {
+  min-width: 48rem;
+}
+
+.request-region-grid th,
+.request-region-grid td {
+  width: auto;
+}
+
+.request-region-grid th:first-child,
+.request-region-grid td:first-child {
+  width: 5.5rem;
+}
+
+.request-region-grid th:nth-child(2),
+.request-region-grid td:nth-child(2) {
+  min-width: 13rem;
+}
+
+.request-region-grid th:nth-child(n+3),
+.request-region-grid td:nth-child(n+3) {
+  width: 6.5rem;
+}
+
+.request-region-grid a {
+  color: inherit;
+  display: block;
   min-width: 0;
+  overflow: hidden;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.request-trace-region-pane {
-  min-width: 0;
+.request-region-grid th a[aria-current="true"] {
+  color: var(--sys-color-primary);
 }
 
-.request-trace-flame-pane {
-  grid-column: 1 / -1;
-  grid-row: 2;
+.request-region-grid tbody tr:hover td {
+  background: var(--row-hover);
+}
+
+.request-region-grid tr[aria-selected="true"] td {
+  background: var(--row-selected);
+}
+
+.request-region-meter {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  display: block;
+  height: 10px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.request-region-meter span {
+  background: var(--sys-color-primary);
+  display: block;
+  height: 100%;
+  min-width: 1px;
+}
+
+.request-region-grid tr[data-framework="true"] .request-region-meter span {
+  background: var(--warn);
+}
+
+.request-flame-axis {
+  color: var(--text-muted);
+  display: flex;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 11px;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.request-flamegraph {
+  min-width: 100%;
 }
 
 .runtime-grid {
@@ -1324,6 +1438,11 @@ button:disabled:hover {
   border-radius: 2px;
   height: 18px;
   min-width: 2px;
+}
+
+.trace-flame-row[data-goroutine-change="true"] .trace-flame-bar {
+  background: color-mix(in srgb, var(--warn) 72%, transparent);
+  border-color: var(--warn);
 }
 
 .trace-flame-label {
