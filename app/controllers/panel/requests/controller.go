@@ -899,8 +899,20 @@ func requestFlameRows(trace requestTrace, spans []requestSpan, selected string, 
 	if requestSortFamily(sortKey) == "time" {
 		return requestSpanRows(trace, spans, selected, query, tab, domain, framework, sortKey, false)
 	}
+	if !requestHasMetricSamples(spans, sortKey) {
+		return requestSpanRows(trace, spans, selected, query, tab, domain, framework, sortKey, false)
+	}
 	ordered := requestMetricTreeSpans(spans, sortKey)
 	return requestSpanRows(trace, ordered, selected, query, tab, domain, framework, sortKey, true)
+}
+
+func requestHasMetricSamples(spans []requestSpan, sortKey string) bool {
+	for _, span := range spans {
+		if requestSpanSortValue(span, sortKey) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func requestMetricTreeSpans(spans []requestSpan, sortKey string) []requestSpan {

@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"golazy.dev/lazy/app"
 	"golazy.dev/lazy/app/controllers/panel"
@@ -169,6 +170,42 @@ func TestRequestViewReadsTracesAndRendersRequestDetails(t *testing.T) {
 	} {
 		if !strings.Contains(detailBody, want) {
 			t.Fatalf("rendered request detail frame does not contain %q:\n%s", want, detailBody)
+		}
+	}
+}
+
+func TestRequestFlameRowsFallBackToTimelineWhenMetricSamplesAreMissing(t *testing.T) {
+	start := time.Date(2026, 6, 29, 8, 0, 0, 0, time.UTC)
+	trace := requestTrace{
+		RequestID:  "req-missing-metrics",
+		DurationMS: 20,
+		Spans: []requestSpan{
+			{
+				Name:       "http.server.request",
+				SpanID:     "root",
+				StartedAt:  start,
+				DurationMS: 20,
+			},
+			{
+				Name:       "controller pools#Index",
+				SpanID:     "controller",
+				ParentID:   "root",
+				StartedAt:  start.Add(5 * time.Millisecond),
+				DurationMS: 6,
+			},
+		},
+	}
+
+	for _, sortKey := range []string{"alloc-total", "memory-total"} {
+		rows := requestFlameRows(trace, trace.Spans, "controller", "", "tracing", "", false, sortKey)
+		if len(rows) != len(trace.Spans) {
+			t.Fatalf("%s rows = %d, want %d", sortKey, len(rows), len(trace.Spans))
+		}
+		if rows[1].LeftPercent == "0.000%" || rows[1].WidthPercent == "0.250%" {
+			t.Fatalf("%s rows = %#v, want timeline-scaled fallback for missing metric samples", sortKey, rows)
+		}
+		if !strings.Contains(rows[1].URL, "sort="+sortKey) {
+			t.Fatalf("%s row URL = %q, want metric sort preserved", sortKey, rows[1].URL)
 		}
 	}
 }

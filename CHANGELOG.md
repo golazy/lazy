@@ -119,6 +119,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   use square classical flamegraph colors, keep only the span name inside the
   bar, expose full timing/allocation details in tooltips, and grow to the
   graph's full height while the region table keeps a compact minimum height.
+  Allocation and memory flamegraphs fall back to the request timeline when a
+  trace has regions but no positive sampled metric values, so those sort modes
+  do not hide recorded regions.
 - The Chrome extension action now toggles the inspected page's in-page panel
   instead of trying to select the DevTools panel. The in-page panel hides when
   the GoLazy DevTools panel is open, and closed panels show a small yellow
