@@ -74,8 +74,11 @@ func TestTraceViewReadsApplicationControlPlaneAndPreservesSelectionURLs(t *testi
 	if got := view.SelectedSpan.MallocsSummaryText(); got != "12 mallocs total, 4 mallocs self" {
 		t.Fatalf("selected malloc summary = %q", got)
 	}
-	if got := view.SelectedSpan.FlameLabel(); !strings.Contains(got, "self alloc 1.0 KiB") {
-		t.Fatalf("selected flame label = %q, want self allocation", got)
+	if got := view.SelectedSpan.FlameLabel(); got != "controller pools#Index" {
+		t.Fatalf("selected flame label = %q, want span name", got)
+	}
+	if got := view.SelectedSpan.FlameTooltip(); !strings.Contains(got, "Span: controller pools#Index") || !strings.Contains(got, "Memory: 4.0 KiB total, 1.0 KiB self") {
+		t.Fatalf("selected flame tooltip = %q, want full details", got)
 	}
 	renderer := newTraceTestRenderer(t)
 	controller.Renderer = renderer
@@ -91,7 +94,8 @@ func TestTraceViewReadsApplicationControlPlaneAndPreservesSelectionURLs(t *testi
 		"5.00ms total, 2.00ms self",
 		"4.0 KiB total, 1.0 KiB self",
 		"12 mallocs total, 4 mallocs self",
-		"self alloc 1.0 KiB",
+		"Memory: 4.0 KiB total, 1.0 KiB self",
+		"trace-flame-color-",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("rendered traces frame does not contain %q:\n%s", want, body)

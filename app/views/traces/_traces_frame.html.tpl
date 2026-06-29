@@ -94,9 +94,10 @@
           <h2>Chronological Flamegraph</h2>
           <div class="trace-flamegraph" data-trace-flamegraph>
             {{range .traces.FlameRows}}
-              <a class="trace-flame-row" href="{{.URL}}" data-turbo-frame="_top" data-selected="{{.Selected}}" style="margin-left: {{.FlameMargin}}">
-                <span class="trace-flame-bar" style="margin-left: {{.LeftPercent}}; width: {{.WidthPercent}}"></span>
-                <span class="trace-flame-label">{{.Span.FlameLabel}}</span>
+              <a class="trace-flame-row" href="{{.URL}}" data-turbo-frame="_top" data-selected="{{.Selected}}" title="{{.Span.FlameTooltip}}" aria-label="{{.Span.FlameTooltip}}" style="margin-left: {{.FlameMargin}}">
+                <span class="trace-flame-bar {{.Span.FlameColorClass}}" style="margin-left: {{.LeftPercent}}; width: {{.WidthPercent}}">
+                  <span class="trace-flame-label">{{.Span.FlameLabel}}</span>
+                </span>
               </a>
             {{else}}
               <div class="empty-state">Select a timeline section.</div>

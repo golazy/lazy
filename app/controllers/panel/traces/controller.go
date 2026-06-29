@@ -282,14 +282,32 @@ func (s traceSpan) FreesSummaryText() string {
 }
 
 func (s traceSpan) FlameLabel() string {
-	parts := []string{s.Name, s.DurationText()}
-	if s.SelfDurationMS != nil {
-		parts = append(parts, "self "+s.SelfDurationText())
+	return s.Name
+}
+
+func (s traceSpan) FlameTooltip() string {
+	parts := []string{
+		"Span: " + s.Name,
+		"Total time: " + s.DurationText(),
+		"Self time: " + s.SelfDurationText(),
+		"Memory: " + s.AllocationSummaryText(),
+		"Mallocs: " + s.MallocsSummaryText(),
+		"Frees: " + s.FreesSummaryText(),
 	}
-	if s.Memory != nil {
-		parts = append(parts, "self alloc "+formatBytes(s.Memory.SelfTotalAllocBytesDelta))
+	if s.SpanID != "" {
+		parts = append(parts, "Span ID: "+s.SpanID)
 	}
-	return strings.Join(parts, " | ")
+	if s.TraceID != "" {
+		parts = append(parts, "Trace ID: "+s.TraceID)
+	}
+	if s.ParentID != "" {
+		parts = append(parts, "Parent ID: "+s.ParentID)
+	}
+	return strings.Join(parts, "\n")
+}
+
+func (s traceSpan) FlameColorClass() string {
+	return flameColorClass(s.Name)
 }
 
 func (s traceSpan) Framework() bool {
@@ -532,6 +550,15 @@ func selectedSpanID(span *traceSpan) string {
 		return ""
 	}
 	return span.SpanID
+}
+
+func flameColorClass(value string) string {
+	hash := uint32(2166136261)
+	for _, char := range value {
+		hash ^= uint32(char)
+		hash *= 16777619
+	}
+	return "trace-flame-color-" + strconv.Itoa(int(hash%8))
 }
 
 func formatDuration(value float64) string {

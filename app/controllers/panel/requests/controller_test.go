@@ -94,6 +94,12 @@ func TestRequestViewReadsTracesAndRendersRequestDetails(t *testing.T) {
 	if got := view.SelectedSpan.AllocationSummaryText(); !strings.Contains(got, "4.0 KiB total") || !strings.Contains(got, "1.0 KiB self") {
 		t.Fatalf("selected allocation summary = %q, want total and self allocations", got)
 	}
+	if got := view.SelectedSpan.FlameLabel(); got != "controller pools#Index" {
+		t.Fatalf("selected flame label = %q, want span name", got)
+	}
+	if got := view.SelectedSpan.FlameTooltip(); !strings.Contains(got, "Span: controller pools#Index") || !strings.Contains(got, "Memory: 4.0 KiB total, 1.0 KiB self") {
+		t.Fatalf("selected flame tooltip = %q, want full details", got)
+	}
 	if got := view.StreamURL(); !strings.Contains(got, "request=req-123") || !strings.Contains(got, "span=controller") || !strings.Contains(got, "tab=tracing") || !strings.Contains(got, "domain=lazydispatch.Router") || strings.Contains(got, "type=") {
 		t.Fatalf("StreamURL = %q, want selected request/span/tab/domain and no type", got)
 	}
@@ -150,6 +156,9 @@ func TestRequestViewReadsTracesAndRendersRequestDetails(t *testing.T) {
 		"sort=memory-self",
 		"4.0 KiB",
 		"1.0 KiB",
+		`title="Span: controller pools#Index`,
+		"Memory: 4.0 KiB total, 1.0 KiB self",
+		"trace-flame-color-",
 	} {
 		if !strings.Contains(detailBody, want) {
 			t.Fatalf("rendered request detail frame does not contain %q:\n%s", want, detailBody)

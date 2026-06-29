@@ -609,14 +609,35 @@ func (s requestSpan) SelfMemoryText() string {
 }
 
 func (s requestSpan) FlameLabel() string {
-	parts := []string{s.Name, s.DurationText()}
-	if s.SelfDurationMS != nil {
-		parts = append(parts, "self "+s.SelfDurationText())
+	return s.Name
+}
+
+func (s requestSpan) FlameTooltip() string {
+	parts := []string{
+		"Span: " + s.Name,
+		"Total time: " + s.DurationText(),
+		"Self time: " + s.SelfDurationText(),
+		"Memory: " + s.AllocationSummaryText(),
+		"Mallocs: " + s.MallocsSummaryText(),
+		"Frees: " + s.FreesSummaryText(),
 	}
-	if s.Memory != nil {
-		parts = append(parts, "self alloc "+formatRequestBytes(s.Memory.SelfTotalAllocBytesDelta))
+	if s.SpanID != "" {
+		parts = append(parts, "Span ID: "+s.SpanID)
 	}
-	return strings.Join(parts, " | ")
+	if s.TraceID != "" {
+		parts = append(parts, "Trace ID: "+s.TraceID)
+	}
+	if s.ParentID != "" {
+		parts = append(parts, "Parent ID: "+s.ParentID)
+	}
+	if s.GoroutineID != 0 {
+		parts = append(parts, "Goroutine: "+strconv.FormatUint(s.GoroutineID, 10))
+	}
+	return strings.Join(parts, "\n")
+}
+
+func (s requestSpan) FlameColorClass() string {
+	return flameColorClass(s.Name)
 }
 
 func (s requestSpan) Framework() bool {
@@ -689,6 +710,15 @@ func normalizeRequestTab(tab string) string {
 	default:
 		return "headers"
 	}
+}
+
+func flameColorClass(value string) string {
+	hash := uint32(2166136261)
+	for _, char := range value {
+		hash ^= uint32(char)
+		hash *= 16777619
+	}
+	return "trace-flame-color-" + strconv.Itoa(int(hash%8))
 }
 
 func normalizeRequestType(requestType string) string {

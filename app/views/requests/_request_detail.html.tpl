@@ -102,9 +102,10 @@
             </div>
             <div class="trace-flamegraph request-flamegraph" data-trace-flamegraph>
               {{range .requests.FlameRows}}
-                <a class="trace-flame-row" href="{{.URL}}" data-turbo-frame="request_detail" data-selected="{{.Selected}}" data-goroutine-change="{{.GoroutineChanged}}" style="margin-left: {{.FlameMargin}}">
-                  <span class="trace-flame-bar" style="margin-left: {{.LeftPercent}}; width: {{.WidthPercent}}"></span>
-                  <span class="trace-flame-label">{{.Span.FlameLabel}}</span>
+                <a class="trace-flame-row" href="{{.URL}}" data-turbo-frame="request_detail" data-selected="{{.Selected}}" data-goroutine-change="{{.GoroutineChanged}}" title="{{.Span.FlameTooltip}}" aria-label="{{.Span.FlameTooltip}}" style="margin-left: {{.FlameMargin}}">
+                  <span class="trace-flame-bar {{.Span.FlameColorClass}}" style="margin-left: {{.LeftPercent}}; width: {{.WidthPercent}}">
+                    <span class="trace-flame-label">{{.Span.FlameLabel}}</span>
+                  </span>
                 </a>
               {{else}}
                 <div class="empty-state">No trace regions recorded for this request.</div>
