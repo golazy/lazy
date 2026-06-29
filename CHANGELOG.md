@@ -60,6 +60,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   fresh data. Browser-facing panel endpoints render HTML, Turbo Frames, or
   Turbo Stream HTML; internal app-control JSON is read server-side and enriched
   before rendering.
+- The development panel layout now uses Turbo morph refreshes with scroll
+  preservation, so refreshes can patch the panel document without resetting the
+  user's scroll position.
 - Development panel tab streams now hydrate list content when their
   `turbo-stream-source` connects, then send targeted row/count updates only
   when a relevant backend event exists instead of repainting whole tabs from
