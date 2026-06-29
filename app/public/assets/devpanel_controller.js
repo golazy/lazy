@@ -33,12 +33,14 @@ export default class DevPanelController {
     this.launcher = root.querySelector(`#${embeddedPanelLauncherID}`)
     this.handle = root.querySelector("[data-golazy-dev-panel-resize-handle]")
     this.moveResize = this.moveResize.bind(this)
+    this.openPanel = this.openPanel.bind(this)
     this.stopResize = this.stopResize.bind(this)
     this.sync = this.sync.bind(this)
   }
 
   connect() {
     this.installMessages()
+    this.installLauncher()
     this.installResize()
     this.installViewportResize()
     this.installTurboPersistence()
@@ -92,6 +94,12 @@ export default class DevPanelController {
         break
       }
     })
+  }
+
+  installLauncher() {
+    if (!this.launcher || this.launcher.dataset.golazyDevPanelLauncherBound === "true") return
+    this.launcher.dataset.golazyDevPanelLauncherBound = "true"
+    this.launcher.addEventListener("click", this.openPanel)
   }
 
   installResize() {

@@ -126,8 +126,8 @@ var clientPanel = []byte(`<div id="golazy-dev-panel-root" data-golazy-dev-panel-
     }
     #golazy-dev-panel-launcher img {
       display: block;
-      height: 36px;
-      width: 36px;
+      height: 46px;
+      width: 46px;
     }
   </style>
   <div id="golazy-dev-panel-padding" data-golazy-dev-panel-padding aria-hidden="true" hidden></div>
@@ -136,7 +136,7 @@ var clientPanel = []byte(`<div id="golazy-dev-panel-root" data-golazy-dev-panel-
     <iframe src="/_golazy/" title="GoLazy development panel"></iframe>
   </div>
   <button id="golazy-dev-panel-launcher" data-golazy-dev-panel-launcher type="button" aria-label="Open GoLazy development panel" title="Open GoLazy development panel" hidden>
-    <img src="/_golazy/assets/golazy-mark.svg" alt="" aria-hidden="true">
+    <img src="/_golazy/assets/logo-square.svg" alt="" aria-hidden="true">
   </button>
 </div>`)
 var clientMarkup = append(append([]byte{}, clientPanel...), clientScript...)
@@ -340,7 +340,7 @@ func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request) {
 
 func isHTTPWelcomeAsset(path string) bool {
 	switch path {
-	case "/_golazy/assets/golazy-mark.svg", "/_golazy/assets/golazy-horizontal.svg":
+	case "/_golazy/assets/golazy-mark.svg", "/_golazy/assets/golazy-horizontal.svg", "/_golazy/assets/logo-square.svg":
 		return true
 	default:
 		return false

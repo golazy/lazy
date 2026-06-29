@@ -405,11 +405,27 @@ func TestPanelAssetsAndJobsPage(t *testing.T) {
 		"DevPanelController",
 		"golazy:page:devpanel-ready",
 		"golazy:devpanel:height",
+		"installLauncher",
+		"golazyDevPanelLauncherBound",
 		"shouldShowLauncher",
 		"togglePanel",
 	} {
 		if !strings.Contains(controllerScript.Body.String(), want) {
 			t.Fatalf("controller script missing %q:\n%s", want, controllerScript.Body.String())
+		}
+	}
+
+	logo := httptest.NewRecorder()
+	app.ServeHTTP(logo, httptest.NewRequest(http.MethodGet, "/_golazy/assets/logo-square.svg", nil))
+	if logo.Code != http.StatusOK {
+		t.Fatalf("logo status = %d, want %d: %s", logo.Code, http.StatusOK, logo.Body.String())
+	}
+	for _, want := range []string{
+		`<rect width="1000" height="1000" fill="#FBBC04"/>`,
+		`viewBox="0 0 1000 1000"`,
+	} {
+		if !strings.Contains(logo.Body.String(), want) {
+			t.Fatalf("logo missing %q:\n%s", want, logo.Body.String())
 		}
 	}
 
