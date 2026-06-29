@@ -30,13 +30,15 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   exporters into the child app. Detailed request monitoring is off by default
   and can be enabled from the development panel.
 - The development panel now visits one resource-backed page per top-level tab,
-  keeps the status bar mounted as a permanent Turbo Frame, uses the generated
-  importmap for its iframe app, and streams Turbo Stream updates alongside the
-  existing event JSON.
-- The development client now reuses one reload stream and one panel event
-  stream across Turbo visits, preventing repeated `EventSource` connections and
-  listener registration. The panel event endpoint now uses the framework SSE
-  stream helper so wrapped response writers do not produce false 500s.
+  keeps the status bar mounted as a permanent Turbo Frame, and uses one
+  permanent status `turbo-stream-source` plus one tab-scoped stream source for
+  fresh data. Browser-facing panel endpoints render HTML, Turbo Frames, or
+  Turbo Stream HTML; internal app-control JSON is read server-side and enriched
+  before rendering.
+- The development iframe client now relies on Turbo Stream sources and
+  Stimulus controllers for panel UI behavior, removing the old shared
+  `/_golazy/state` fetch loop and `/_golazy/events` panel renderer while
+  keeping the host-page reload stream.
 - The development panel now uses a single top tab bar with the close control on
   the right, app and service status chips in the permanent status bar, a
   full-height Services page, and an App Logs split resize that expands the left

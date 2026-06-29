@@ -1,6 +1,7 @@
 package jobs
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -11,7 +12,7 @@ import (
 	"golazy.dev/lazy/services/buildservice"
 )
 
-func TestIndexProxiesApplicationControlPlaneForJSON(t *testing.T) {
+func TestJobsSnapshotReadsApplicationControlPlane(t *testing.T) {
 	var gotMethod string
 	var gotPath string
 	appControl := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -27,21 +28,19 @@ func TestIndexProxiesApplicationControlPlaneForJSON(t *testing.T) {
 		State:            buildservice.StateRunning,
 		ControlPlaneAddr: strings.TrimPrefix(appControl.URL, "http://"),
 	})
-	controller := &JobsController{Base: panel.Base{Store: store}}
+	base := panel.Base{Store: store}
 
-	request := httptest.NewRequest(http.MethodGet, "/_golazy/jobs", nil)
-	request.Header.Set("Accept", "application/json")
-	response := httptest.NewRecorder()
-	if err := controller.Index(response, request); err != nil {
-		t.Fatal(err)
-	}
-	if response.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
-	}
+	snapshot := base.JobsSnapshot(context.Background())
 	if gotMethod != http.MethodGet || gotPath != appJobsPath {
 		t.Fatalf("proxied request = %s %s, want GET %s", gotMethod, gotPath, appJobsPath)
 	}
-	if !strings.Contains(response.Body.String(), `"imports.whatsapp"`) {
-		t.Fatalf("body = %s, want jobs JSON", response.Body.String())
+	if snapshot.Error != "" {
+		t.Fatalf("snapshot error = %q", snapshot.Error)
+	}
+	if !snapshot.Running {
+		t.Fatalf("snapshot.Running = false, want true")
+	}
+	if len(snapshot.Definitions) != 1 || snapshot.Definitions[0].Kind != "imports.whatsapp" {
+		t.Fatalf("definitions = %#v, want imports.whatsapp", snapshot.Definitions)
 	}
 }

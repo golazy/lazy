@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"golazy.dev/lazy/app/controllers/panel"
+	"golazy.dev/lazy/services/buildservice"
+	"golazy.dev/lazycontroller"
 	"golazy.dev/lazyroutes"
 )
 
@@ -22,10 +24,18 @@ func New(ctx context.Context) (*RoutesController, error) {
 }
 
 func (c *RoutesController) Index(w http.ResponseWriter, r *http.Request) error {
-	if acceptsJSON(r) {
-		return c.ProxyAppControl(w, r, http.MethodGet, appRoutesPath)
-	}
+	return c.Wants(lazycontroller.Formats{
+		lazycontroller.HTML: func() error {
+			c.setRoutesState(r)
+			return nil
+		},
+		lazycontroller.SSE: func() error {
+			return c.StreamTurbo(w, r, c.streamRoutes)
+		},
+	})
+}
 
+func (c *RoutesController) setRoutesState(r *http.Request) {
 	c.SetState()
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	var routes lazyroutes.RouteTable
@@ -35,7 +45,7 @@ func (c *RoutesController) Index(w http.ResponseWriter, r *http.Request) error {
 		c.Set("routes_total", 0)
 		c.Set("routes_visible", 0)
 		c.Set("routes", []routeRow{})
-		return nil
+		return
 	}
 
 	rows := routeRows(routes)
@@ -44,7 +54,37 @@ func (c *RoutesController) Index(w http.ResponseWriter, r *http.Request) error {
 	c.Set("routes_total", len(rows))
 	c.Set("routes_visible", len(filtered))
 	c.Set("routes", filtered)
-	return nil
+}
+
+func (c *RoutesController) streamRoutes(r *http.Request, _ buildservice.Event) (string, error) {
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	var routes lazyroutes.RouteTable
+	var variables map[string]any
+	if err := c.FetchAppControlJSON(r.Context(), appRoutesPath, &routes); err != nil {
+		variables = map[string]any{
+			"state":          c.Snapshot(),
+			"routes_error":   err.Error(),
+			"routes_query":   query,
+			"routes_total":   0,
+			"routes_visible": 0,
+			"routes":         []routeRow{},
+		}
+	} else {
+		rows := routeRows(routes)
+		filtered := filterRoutes(rows, query)
+		variables = map[string]any{
+			"state":          c.Snapshot(),
+			"routes_query":   query,
+			"routes_total":   len(rows),
+			"routes_visible": len(filtered),
+			"routes":         filtered,
+		}
+	}
+	body, err := c.RenderPanelPartial(r, "routes", "routes_frame", variables)
+	if err != nil {
+		return "", err
+	}
+	return panel.TurboStream("replace", "routes", body), nil
 }
 
 type routeRow struct {
@@ -115,16 +155,4 @@ func routeParams(params map[string]bool) string {
 	}
 	sort.Strings(names)
 	return strings.Join(names, ", ")
-}
-
-func acceptsJSON(r *http.Request) bool {
-	if r == nil || strings.TrimSpace(r.Header.Get("Turbo-Frame")) != "" {
-		return false
-	}
-	for _, part := range strings.Split(r.Header.Get("Accept"), ",") {
-		if strings.Contains(strings.ToLower(part), "application/json") {
-			return true
-		}
-	}
-	return false
 }

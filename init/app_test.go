@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"golazy.dev/lazy/services/buildservice"
 )
@@ -36,10 +37,11 @@ func TestPanelTabPageLoadsImportmapNavAndPermanentStatus(t *testing.T) {
 		`<script type="importmap">`,
 		`"/js/app.js": "/_golazy/assets/lazyshaft/app/`,
 		`<script type="module">import "/js/app.js"</script>`,
-		`<nav class="panel-tabs tabbed-pane-header" aria-label="GoLazy panel sections">`,
+		`<nav class="panel-tabs tabbed-pane-header" aria-label="GoLazy panel sections" data-controller="panel-close">`,
 		`<span class="panel-tab">App Logs</span>`,
 		`<a href="/_golazy/requests" data-turbo-frame="_top">Requests</a>`,
 		`data-panel-close`,
+		`<turbo-stream-source src="/_golazy/logs"></turbo-stream-source>`,
 		`<section id="logs" class="tool-view is-active" data-view="logs">`,
 		`data-panel-resize-direction-value="right"`,
 		`class="runtime-left-stack" data-panel-resize-target="primary"`,
@@ -86,7 +88,10 @@ func TestPanelFrameRoutes(t *testing.T) {
 		if !strings.Contains(body, test.want) {
 			t.Fatalf("%s body missing %q:\n%s", test.path, test.want, body)
 		}
-		if test.path == "/_golazy/status" && !strings.Contains(body, `class="service-status-button" data-service-status data-service-name="postgres" data-service-state="ready"`) {
+		if test.path == "/_golazy/status" && !strings.Contains(body, `<turbo-stream-source src="/_golazy/status"></turbo-stream-source>`) {
+			t.Fatalf("%s body missing status stream source:\n%s", test.path, body)
+		}
+		if test.path == "/_golazy/status" && !strings.Contains(body, `<a class="service-status-button" href="/_golazy/services?service=postgres" data-turbo-frame="_top" data-service-state="ready" title="ready">`) {
 			t.Fatalf("%s body missing service status button:\n%s", test.path, body)
 		}
 	}
@@ -142,7 +147,7 @@ func TestPanelRoutesPageFetchesApplicationRoutes(t *testing.T) {
 	}
 }
 
-func TestPanelAssetsAndJobsJSON(t *testing.T) {
+func TestPanelAssetsAndJobsPage(t *testing.T) {
 	app := testApp()
 
 	asset := httptest.NewRecorder()
@@ -172,21 +177,44 @@ func TestPanelAssetsAndJobsJSON(t *testing.T) {
 		}
 	}
 
-	request := httptest.NewRequest(http.MethodGet, "/_golazy/jobs", nil)
-	request.Header.Set("Accept", "application/json")
 	jobs := httptest.NewRecorder()
-	app.ServeHTTP(jobs, request)
-	if jobs.Code != http.StatusServiceUnavailable {
-		t.Fatalf("jobs status = %d, want %d", jobs.Code, http.StatusServiceUnavailable)
+	app.ServeHTTP(jobs, httptest.NewRequest(http.MethodGet, "/_golazy/jobs", nil))
+	if jobs.Code != http.StatusOK {
+		t.Fatalf("jobs status = %d, want %d: %s", jobs.Code, http.StatusOK, jobs.Body.String())
+	}
+	for _, want := range []string{
+		`<turbo-stream-source src="/_golazy/jobs"></turbo-stream-source>`,
+		`<section id="jobs" class="tool-view is-active" data-view="jobs">`,
+		`Jobs unavailable`,
+	} {
+		if !strings.Contains(jobs.Body.String(), want) {
+			t.Fatalf("jobs body missing %q:\n%s", want, jobs.Body.String())
+		}
 	}
 }
 
-func TestPanelEventsStreamThroughAppMiddleware(t *testing.T) {
-	app := testApp()
+func TestPanelStatusStreamThroughAppMiddleware(t *testing.T) {
+	store := buildservice.NewStore(10)
+	store.Update(buildservice.Snapshot{
+		State:      buildservice.StateRunning,
+		Message:    "running",
+		BuildCount: 3,
+		AppAddr:    "127.0.0.1:3001",
+	})
+	app := App(Config{
+		Store:             store,
+		Actions:           buildservice.NewActions(),
+		ForceDetailErrors: true,
+	})
 	server := httptest.NewServer(app)
 	defer server.Close()
 
-	response, err := server.Client().Get(server.URL + "/_golazy/events")
+	request, err := http.NewRequest(http.MethodGet, server.URL+"/_golazy/status", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Accept", "text/event-stream")
+	response, err := server.Client().Do(request)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,16 +228,46 @@ func TestPanelEventsStreamThroughAppMiddleware(t *testing.T) {
 	}
 
 	reader := bufio.NewReader(response.Body)
-	var lines []string
-	for len(lines) < 3 {
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			t.Fatal(err)
+	payload := make(chan string, 1)
+	errs := make(chan error, 1)
+	go func() {
+		var builder strings.Builder
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				errs <- err
+				return
+			}
+			builder.WriteString(line)
+			if line == "\n" {
+				payload <- builder.String()
+				return
+			}
 		}
-		lines = append(lines, line)
-	}
-	if got, want := strings.Join(lines, ""), "event: ready\ndata: ok\n\n"; got != want {
-		t.Fatalf("first event = %q, want %q", got, want)
+	}()
+
+	store.Update(buildservice.Snapshot{
+		State:      buildservice.StateRunning,
+		Message:    "updated",
+		BuildCount: 4,
+		AppAddr:    "127.0.0.1:3001",
+	})
+
+	select {
+	case got := <-payload:
+		for _, want := range []string{
+			`data: <turbo-stream action="replace" target="status_bar_content">`,
+			`<footer id="status_bar_content" class="status-bar">`,
+			`Build <span>4</span>`,
+		} {
+			if !strings.Contains(got, want) {
+				t.Fatalf("stream event missing %q:\n%s", want, got)
+			}
+		}
+	case err := <-errs:
+		t.Fatal(err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for status turbo-stream")
 	}
 }
 

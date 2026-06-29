@@ -13,6 +13,7 @@ import (
 	"golazy.dev/lazy/app/controllers"
 	"golazy.dev/lazy/services/buildservice"
 	"golazy.dev/lazycontroller"
+	"golazy.dev/lazysse"
 	"golazy.dev/lazyturbo"
 	"golazy.dev/lazyview"
 )
@@ -57,43 +58,6 @@ func (b *Base) Snapshot() buildservice.Snapshot {
 	return b.Store.Snapshot()
 }
 
-func (b *Base) RespondHTMLOrJSON(w http.ResponseWriter, r *http.Request, path string) error {
-	if wantsJSON(r) {
-		return b.ProxyAppControl(w, r, http.MethodGet, path)
-	}
-	b.SetState()
-	return nil
-}
-
-func (b *Base) ProxyAppControl(w http.ResponseWriter, r *http.Request, method string, path string) error {
-	addr := b.Snapshot().ControlPlaneAddr
-	if addr == "" {
-		http.Error(w, "application control plane is not available", http.StatusServiceUnavailable)
-		return nil
-	}
-	request, err := http.NewRequestWithContext(r.Context(), method, "http://"+addr+path, nil)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return nil
-	}
-	request.Header.Set("Accept", "application/json")
-
-	response, err := appControlClient.Do(request)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
-		return nil
-	}
-	defer response.Body.Close()
-
-	w.Header().Set("Cache-Control", "no-store")
-	if contentType := response.Header.Get("Content-Type"); contentType != "" {
-		w.Header().Set("Content-Type", contentType)
-	}
-	w.WriteHeader(response.StatusCode)
-	_, _ = io.Copy(w, io.LimitReader(response.Body, 1<<20))
-	return nil
-}
-
 func (b *Base) FetchAppControlJSON(ctx context.Context, path string, target any) error {
 	addr := b.Snapshot().ControlPlaneAddr
 	if addr == "" {
@@ -117,6 +81,59 @@ func (b *Base) FetchAppControlJSON(ctx context.Context, path string, target any)
 		return err
 	}
 	return nil
+}
+
+func (b *Base) PostAppControl(ctx context.Context, path string) error {
+	addr := b.Snapshot().ControlPlaneAddr
+	if addr == "" {
+		return fmt.Errorf("application control plane is not available")
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://"+addr+path, nil)
+	if err != nil {
+		return err
+	}
+	request.Header.Set("Accept", "application/json")
+
+	response, err := appControlClient.Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 1<<20))
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return fmt.Errorf("application control plane returned %s", response.Status)
+	}
+	return nil
+}
+
+func (b *Base) StreamTurbo(w http.ResponseWriter, r *http.Request, render func(*http.Request, buildservice.Event) (string, error)) error {
+	stream, err := b.SSEStream()
+	if err != nil {
+		return err
+	}
+	defer stream.Close()
+
+	events, unsubscribe := b.Store.Subscribe()
+	defer unsubscribe()
+	stream.Heartbeat(15 * time.Second)
+
+	for {
+		select {
+		case <-stream.Done():
+			return nil
+		case event := <-events:
+			if render == nil {
+				continue
+			}
+			body, err := render(r, event)
+			if err != nil || body == "" {
+				continue
+			}
+			if err := stream.Send(lazysse.Event{Data: []string{body}}); err != nil {
+				return err
+			}
+		}
+	}
 }
 
 func (b *Base) RenderPanelFrame(r *http.Request, id string, controller string, partial string, variables map[string]any) (string, error) {
@@ -176,16 +193,4 @@ func TurboStream(action string, target string, body string) string {
 	builder.WriteString(body)
 	builder.WriteString(`</template></turbo-stream>`)
 	return builder.String()
-}
-
-func wantsJSON(r *http.Request) bool {
-	if r == nil || strings.TrimSpace(r.Header.Get("Turbo-Frame")) != "" {
-		return false
-	}
-	for _, part := range strings.Split(r.Header.Get("Accept"), ",") {
-		if strings.Contains(strings.ToLower(part), "application/json") {
-			return true
-		}
-	}
-	return false
 }

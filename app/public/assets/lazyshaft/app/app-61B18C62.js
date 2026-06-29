@@ -1,5 +1,11 @@
-// golazy:turbo
-// golazy:stimulus
+import "@hotwired/turbo"
+import { Application } from "@hotwired/stimulus"
+import PanelCloseController from "/js/controllers/panel_close_controller.js"
+import PanelResizeController from "/js/controllers/panel_resize_controller.js"
+
+const application = Application.start()
+application.register("panel-close", PanelCloseController)
+application.register("panel-resize", PanelResizeController)
 
 const panelPath = "/_golazy/"
 const embeddedPanelID = "golazy-dev-panel"

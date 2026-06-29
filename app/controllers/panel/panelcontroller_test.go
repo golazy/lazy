@@ -10,39 +10,17 @@ import (
 	"golazy.dev/lazy/services/buildservice"
 )
 
-func TestCacheProxiesApplicationControlPlane(t *testing.T) {
-	var gotMethod string
-	var gotPath string
-	appControl := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotMethod = r.Method
-		gotPath = r.URL.Path
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		_, _ = fmt.Fprint(w, `{"enabled":true,"stats":{"entries":1},"keys":["users-1"]}`)
-	}))
-	defer appControl.Close()
-
-	store := buildservice.NewStore(10)
-	store.Update(buildservice.Snapshot{
-		State:            buildservice.StateRunning,
-		ControlPlaneAddr: strings.TrimPrefix(appControl.URL, "http://"),
-	})
-	controller := &Controller{Base: Base{Store: store}}
-
+func TestCacheRedirectsToActions(t *testing.T) {
+	controller := &Controller{Base: Base{Store: buildservice.NewStore(10)}}
 	response := httptest.NewRecorder()
 	if err := controller.Cache(response, httptest.NewRequest(http.MethodGet, "/_golazy/cache", nil)); err != nil {
 		t.Fatal(err)
 	}
-	if response.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
+	if response.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusSeeOther, response.Body.String())
 	}
-	if gotMethod != http.MethodGet || gotPath != appCachePath {
-		t.Fatalf("proxied request = %s %s, want GET %s", gotMethod, gotPath, appCachePath)
-	}
-	if got := response.Header().Get("Cache-Control"); got != "no-store" {
-		t.Fatalf("Cache-Control = %q, want no-store", got)
-	}
-	if !strings.Contains(response.Body.String(), `"keys":["users-1"]`) {
-		t.Fatalf("body = %s, want cache JSON", response.Body.String())
+	if got, want := response.Header().Get("Location"), "/_golazy/actions"; got != want {
+		t.Fatalf("Location = %q, want %q", got, want)
 	}
 }
 
@@ -76,8 +54,11 @@ func TestCacheOnAndOffProxyApplicationControlPlane(t *testing.T) {
 		if err := call.fn(response, httptest.NewRequest(http.MethodPost, "/_golazy/cache/"+call.name, nil)); err != nil {
 			t.Fatal(err)
 		}
-		if response.Code != http.StatusOK {
-			t.Fatalf("%s status = %d, want %d", call.name, response.Code, http.StatusOK)
+		if response.Code != http.StatusSeeOther {
+			t.Fatalf("%s status = %d, want %d", call.name, response.Code, http.StatusSeeOther)
+		}
+		if got, want := response.Header().Get("Location"), "/_golazy/actions"; got != want {
+			t.Fatalf("%s Location = %q, want %q", call.name, got, want)
 		}
 	}
 
@@ -87,7 +68,7 @@ func TestCacheOnAndOffProxyApplicationControlPlane(t *testing.T) {
 	}
 }
 
-func TestRequestMonitoringProxiesApplicationControlPlane(t *testing.T) {
+func TestRequestMonitoringRedirectsAndProxiesApplicationControlPlaneCommands(t *testing.T) {
 	var paths []string
 	appControl := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		paths = append(paths, r.Method+" "+r.URL.Path)
@@ -103,27 +84,38 @@ func TestRequestMonitoringProxiesApplicationControlPlane(t *testing.T) {
 	})
 	controller := &Controller{Base: Base{Store: store}}
 
+	response := httptest.NewRecorder()
+	if err := controller.RequestMonitoring(response, httptest.NewRequest(http.MethodGet, "/_golazy/request-monitoring", nil)); err != nil {
+		t.Fatal(err)
+	}
+	if response.Code != http.StatusSeeOther {
+		t.Fatalf("state status = %d, want %d: %s", response.Code, http.StatusSeeOther, response.Body.String())
+	}
+	if got, want := response.Header().Get("Location"), "/_golazy/traces"; got != want {
+		t.Fatalf("state Location = %q, want %q", got, want)
+	}
+
 	for _, call := range []struct {
-		name   string
-		method string
-		fn     func(http.ResponseWriter, *http.Request) error
+		name string
+		fn   func(http.ResponseWriter, *http.Request) error
 	}{
-		{name: "state", method: http.MethodGet, fn: controller.RequestMonitoring},
-		{name: "on", method: http.MethodPost, fn: controller.RequestMonitoringOn},
-		{name: "off", method: http.MethodPost, fn: controller.RequestMonitoringOff},
+		{name: "on", fn: controller.RequestMonitoringOn},
+		{name: "off", fn: controller.RequestMonitoringOff},
 	} {
 		response := httptest.NewRecorder()
-		request := httptest.NewRequest(call.method, "/_golazy/request-monitoring/"+call.name, nil)
+		request := httptest.NewRequest(http.MethodPost, "/_golazy/request-monitoring/"+call.name, nil)
 		if err := call.fn(response, request); err != nil {
 			t.Fatal(err)
 		}
-		if response.Code != http.StatusOK {
-			t.Fatalf("%s status = %d, want %d: %s", call.name, response.Code, http.StatusOK, response.Body.String())
+		if response.Code != http.StatusSeeOther {
+			t.Fatalf("%s status = %d, want %d: %s", call.name, response.Code, http.StatusSeeOther, response.Body.String())
+		}
+		if got, want := response.Header().Get("Location"), "/_golazy/traces"; got != want {
+			t.Fatalf("%s Location = %q, want %q", call.name, got, want)
 		}
 	}
 
 	want := []string{
-		http.MethodGet + " " + appRequestMonitoringPath,
 		http.MethodPost + " " + appRequestMonitoringOnPath,
 		http.MethodPost + " " + appRequestMonitoringOffPath,
 	}
@@ -137,13 +129,13 @@ func TestRequestMonitoringProxiesApplicationControlPlane(t *testing.T) {
 	}
 }
 
-func TestCacheReportsUnavailableControlPlane(t *testing.T) {
+func TestCacheCommandReportsUnavailableControlPlane(t *testing.T) {
 	controller := &Controller{Base: Base{Store: buildservice.NewStore(10)}}
 	response := httptest.NewRecorder()
-	if err := controller.Cache(response, httptest.NewRequest(http.MethodGet, "/_golazy/cache", nil)); err != nil {
+	if err := controller.CacheOn(response, httptest.NewRequest(http.MethodPost, "/_golazy/cache/on", nil)); err != nil {
 		t.Fatal(err)
 	}
-	if response.Code != http.StatusServiceUnavailable {
-		t.Fatalf("status = %d, want %d", response.Code, http.StatusServiceUnavailable)
+	if response.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusBadGateway)
 	}
 }

@@ -16,26 +16,34 @@
       <div class="section-heading">
         <h2>View Cache</h2>
         <div class="cache-actions">
-          <button type="button" class="toolbar-button" data-cache-action="/_golazy/cache/on">On</button>
-          <button type="button" class="toolbar-button" data-cache-action="/_golazy/cache/off">Off</button>
+          <form method="post" action="/_golazy/cache/on">
+            <button type="submit" class="toolbar-button">On</button>
+          </form>
+          <form method="post" action="/_golazy/cache/off">
+            <button type="submit" class="toolbar-button">Off</button>
+          </form>
         </div>
       </div>
       <dl class="cache-stats">
         <dt>Status</dt>
-        <dd data-cache-enabled>Unknown</dd>
+        <dd>{{.cache.StatusText}}</dd>
         <dt>Entries</dt>
-        <dd data-cache-entries>0</dd>
+        <dd>{{.cache.Stats.Entries}}</dd>
         <dt>Hits</dt>
-        <dd data-cache-hits>0</dd>
+        <dd>{{.cache.Stats.Hits}}</dd>
         <dt>Misses</dt>
-        <dd data-cache-misses>0</dd>
+        <dd>{{.cache.Stats.Misses}}</dd>
         <dt>Sets</dt>
-        <dd data-cache-sets>0</dd>
+        <dd>{{.cache.Stats.Sets}}</dd>
         <dt>Evictions</dt>
-        <dd data-cache-evictions>0</dd>
+        <dd>{{.cache.Stats.Evictions}}</dd>
       </dl>
       <ul class="cache-keys compact-list" data-cache-keys>
-        <li class="muted">No keys.</li>
+        {{range .cache.Keys}}
+          <li><code>{{.}}</code></li>
+        {{else}}
+          <li class="muted">{{if $.cache.Error}}{{$.cache.Error}}{{else}}No keys.{{end}}</li>
+        {{end}}
       </ul>
     </section>
 

@@ -1,16 +1,14 @@
 <section id="requests" class="tool-view is-active" data-view="requests">
   <div class="network-toolbar network-toolbar-container">
     <div class="network-controls">
-      <button type="button" class="icon-button record-button" data-request-monitoring-action="/_golazy/request-monitoring/on" data-request-monitoring-button title="Enable detailed request monitoring" aria-pressed="false">
-        <span class="record-dot"></span>
-      </button>
+      <form method="post" action="{{if .monitoring.Enabled}}/_golazy/request-monitoring/off{{else}}/_golazy/request-monitoring/on{{end}}">
+        <button type="submit" class="icon-button record-button" title="{{if .monitoring.Enabled}}Disable detailed request monitoring{{else}}Enable detailed request monitoring{{end}}" aria-pressed="{{.monitoring.Enabled}}">
+          <span class="record-dot"></span>
+        </button>
+      </form>
       <button type="button" class="icon-button clear-button" disabled title="Clear request log"></button>
       <span class="toolbar-divider"></span>
-      <label class="inline-check">
-        <input type="checkbox" data-request-monitoring-toggle>
-        <span>Detail monitoring</span>
-      </label>
-      <span class="toolbar-count" data-request-monitoring-state>Monitoring unknown</span>
+      <span class="toolbar-count">{{.monitoring.StatusText}}</span>
       <span class="toolbar-divider"></span>
       <label class="inline-check">
         <input type="checkbox" checked disabled>

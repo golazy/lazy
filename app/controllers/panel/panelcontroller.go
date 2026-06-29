@@ -2,11 +2,9 @@ package panel
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 
 	"golazy.dev/lazy/services/buildservice"
-	"golazy.dev/lazysse"
 )
 
 type Controller struct {
@@ -30,69 +28,50 @@ func (c *Controller) Index(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-func (c *Controller) State(w http.ResponseWriter, _ *http.Request) error {
-	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	return json.NewEncoder(w).Encode(c.Snapshot())
-}
-
 func (c *Controller) Cache(w http.ResponseWriter, r *http.Request) error {
-	return c.ProxyAppControl(w, r, http.MethodGet, appCachePath)
+	http.Redirect(w, r, "/_golazy/actions", http.StatusSeeOther)
+	return nil
 }
 
 func (c *Controller) CacheOn(w http.ResponseWriter, r *http.Request) error {
-	return c.ProxyAppControl(w, r, http.MethodPost, appCacheOnPath)
+	if err := c.PostAppControl(r.Context(), appCacheOnPath); err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return nil
+	}
+	http.Redirect(w, r, "/_golazy/actions", http.StatusSeeOther)
+	return nil
 }
 
 func (c *Controller) CacheOff(w http.ResponseWriter, r *http.Request) error {
-	return c.ProxyAppControl(w, r, http.MethodPost, appCacheOffPath)
+	if err := c.PostAppControl(r.Context(), appCacheOffPath); err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return nil
+	}
+	http.Redirect(w, r, "/_golazy/actions", http.StatusSeeOther)
+	return nil
 }
 
 func (c *Controller) RequestMonitoring(w http.ResponseWriter, r *http.Request) error {
-	return c.ProxyAppControl(w, r, http.MethodGet, appRequestMonitoringPath)
+	http.Redirect(w, r, "/_golazy/traces", http.StatusSeeOther)
+	return nil
 }
 
 func (c *Controller) RequestMonitoringOn(w http.ResponseWriter, r *http.Request) error {
-	return c.ProxyAppControl(w, r, http.MethodPost, appRequestMonitoringOnPath)
+	if err := c.PostAppControl(r.Context(), appRequestMonitoringOnPath); err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return nil
+	}
+	http.Redirect(w, r, "/_golazy/traces", http.StatusSeeOther)
+	return nil
 }
 
 func (c *Controller) RequestMonitoringOff(w http.ResponseWriter, r *http.Request) error {
-	return c.ProxyAppControl(w, r, http.MethodPost, appRequestMonitoringOffPath)
-}
-
-func (c *Controller) Events(w http.ResponseWriter, r *http.Request) error {
-	stream, err := c.SSEStream()
-	if err != nil {
-		return err
+	if err := c.PostAppControl(r.Context(), appRequestMonitoringOffPath); err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return nil
 	}
-	defer stream.Close()
-
-	events, unsubscribe := c.Store.Subscribe()
-	defer unsubscribe()
-
-	if err := stream.Send(lazysse.Event{Event: "ready", Data: []string{"ok"}}); err != nil {
-		return err
-	}
-
-	for {
-		select {
-		case <-stream.Done():
-			return nil
-		case event := <-events:
-			data, err := json.Marshal(event)
-			if err != nil {
-				continue
-			}
-			if err := stream.Send(lazysse.Event{Event: string(event.Type), Data: []string{string(data)}}); err != nil {
-				return err
-			}
-			if body, err := c.turboStreamForEvent(r, event); err == nil && body != "" {
-				if err := stream.Send(lazysse.Event{Event: "turbo-stream", Data: []string{body}}); err != nil {
-					return err
-				}
-			}
-		}
-	}
+	http.Redirect(w, r, "/_golazy/traces", http.StatusSeeOther)
+	return nil
 }
 
 func (c *Controller) Rebuild(w http.ResponseWriter, r *http.Request) error {
@@ -110,31 +89,4 @@ func (c *Controller) enqueue(w http.ResponseWriter, r *http.Request, action buil
 	}
 	http.Redirect(w, r, "/_golazy/", http.StatusSeeOther)
 	return nil
-}
-
-func (c *Controller) turboStreamForEvent(r *http.Request, event buildservice.Event) (string, error) {
-	var stream string
-	snapshot := c.Snapshot()
-	variables := map[string]any{"state": snapshot}
-
-	status, err := c.RenderPermanentPanelFrame(r, "status_bar", "status", "status_bar_frame", variables)
-	if err != nil {
-		return "", err
-	}
-	stream += TurboStream("replace", "status_bar", status)
-
-	item, err := c.RenderPanelPartialData(r, "logs", "event_item", event)
-	if err != nil {
-		return "", err
-	}
-	stream += TurboStream("append", "panel_events", item)
-
-	if event.Type != buildservice.EventOutput {
-		logs, err := c.RenderPanelPartial(r, "logs", "logs_frame", variables)
-		if err != nil {
-			return "", err
-		}
-		stream += TurboStream("replace", "logs", logs)
-	}
-	return stream, nil
 }

@@ -1,8 +1,8 @@
 <section id="jobs" class="tool-view is-active" data-view="jobs">
-  <div class="filter-toolbar">
+    <div class="filter-toolbar">
     <input class="filter-input" type="search" placeholder="Filter jobs" disabled>
     <span class="toolbar-spacer"></span>
-    <span class="toolbar-count" data-jobs-state>Jobs unavailable</span>
+    <span class="toolbar-count">{{.jobs.StateText}}</span>
   </div>
 
   <div class="runtime-grid" data-jobs-panel>
@@ -10,26 +10,30 @@
       <h2>State</h2>
       <dl class="detail-list">
         <dt>Runner</dt>
-        <dd data-jobs-running>Unknown</dd>
+        <dd>{{.jobs.RunningText}}</dd>
         <dt>Total</dt>
-        <dd data-jobs-total>0</dd>
+        <dd>{{.jobs.Stats.Total}}</dd>
         <dt>Pending</dt>
-        <dd data-jobs-pending>0</dd>
+        <dd>{{.jobs.Count "pending"}}</dd>
         <dt>Running</dt>
-        <dd data-jobs-count-running>0</dd>
+        <dd>{{.jobs.Count "running"}}</dd>
         <dt>Retrying</dt>
-        <dd data-jobs-retrying>0</dd>
+        <dd>{{.jobs.Count "retrying"}}</dd>
         <dt>Succeeded</dt>
-        <dd data-jobs-succeeded>0</dd>
+        <dd>{{.jobs.Count "succeeded"}}</dd>
         <dt>Discarded</dt>
-        <dd data-jobs-discarded>0</dd>
+        <dd>{{.jobs.Count "discarded"}}</dd>
       </dl>
     </section>
 
     <section class="runtime-pane output-pane">
       <h2>Definitions</h2>
       <ul class="compact-list" data-job-definitions>
-        <li class="muted">No job definitions.</li>
+        {{range .jobs.Definitions}}
+          <li><code>{{.Kind}}</code> {{.Queue}} attempts {{.MaxAttempts}}</li>
+        {{else}}
+          <li class="muted">{{if $.jobs.Error}}{{$.jobs.Error}}{{else}}No job definitions.{{end}}</li>
+        {{end}}
       </ul>
     </section>
 
@@ -48,9 +52,21 @@
           </tr>
         </thead>
         <tbody data-jobs-recent>
-          <tr>
-            <td colspan="7" class="empty-cell">No recent jobs.</td>
-          </tr>
+          {{range .jobs.Recent}}
+            <tr>
+              <td>{{.ID}}</td>
+              <td>{{.Kind}}</td>
+              <td>{{.Queue}}</td>
+              <td>{{.State}}</td>
+              <td>{{.AttemptText}}</td>
+              <td>{{.RunAtText}}</td>
+              <td>{{.LastError}}</td>
+            </tr>
+          {{else}}
+            <tr>
+              <td colspan="7" class="empty-cell">{{if $.jobs.Error}}{{$.jobs.Error}}{{else}}No recent jobs.{{end}}</td>
+            </tr>
+          {{end}}
         </tbody>
       </table>
     </section>

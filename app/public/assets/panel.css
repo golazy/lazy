@@ -769,7 +769,7 @@ button:disabled:hover {
   padding: 0;
 }
 
-.service-list button {
+.service-list a {
   align-items: center;
   background: transparent;
   border: 1px solid transparent;
@@ -783,20 +783,21 @@ button:disabled:hover {
   min-width: 0;
   padding: 0 8px;
   text-align: left;
+  text-decoration: none;
   width: 100%;
 }
 
-.service-list button:hover {
+.service-list a:hover {
   background: var(--row-hover);
 }
 
-.service-list button[aria-selected="true"] {
+.service-list a[aria-selected="true"] {
   background: var(--sys-color-tonal-container);
   border-color: var(--sys-color-primary);
   color: var(--sys-color-on-tonal-container);
 }
 
-.service-list button span:last-child {
+.service-list a span:last-child {
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -921,12 +922,18 @@ button:disabled:hover {
   width: 4.8rem;
 }
 
-.trace-list-grid tr[data-trace-id] {
-  cursor: pointer;
+.trace-list-grid a,
+.trace-log-grid a {
+  color: inherit;
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.trace-list-grid tr[data-trace-id]:hover td,
-.trace-list-grid tr[data-trace-id]:focus td {
+.trace-list-grid tbody tr:hover td {
   background: var(--row-hover);
 }
 
@@ -959,9 +966,11 @@ button:disabled:hover {
   cursor: pointer;
   height: 22px;
   min-width: 0;
+  text-decoration: none;
 }
 
 .trace-timeline-label {
+  display: block;
   overflow: hidden;
   text-align: left;
   text-overflow: ellipsis;
@@ -971,6 +980,7 @@ button:disabled:hover {
 .trace-timeline-track {
   background: var(--surface);
   border-color: var(--border);
+  display: block;
   position: relative;
 }
 
@@ -1129,6 +1139,12 @@ button:disabled:hover {
 
 .filter-toolbar form {
   margin: 0;
+}
+
+.inline-form {
+  align-items: center;
+  display: inline-flex;
+  min-width: 0;
 }
 
 .action-layout {

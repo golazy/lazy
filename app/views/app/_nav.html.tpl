@@ -1,4 +1,4 @@
-<nav class="panel-tabs tabbed-pane-header" aria-label="GoLazy panel sections">
+<nav class="panel-tabs tabbed-pane-header" aria-label="GoLazy panel sections" data-controller="panel-close">
   <div class="panel-tab-list">
     <span class="panel-tab">{{link_to "Requests" (path_for "requests") (data "turbo-frame" "_top") (unless_current)}}</span>
     <span class="panel-tab">{{link_to "Console" (path_for "console") (data "turbo-frame" "_top") (unless_current)}}</span>
@@ -10,5 +10,5 @@
     <span class="panel-tab">{{link_to "Assets" (path_for "assets") (data "turbo-frame" "_top") (unless_current)}}</span>
     <span class="panel-tab">{{link_to "Actions" (path_for "actions") (data "turbo-frame" "_top") (unless_current)}}</span>
   </div>
-  <button type="button" class="panel-close-button" data-panel-close hidden aria-label="Close GoLazy development panel" title="Close GoLazy development panel"></button>
+  <button type="button" class="panel-close-button" data-panel-close hidden aria-label="Close GoLazy development panel" title="Close GoLazy development panel" data-panel-close-target="button" data-action="panel-close#close"></button>
 </nav>
