@@ -84,6 +84,8 @@ type panelOutputWriter struct {
 type serviceOutputWriter struct {
 	store   *buildservice.Store
 	service string
+	task    string
+	run     int
 	stream  string
 }
 
@@ -104,6 +106,8 @@ func (w serviceOutputWriter) Write(p []byte) (int, error) {
 			Type:    buildservice.EventOutput,
 			Stream:  w.stream,
 			Service: w.service,
+			Task:    w.task,
+			Run:     w.run,
 			Output:  string(p),
 		})
 	}
@@ -278,12 +282,18 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 		Status: func(service string, state lifecycleservice.State, message string) {
 			store.UpdateService(service, serviceState(state), message)
 		},
-		Output: func(service string, stream string) io.Writer {
+		Output: func(output lifecycleservice.TaskOutput) io.Writer {
 			target := stdout
-			if stream == "stderr" {
+			if output.Stream == "stderr" {
 				target = stderr
 			}
-			return io.MultiWriter(target, serviceOutputWriter{store: store, service: service, stream: stream})
+			return io.MultiWriter(target, serviceOutputWriter{
+				store:   store,
+				service: output.Service,
+				task:    output.Task,
+				run:     output.Run,
+				stream:  output.Stream,
+			})
 		},
 	}).Start(ctx)
 	if err != nil {

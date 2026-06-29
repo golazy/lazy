@@ -257,7 +257,8 @@ pre {
 .inline-check,
 .select-button,
 .more-filters,
-.type-filter button {
+.type-filter button,
+.type-filter a {
   align-items: center;
   background: transparent;
   border: 1px solid transparent;
@@ -283,7 +284,8 @@ pre {
 .inline-check:hover,
 .select-button:hover,
 .more-filters:hover,
-.type-filter button:hover {
+.type-filter button:hover,
+.type-filter a:hover {
   background: var(--row-hover);
   border-color: var(--border);
 }
@@ -494,7 +496,8 @@ button:disabled:hover {
 }
 
 .scope-filter button[aria-pressed="true"],
-.type-filter button[aria-pressed="true"] {
+.type-filter button[aria-pressed="true"],
+.type-filter a[aria-current="page"] {
   background: var(--sys-color-tonal-container);
   color: var(--sys-color-on-tonal-container);
 }
@@ -510,12 +513,15 @@ button:disabled:hover {
   padding: 3px 6px;
 }
 
-.type-filter button {
+.type-filter button,
+.type-filter a {
   border-color: var(--border-strong);
   border-radius: 10px;
+  color: var(--text);
   font-weight: 600;
   height: 25px;
   padding: 0 9px;
+  text-decoration: none;
 }
 
 .split-view {
@@ -740,6 +746,7 @@ button:disabled:hover {
 }
 
 .services-view {
+  grid-template-rows: 31px 31px minmax(0, 1fr);
   min-height: 0;
 }
 
@@ -870,20 +877,30 @@ button:disabled:hover {
 
 .service-output-grid th:nth-child(1),
 .service-output-grid td:nth-child(1) {
-  width: 7rem;
+  width: 6rem;
 }
 
 .service-output-grid th:nth-child(2),
 .service-output-grid td:nth-child(2) {
-  width: 11rem;
+  width: 4rem;
 }
 
 .service-output-grid th:nth-child(3),
 .service-output-grid td:nth-child(3) {
+  width: 7rem;
+}
+
+.service-output-grid th:nth-child(4),
+.service-output-grid td:nth-child(4) {
+  width: 11rem;
+}
+
+.service-output-grid th:nth-child(5),
+.service-output-grid td:nth-child(5) {
   width: auto;
 }
 
-.service-output-grid td:nth-child(3) {
+.service-output-grid td:nth-child(5) {
   overflow-wrap: anywhere;
   text-overflow: clip;
   white-space: pre-wrap;

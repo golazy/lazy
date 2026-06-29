@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -187,6 +188,73 @@ func TestServiceWithoutCheckIsMarkedReadyAfterStart(t *testing.T) {
 	}
 }
 
+func TestTaskOutputIncludesTaskAndRun(t *testing.T) {
+	dir := t.TempDir()
+	writeTask(t, dir, "postgres/start")
+	writeTask(t, dir, "postgres/check")
+	writeTask(t, dir, "postgres/create")
+	writeTask(t, dir, "postgres/migrate")
+
+	var mu sync.Mutex
+	var outputs []TaskOutput
+	record := func(output TaskOutput) {
+		mu.Lock()
+		defer mu.Unlock()
+		outputs = append(outputs, output)
+	}
+	starter := func(_ string, _ string, stdout io.Writer, _ io.Writer, _ time.Duration) (Process, error) {
+		_, _ = fmt.Fprintln(stdout, "start output")
+		return newFakeProcess(), nil
+	}
+	checks := 0
+	runner := func(_ context.Context, _ string, task string, _ []string, _ io.Reader, stdout io.Writer, _ io.Writer, _ bool) error {
+		_, _ = fmt.Fprintln(stdout, task)
+		if task == "postgres:check" {
+			checks++
+			if checks < 3 {
+				return errors.New("not ready")
+			}
+		}
+		return nil
+	}
+
+	manager, err := (Service{
+		Dir:     dir,
+		Starter: starter,
+		Runner:  runner,
+		Output: func(output TaskOutput) io.Writer {
+			return writerFunc(func(p []byte) (int, error) {
+				if strings.TrimSpace(string(p)) != "" {
+					record(output)
+				}
+				return len(p), nil
+			})
+		},
+		CheckInterval: time.Millisecond,
+	}).Start(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Stop()
+
+	if err := waitReady(t, manager); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, want := range []TaskOutput{
+		{Service: "postgres", Task: "start", Run: 1},
+		{Service: "postgres", Task: "check", Run: 1},
+		{Service: "postgres", Task: "check", Run: 2},
+		{Service: "postgres", Task: "check", Run: 3},
+		{Service: "postgres", Task: "create", Run: 1},
+		{Service: "postgres", Task: "migrate", Run: 1},
+	} {
+		if !hasTaskOutput(outputs, want) {
+			t.Fatalf("outputs = %#v, missing %#v", outputs, want)
+		}
+	}
+}
+
 func TestRestartStopsSelectedServiceAndRunsLifecycleTasks(t *testing.T) {
 	dir := t.TempDir()
 	writeTask(t, dir, "postgres/start")
@@ -308,6 +376,21 @@ func assertBefore(t *testing.T, values []string, before string, after string) {
 	if beforeIndex > afterIndex {
 		t.Fatalf("values = %#v, want %s before %s", values, before, after)
 	}
+}
+
+func hasTaskOutput(outputs []TaskOutput, want TaskOutput) bool {
+	for _, output := range outputs {
+		if output.Service == want.Service && output.Task == want.Task && output.Run == want.Run {
+			return true
+		}
+	}
+	return false
+}
+
+type writerFunc func([]byte) (int, error)
+
+func (f writerFunc) Write(p []byte) (int, error) {
+	return f(p)
 }
 
 func writeTask(t *testing.T, dir string, name string) {

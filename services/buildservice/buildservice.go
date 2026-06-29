@@ -60,6 +60,8 @@ type Event struct {
 	Message   string    `json:"message,omitempty"`
 	Stream    string    `json:"stream,omitempty"`
 	Service   string    `json:"service,omitempty"`
+	Task      string    `json:"task,omitempty"`
+	Run       int       `json:"run,omitempty"`
 	Output    string    `json:"output,omitempty"`
 	Changed   []string  `json:"changed,omitempty"`
 	Build     int       `json:"build,omitempty"`

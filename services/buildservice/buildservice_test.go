@@ -34,13 +34,15 @@ func TestStoreRecordsServiceTaggedOutputEvents(t *testing.T) {
 	store.AddEvent(Event{
 		Type:    EventOutput,
 		Service: "postgres",
+		Task:    "check",
+		Run:     2,
 		Stream:  "stderr",
 		Output:  "ready\n",
 	})
 
 	events := store.Snapshot().Events
 	event := events[len(events)-1]
-	if event.Service != "postgres" || event.Stream != "stderr" || event.Output != "ready\n" {
+	if event.Service != "postgres" || event.Task != "check" || event.Run != 2 || event.Stream != "stderr" || event.Output != "ready\n" {
 		t.Fatalf("event = %#v, want service output", event)
 	}
 	services := store.Snapshot().Services

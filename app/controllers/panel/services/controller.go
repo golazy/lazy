@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"sort"
+	"strconv"
 	"strings"
 
 	"golazy.dev/lazy/app/controllers/panel"
@@ -53,18 +55,28 @@ func (c *ServicesController) Restart(w http.ResponseWriter, r *http.Request) err
 func (c *ServicesController) setServicesState(r *http.Request) {
 	state := c.Snapshot()
 	selected := selectedService(r, state)
+	tasks := serviceTasks(state.Events, selected)
+	selectedTask := selectedServiceTask(r, tasks)
 	c.Set("state", state)
 	c.Set("selected_service", selected)
-	c.Set("service_output_rows", serviceOutputRows(state.Events, selected))
+	c.Set("selected_service_task", selectedTask)
+	c.Set("service_task_filters", serviceTaskFilters(selected, tasks, selectedTask))
+	c.Set("services_stream_url", serviceURL(selected, selectedTask))
+	c.Set("service_output_rows", serviceOutputRows(state.Events, selected, selectedTask))
 }
 
 func (c *ServicesController) streamServices(r *http.Request, _ buildservice.Event) (string, error) {
 	state := c.Snapshot()
 	selected := selectedService(r, state)
+	tasks := serviceTasks(state.Events, selected)
+	selectedTask := selectedServiceTask(r, tasks)
 	body, err := c.RenderPanelPartial(r, "services", "services_frame", map[string]any{
-		"state":               state,
-		"selected_service":    selected,
-		"service_output_rows": serviceOutputRows(state.Events, selected),
+		"state":                 state,
+		"selected_service":      selected,
+		"selected_service_task": selectedTask,
+		"service_task_filters":  serviceTaskFilters(selected, tasks, selectedTask),
+		"services_stream_url":   serviceURL(selected, selectedTask),
+		"service_output_rows":   serviceOutputRows(state.Events, selected, selectedTask),
 	})
 	if err != nil {
 		return "", err
@@ -73,9 +85,18 @@ func (c *ServicesController) streamServices(r *http.Request, _ buildservice.Even
 }
 
 type serviceOutputRow struct {
-	Stream  string
-	Time    string
-	Message string
+	Task     string
+	Run      int
+	RunLabel string
+	Stream   string
+	Time     string
+	Message  string
+}
+
+type serviceTaskFilter struct {
+	Label    string
+	URL      string
+	Selected bool
 }
 
 func selectedService(r *http.Request, state buildservice.Snapshot) string {
@@ -102,7 +123,80 @@ func serviceExists(name string, state buildservice.Snapshot) bool {
 	return false
 }
 
-func serviceOutputRows(events []buildservice.Event, service string) []serviceOutputRow {
+func selectedServiceTask(r *http.Request, tasks []string) string {
+	selected := strings.TrimSpace(r.URL.Query().Get("task"))
+	if selected == "" {
+		return ""
+	}
+	for _, task := range tasks {
+		if task == selected {
+			return selected
+		}
+	}
+	return ""
+}
+
+func serviceTaskFilters(service string, tasks []string, selected string) []serviceTaskFilter {
+	filters := []serviceTaskFilter{{
+		Label:    "All",
+		URL:      serviceURL(service, ""),
+		Selected: selected == "",
+	}}
+	for _, task := range tasks {
+		filters = append(filters, serviceTaskFilter{
+			Label:    task,
+			URL:      serviceURL(service, task),
+			Selected: selected == task,
+		})
+	}
+	return filters
+}
+
+func serviceURL(service string, task string) string {
+	values := url.Values{}
+	if service != "" {
+		values.Set("service", service)
+	}
+	if task != "" {
+		values.Set("task", task)
+	}
+	if encoded := values.Encode(); encoded != "" {
+		return "/_golazy/services?" + encoded
+	}
+	return "/_golazy/services"
+}
+
+func serviceTasks(events []buildservice.Event, service string) []string {
+	if service == "" {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	for _, event := range events {
+		if event.Type != buildservice.EventOutput || event.Service != service || event.Task == "" {
+			continue
+		}
+		seen[event.Task] = struct{}{}
+	}
+	preferred := []string{"start", "check", "create", "migrate"}
+	tasks := make([]string, 0, len(seen))
+	for _, task := range preferred {
+		if _, ok := seen[task]; ok {
+			tasks = append(tasks, task)
+			delete(seen, task)
+		}
+	}
+	preferredCount := len(tasks)
+	for task := range seen {
+		tasks = append(tasks, task)
+	}
+	if len(tasks) > preferredCount {
+		tail := tasks[preferredCount:]
+		sort.Strings(tail)
+	}
+	return tasks
+}
+
+func serviceOutputRows(events []buildservice.Event, service string, task string) []serviceOutputRow {
 	if service == "" {
 		return nil
 	}
@@ -111,16 +205,36 @@ func serviceOutputRows(events []buildservice.Event, service string) []serviceOut
 		if event.Type != buildservice.EventOutput || event.Service != service || event.Output == "" {
 			continue
 		}
+		if task != "" && event.Task != task {
+			continue
+		}
 		for _, line := range strings.Split(strings.ReplaceAll(event.Output, "\r\n", "\n"), "\n") {
 			if line == "" {
 				continue
 			}
 			rows = append(rows, serviceOutputRow{
-				Stream:  event.Stream,
-				Time:    event.Time.Local().Format("2006-01-02 15:04:05"),
-				Message: line,
+				Task:     taskLabel(event.Task),
+				Run:      event.Run,
+				RunLabel: runLabel(event.Run),
+				Stream:   event.Stream,
+				Time:     event.Time.Local().Format("2006-01-02 15:04:05"),
+				Message:  line,
 			})
 		}
 	}
 	return rows
+}
+
+func taskLabel(task string) string {
+	if task == "" {
+		return "service"
+	}
+	return task
+}
+
+func runLabel(run int) string {
+	if run <= 0 {
+		return "-"
+	}
+	return strconv.Itoa(run)
 }

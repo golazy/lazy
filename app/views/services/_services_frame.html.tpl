@@ -3,8 +3,18 @@
     <span>Services</span>
     <span class="toolbar-divider"></span>
     <span class="toolbar-count">{{if .selected_service}}{{.selected_service}} output{{else}}Select a service{{end}}</span>
+    {{if .selected_service_task}}
+      <span class="toolbar-divider"></span>
+      <span class="toolbar-count">{{.selected_service_task}}</span>
+    {{end}}
     <span class="toolbar-spacer"></span>
     <span class="toolbar-count">{{len .service_output_rows}} messages</span>
+  </div>
+
+  <div class="type-filter service-task-filter" aria-label="Service task log filters">
+    {{range .service_task_filters}}
+      <a href="{{.URL}}" data-turbo-frame="_top" aria-current="{{if .Selected}}page{{else}}false{{end}}">{{.Label}}</a>
+    {{end}}
   </div>
 
   <div class="services-layout" data-services-panel>
@@ -30,6 +40,8 @@
       <table class="data-grid service-output-grid">
         <thead>
           <tr>
+            <th>script</th>
+            <th>run</th>
             <th>stdout/stderr</th>
             <th>timestamp</th>
             <th>message</th>
@@ -38,13 +50,15 @@
         <tbody data-service-output>
           {{range .service_output_rows}}
             <tr>
+              <td>{{.Task}}</td>
+              <td>{{.RunLabel}}</td>
               <td>{{.Stream}}</td>
               <td>{{.Time}}</td>
               <td>{{.Message}}</td>
             </tr>
           {{else}}
             <tr>
-              <td colspan="3" class="empty-cell">{{if $.selected_service}}No output recorded for this service.{{else}}Select a service to inspect output.{{end}}</td>
+              <td colspan="5" class="empty-cell">{{if $.selected_service}}No output recorded for this service.{{else}}Select a service to inspect output.{{end}}</td>
             </tr>
           {{end}}
         </tbody>

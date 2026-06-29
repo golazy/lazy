@@ -20,6 +20,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The development panel now includes a Services tab with per-service output and
   status-bar service indicators.
 - The development panel Services tab now includes per-service restart actions.
+- The development panel Services tab now splits service output by lifecycle
+  script (`start`, `check`, `create`, `migrate`, and custom task names) and
+  shows each task run number, making repeated readiness checks visible.
 - The `lazy` development proxy now accepts HTTP and HTTPS on the same port.
   Plain HTTP serves the local certificate authority setup and download page,
   while HTTPS serves the development panel and proxied app traffic with HTTP/2
@@ -60,6 +63,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   their stdout and stderr, waits on service `check` tasks before running
   `create` and `migrate`, and stops the app before stopping services on
   interrupt.
+- Service lifecycle output events now keep the service name, script action, and
+  run number so repeated `check` attempts and restart-triggered runs can be
+  inspected independently in the panel.
 - The embedded development panel can now be closed from its toolbar. Panel
   split panes use a reusable Stimulus resize controller with `left`, `right`,
   `top`, and `bottom` directions plus pixel or percentage `min`, `max`, and

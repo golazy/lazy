@@ -26,6 +26,13 @@ type TaskRunner func(ctx context.Context, dir string, task string, args []string
 
 type Starter func(dir string, task string, stdout io.Writer, stderr io.Writer, stopTimeout time.Duration) (Process, error)
 
+type TaskOutput struct {
+	Service string
+	Task    string
+	Run     int
+	Stream  string
+}
+
 type State string
 
 const (
@@ -50,7 +57,7 @@ type Service struct {
 	Starter           Starter
 	Register          func([]string)
 	Status            func(service string, state State, message string)
-	Output            func(service string, stream string) io.Writer
+	Output            func(TaskOutput) io.Writer
 	CheckInterval     time.Duration
 	CheckWarningDelay time.Duration
 	StopTimeout       time.Duration
@@ -65,6 +72,8 @@ type Manager struct {
 	processes         map[string]Process
 	stoppingProcesses map[Process]struct{}
 	stopping          bool
+	runsMu            sync.Mutex
+	runs              map[string]int
 }
 
 func (s Service) Start(ctx context.Context) (*Manager, error) {
@@ -84,6 +93,7 @@ func (s Service) Start(ctx context.Context) (*Manager, error) {
 		inventory:         inventory,
 		processes:         map[string]Process{},
 		stoppingProcesses: map[Process]struct{}{},
+		runs:              map[string]int{},
 	}
 	if len(inventory.Services) == 0 {
 		manager.ready <- nil
@@ -149,7 +159,7 @@ func (m *Manager) Restart(ctx context.Context, service string) error {
 	process := m.takeProcessForRestart(service)
 	if process != nil {
 		m.service.status(service, StateNotReady, "Restarting service.")
-		m.service.logf(service, "lazy: restarting %s service\n", service)
+		m.service.logf(service, "", 0, "lazy: restarting %s service\n", service)
 		process.Stop()
 	}
 	return m.service.startService(ctx, m, m.inventory, service)
@@ -253,11 +263,20 @@ func (m *Manager) hasService(service string) bool {
 	return false
 }
 
+func (m *Manager) nextRun(service string, task string) int {
+	m.runsMu.Lock()
+	defer m.runsMu.Unlock()
+	key := service + "\x00" + task
+	m.runs[key]++
+	return m.runs[key]
+}
+
 func (s Service) startService(ctx context.Context, manager *Manager, inventory taskservice.Inventory, service string) error {
 	startTask := taskservice.TaskName(service, "start")
+	startRun := manager.nextRun(service, "start")
 	s.status(service, StateNotReady, "Starting service.")
-	s.logf(service, "lazy: starting %s service\n", service)
-	process, err := s.starter()(s.dir(), startTask, s.output(service, "stdout"), s.output(service, "stderr"), s.stopTimeout())
+	s.logf(service, "start", startRun, "lazy: starting %s service\n", service)
+	process, err := s.starter()(s.dir(), startTask, s.output(service, "start", startRun, "stdout"), s.output(service, "start", startRun, "stderr"), s.stopTimeout())
 	if err != nil {
 		s.status(service, StateStopped, err.Error())
 		return fmt.Errorf("%s:start: %w", service, err)
@@ -280,12 +299,13 @@ func (s Service) startService(ctx context.Context, manager *Manager, inventory t
 			continue
 		}
 		task := taskservice.TaskName(service, action)
-		s.logf(service, "lazy: running %s\n", task)
-		if err := s.runner()(ctx, s.dir(), task, nil, s.Stdin, s.output(service, "stdout"), s.output(service, "stderr"), false); err != nil {
-			s.logf(service, "lazy: %s failed: %v\n", task, err)
+		run := manager.nextRun(service, action)
+		s.logf(service, action, run, "lazy: running %s\n", task)
+		if err := s.runner()(ctx, s.dir(), task, nil, s.Stdin, s.output(service, action, run, "stdout"), s.output(service, action, run, "stderr"), false); err != nil {
+			s.logf(service, action, run, "lazy: %s failed: %v\n", task, err)
 			continue
 		}
-		s.logf(service, "lazy: %s finished\n", task)
+		s.logf(service, action, run, "lazy: %s finished\n", task)
 	}
 
 	go s.watchProcess(manager, service, process)
@@ -310,10 +330,11 @@ func (s Service) waitForCheck(ctx context.Context, manager *Manager, service str
 
 	warned := false
 	for {
-		err := s.runner()(ctx, s.dir(), task, nil, s.Stdin, io.Discard, s.stderr(), true)
+		run := manager.nextRun(service, "check")
+		err := s.runner()(ctx, s.dir(), task, nil, s.Stdin, s.output(service, "check", run, "stdout"), s.output(service, "check", run, "stderr"), false)
 		if err == nil {
 			s.status(service, StateReady, "Service is ready.")
-			s.logf(service, "lazy: %s is ready\n", service)
+			s.logf(service, "check", run, "lazy: %s is ready\n", service)
 			return nil
 		}
 
@@ -330,9 +351,9 @@ func (s Service) waitForCheck(ctx context.Context, manager *Manager, service str
 			return fmt.Errorf("%s:start exited before %s succeeded: %w", service, task, processErr)
 		case <-warning.C:
 			if !warned {
-				s.logf(service, "lazy: %s is still failing after %s; check the service output. lazy will keep checking.\n", task, warningDelay.Round(time.Millisecond))
+				s.logf(service, "check", run, "lazy: %s is still failing after %s; check the service output. lazy will keep checking.\n", task, warningDelay.Round(time.Millisecond))
 				if message := strings.TrimSpace(err.Error()); message != "" {
-					s.logf(service, "lazy: latest %s error: %s\n", task, message)
+					s.logf(service, "check", run, "lazy: latest %s error: %s\n", task, message)
 				}
 				warned = true
 			}
@@ -349,11 +370,11 @@ func (s Service) watchProcess(manager *Manager, service string, process Process)
 	}
 	if err != nil {
 		s.status(service, StateStopped, err.Error())
-		s.logf(service, "lazy: %s service exited: %v\n", service, err)
+		s.logf(service, "", 0, "lazy: %s service exited: %v\n", service, err)
 		return
 	}
 	s.status(service, StateStopped, "Service stopped.")
-	s.logf(service, "lazy: %s service exited\n", service)
+	s.logf(service, "", 0, "lazy: %s service exited\n", service)
 }
 
 func (s Service) dir() string {
@@ -375,16 +396,6 @@ func (s Service) stderr() io.Writer {
 		return io.Discard
 	}
 	return s.Stderr
-}
-
-func (s Service) output(service string, stream string) io.Writer {
-	if s.Output != nil {
-		return s.Output(service, stream)
-	}
-	if stream == "stderr" {
-		return s.stderr()
-	}
-	return s.stdout()
 }
 
 func (s Service) register(services []string) {
@@ -423,8 +434,18 @@ func (s Service) starter() Starter {
 	return startTask
 }
 
-func (s Service) logf(service string, format string, args ...any) {
-	_, _ = fmt.Fprintf(s.output(service, "stderr"), format, args...)
+func (s Service) output(service string, task string, run int, stream string) io.Writer {
+	if s.Output != nil {
+		return s.Output(TaskOutput{Service: service, Task: task, Run: run, Stream: stream})
+	}
+	if stream == "stderr" {
+		return s.stderr()
+	}
+	return s.stdout()
+}
+
+func (s Service) logf(service string, task string, run int, format string, args ...any) {
+	_, _ = fmt.Fprintf(s.output(service, task, run, "stderr"), format, args...)
 }
 
 func startName(service string) string {

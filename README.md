@@ -40,9 +40,11 @@ services as managed subprocesses after the development proxy is already
 serving its status page. Service commands are ordinary non-interactive
 processes; their stdout and stderr stay attached to the terminal and are
 recorded by the development panel. The panel's Services tab shows per-service
-stdout and stderr, and the status bar shows each service with a stopped,
-not-ready, or ready indicator that opens the Services tab when clicked. The
-Services tab can restart one managed service at a time from the service list.
+stdout and stderr, splits logs by lifecycle script such as `start`, `check`,
+`create`, and `migrate`, and includes the run number for each task attempt. The
+status bar shows each service with a stopped, not-ready, or ready indicator
+that opens the Services tab when clicked. The Services tab can restart one
+managed service at a time from the service list.
 
 Example `lazy.toml`:
 
