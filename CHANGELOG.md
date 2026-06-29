@@ -28,6 +28,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   open-app controls.
 - The development panel Assets tab now lists lazy asset manifest entries and
   their public paths from the app lazydev control plane.
+- The development panel now includes a BuildInfo tab that shows the running
+  app's Go version, module path, dependencies, replacements, and recorded build
+  settings from the app lazydev control plane.
 - The development panel Cache tab now shows cache size, usage, hit/miss/set
   counters, a searchable key table with age, size, and key metadata, and
   selected cache entry content when the app backend exposes inspectable

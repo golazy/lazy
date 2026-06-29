@@ -100,6 +100,7 @@ func TestPanelTabPageLoadsImportmapNavAndPermanentStatus(t *testing.T) {
 		`<nav class="panel-tabs tabbed-pane-header" aria-label="GoLazy panel sections" data-controller="panel-close">`,
 		`<span class="panel-tab">App</span>`,
 		`<a href="/_golazy/requests" data-turbo-frame="_top">Requests</a>`,
+		`<a href="/_golazy/buildinfo" data-turbo-frame="_top">BuildInfo</a>`,
 		`data-panel-close`,
 		`<turbo-stream-source src="/_golazy/app"></turbo-stream-source>`,
 		`<section id="app" class="tool-view is-active app-view" data-view="app" data-app-panel>`,
@@ -366,6 +367,21 @@ func TestPanelAssetsAndJobsPage(t *testing.T) {
 	} {
 		if !strings.Contains(jobs.Body.String(), want) {
 			t.Fatalf("jobs body missing %q:\n%s", want, jobs.Body.String())
+		}
+	}
+
+	buildInfo := httptest.NewRecorder()
+	app.ServeHTTP(buildInfo, httptest.NewRequest(http.MethodGet, "/_golazy/buildinfo", nil))
+	if buildInfo.Code != http.StatusOK {
+		t.Fatalf("buildinfo status = %d, want %d: %s", buildInfo.Code, http.StatusOK, buildInfo.Body.String())
+	}
+	for _, want := range []string{
+		`<turbo-stream-source src="/_golazy/buildinfo"></turbo-stream-source>`,
+		`<section id="buildinfo" class="tool-view is-active buildinfo-view" data-view="buildinfo" data-buildinfo-panel>`,
+		`BuildInfo unavailable`,
+	} {
+		if !strings.Contains(buildInfo.Body.String(), want) {
+			t.Fatalf("buildinfo body missing %q:\n%s", want, buildInfo.Body.String())
 		}
 	}
 

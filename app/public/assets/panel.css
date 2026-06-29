@@ -1794,6 +1794,73 @@ button:disabled:hover {
   overflow-wrap: anywhere;
 }
 
+.buildinfo-view {
+  grid-template-rows: 31px minmax(0, 1fr);
+  min-height: 0;
+}
+
+.buildinfo-layout {
+  display: grid;
+  grid-template-columns: minmax(17rem, 26rem) minmax(0, 1fr);
+  grid-template-rows: minmax(10rem, 0.7fr) minmax(10rem, 1fr);
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.buildinfo-summary-pane {
+  grid-row: 1 / span 2;
+}
+
+.buildinfo-table-pane {
+  padding: 0;
+}
+
+.buildinfo-table-pane h2 {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  margin: 0;
+  padding: 6px 8px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.buildinfo-deps-pane {
+  border-top: 1px solid var(--border);
+}
+
+.buildinfo-settings-grid,
+.buildinfo-deps-grid {
+  min-width: 46rem;
+}
+
+.buildinfo-settings-grid th:nth-child(1),
+.buildinfo-settings-grid td:nth-child(1) {
+  width: 12rem;
+}
+
+.buildinfo-deps-grid th:nth-child(1),
+.buildinfo-deps-grid td:nth-child(1) {
+  width: 36%;
+}
+
+.buildinfo-deps-grid th:nth-child(2),
+.buildinfo-deps-grid td:nth-child(2) {
+  width: 8rem;
+}
+
+.buildinfo-deps-grid th:nth-child(3),
+.buildinfo-deps-grid td:nth-child(3) {
+  width: 28%;
+}
+
+.buildinfo-settings-grid code,
+.buildinfo-deps-grid code {
+  overflow-wrap: anywhere;
+}
+
 .section-heading {
   align-items: center;
   display: flex;
@@ -1882,6 +1949,7 @@ button:disabled:hover {
 
 @media (max-width: 820px) {
   .split-view,
+  .buildinfo-layout,
   .runtime-grid,
   .runtime-summary-grid,
   .action-layout {

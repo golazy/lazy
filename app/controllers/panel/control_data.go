@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 )
 
 const appJobsControlPath = "/jobs"
 const appCacheEntryPath = "/cache/entry"
+const appBuildInfoPath = "/buildinfo"
 
 type CacheSnapshot struct {
 	Enabled bool         `json:"enabled"`
@@ -106,6 +108,28 @@ type JobRecord struct {
 	LastError   string    `json:"last_error"`
 }
 
+type BuildInfoSnapshot struct {
+	Available bool               `json:"available"`
+	GoVersion string             `json:"go_version"`
+	Path      string             `json:"path"`
+	Main      BuildInfoModule    `json:"main"`
+	Deps      []BuildInfoModule  `json:"deps"`
+	Settings  []BuildInfoSetting `json:"settings"`
+	Error     string             `json:"-"`
+}
+
+type BuildInfoModule struct {
+	Path    string           `json:"path"`
+	Version string           `json:"version"`
+	Sum     string           `json:"sum"`
+	Replace *BuildInfoModule `json:"replace"`
+}
+
+type BuildInfoSetting struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
 func (s JobsSnapshot) StateText() string {
 	if s.Error != "" {
 		return "Jobs unavailable"
@@ -135,6 +159,40 @@ func (s JobsSnapshot) Count(state string) int {
 
 func (r JobRecord) AttemptText() string {
 	return fmt.Sprintf("%d/%d", r.Attempt, r.MaxAttempts)
+}
+
+func (s BuildInfoSnapshot) StatusText() string {
+	if s.Error != "" {
+		return "BuildInfo unavailable"
+	}
+	if !s.Available {
+		return "No module build info"
+	}
+	if len(s.Deps) == 1 {
+		return "1 dependency"
+	}
+	return fmt.Sprintf("%d dependencies", len(s.Deps))
+}
+
+func (m BuildInfoModule) VersionText() string {
+	if m.Version != "" {
+		return m.Version
+	}
+	return "(devel)"
+}
+
+func (m BuildInfoModule) SumText() string {
+	if m.Sum != "" {
+		return m.Sum
+	}
+	return "-"
+}
+
+func (m BuildInfoModule) ReplaceText() string {
+	if m.Replace == nil {
+		return ""
+	}
+	return strings.TrimSpace(m.Replace.Path + " " + m.Replace.Version)
 }
 
 func (r JobRecord) RunAtText() string {
@@ -181,6 +239,14 @@ func (b *Base) RequestMonitoringSnapshot(ctx context.Context) RequestMonitoringS
 func (b *Base) JobsSnapshot(ctx context.Context) JobsSnapshot {
 	var snapshot JobsSnapshot
 	if err := b.FetchAppControlJSON(ctx, appJobsControlPath, &snapshot); err != nil {
+		snapshot.Error = err.Error()
+	}
+	return snapshot
+}
+
+func (b *Base) BuildInfoSnapshot(ctx context.Context) BuildInfoSnapshot {
+	var snapshot BuildInfoSnapshot
+	if err := b.FetchAppControlJSON(ctx, appBuildInfoPath, &snapshot); err != nil {
 		snapshot.Error = err.Error()
 	}
 	return snapshot

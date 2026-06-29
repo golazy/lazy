@@ -12,6 +12,7 @@ import (
 	panelcontroller "golazy.dev/lazy/app/controllers/panel"
 	panelapp "golazy.dev/lazy/app/controllers/panel/app"
 	"golazy.dev/lazy/app/controllers/panel/assets"
+	"golazy.dev/lazy/app/controllers/panel/buildinfo"
 	"golazy.dev/lazy/app/controllers/panel/cache"
 	"golazy.dev/lazy/app/controllers/panel/jobs"
 	"golazy.dev/lazy/app/controllers/panel/requests"
@@ -30,6 +31,7 @@ var devToolsWorkspaceNamespace = [16]byte{0x67, 0x6f, 0x6c, 0x61, 0x7a, 0x79, 0x
 
 func init() {
 	inflection.Irregular("cache", "cache")
+	inflection.Irregular("buildinfo", "buildinfo")
 	inflection.Irregular("status", "status")
 }
 
@@ -65,6 +67,11 @@ func Draw(router *lazyroutes.Scope) {
 		panel.Resources(traces.New)
 		panel.Resources(routes.New)
 		panel.Resources(jobs.New)
+		panel.Resources(buildinfo.New, func(resource *lazyroutes.Resource) {
+			resource.Singular("buildinfo")
+			resource.Plural("buildinfo")
+			resource.Path("buildinfo")
+		})
 		panel.Resources(assets.New)
 		panel.Resources(cache.New, func(resource *lazyroutes.Resource) {
 			resource.Singular("cache")
