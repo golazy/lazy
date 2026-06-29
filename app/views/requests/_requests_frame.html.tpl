@@ -21,7 +21,7 @@
       <span class="toolbar-count" data-request-count>{{.requests.RequestCountText}}</span>
     </div>
     <div class="filter-row">
-      <form method="get" action="{{path_for "requests"}}" class="inline-form request-filter-form">
+      <form method="get" action="{{path_for "requests"}}" class="inline-form request-filter-form" data-controller="debounced-form" data-action="input->debounced-form#queue submit->debounced-form#submit" data-debounced-form-delay-value="250" data-debounced-form-stream-source-value="[data-request-stream-source]">
         {{if .requests.HasSelected}}
           <input type="hidden" name="request" value="{{.requests.SelectedRequestID}}">
         {{end}}

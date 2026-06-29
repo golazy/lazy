@@ -6,6 +6,7 @@ export default class extends Controller {
     countTarget: String,
     delay: { type: Number, default: 250 },
     frame: String,
+    streamSource: String,
   }
 
   connect() {
@@ -21,12 +22,20 @@ export default class extends Controller {
 
   queue() {
     this.clearTimer()
-    this.timeout = window.setTimeout(() => this.fetchFrame(), this.delayValue)
+    this.timeout = window.setTimeout(() => this.request(), this.delayValue)
   }
 
   submit(event) {
     event?.preventDefault()
     this.clearTimer()
+    this.request()
+  }
+
+  request() {
+    if (this.hasStreamSourceValue) {
+      this.replaceStreamSource()
+      return
+    }
     this.fetchFrame()
   }
 
@@ -68,6 +77,19 @@ export default class extends Controller {
   targetFrame() {
     const id = this.frameValue || this.element.dataset.turboFrame
     return id ? document.getElementById(id) : null
+  }
+
+  targetStreamSource() {
+    return this.streamSourceValue ? document.querySelector(this.streamSourceValue) : null
+  }
+
+  replaceStreamSource() {
+    const source = this.targetStreamSource()
+    if (!source) return
+
+    const replacement = source.cloneNode(false)
+    replacement.setAttribute("src", this.requestURL().toString())
+    source.replaceWith(replacement)
   }
 
   replaceFrame(frame, html) {

@@ -99,6 +99,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The development panel Assets and Routes searches now use debounced backend
   Turbo Frame requests and abort older in-flight searches before they can
   replace newer results. Those tables scroll inside the tab body.
+- The development panel Requests filter now uses the same debounce timing while
+  preserving the tab stream: typing updates the existing `turbo-stream-source`
+  URL so the stream clears and rehydrates matching requests.
 - The development panel Cache tab now renders an empty shell first, hydrates
   from its tab stream, relays app lazydev cache hit/miss/set events, updates
   summary counters individually, and appends or replaces key rows as metadata
