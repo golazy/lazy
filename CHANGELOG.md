@@ -42,6 +42,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The `lazy` development proxy now serves Chromium Automatic Workspace Folders
   metadata at `/.well-known/appspecific/com.chrome.devtools.json`, pointing
   Chrome DevTools at the app's `app/js` source folder.
+- The injected development-panel host script now exposes
+  `window.disableDevPanel()` so the Chrome DevTools extension can hide the
+  in-page panel and launcher once the inspected page has loaded.
 - `lazy upgrade` now migrates `v0.1.16 -> v0.1.17` controller calls from
   `SetLayout` to `Layout` and rewrites common `CacheKey` / `CacheKeyF` action
   returns for the new boolean cache-hit contract.

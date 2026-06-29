@@ -10,10 +10,17 @@ const embeddedPanelClosedKey = "golazy:devpanel:closed"
 const clientState = window.__golazyDevPanelClient || {}
 window.__golazyDevPanelClient = clientState
 
+installDevPanelWindowAPI()
 installEmbeddedPanelMessages()
 installEmbeddedPanel()
 installTurboPersistence()
 installReloadClient()
+
+function installDevPanelWindowAPI() {
+  if (clientState.windowAPIInstalled) return
+  clientState.windowAPIInstalled = true
+  window.disableDevPanel = disableDevPanel
+}
 
 function installReloadClient() {
   if (location.pathname.startsWith("/_golazy")) return
@@ -419,6 +426,11 @@ function setDevToolsPanelOpen(open) {
     return
   }
   installEmbeddedPanel()
+}
+
+function disableDevPanel() {
+  clientState.extensionInstalled = true
+  setDevToolsPanelOpen(true)
 }
 
 function isEmbeddedPanelClosed() {

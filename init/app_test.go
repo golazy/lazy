@@ -328,6 +328,7 @@ func TestPanelAssetsAndJobsPage(t *testing.T) {
 	}
 	for _, want := range []string{
 		"window.__golazyDevPanelClient",
+		"window.disableDevPanel",
 		"window.__lazyReloadSource",
 		"EventSource.CLOSED",
 		"Resize GoLazy development panel",
