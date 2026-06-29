@@ -212,18 +212,84 @@ type traceMemorySummary struct {
 	MallocsDelta         uint64 `json:"mallocs_delta"`
 }
 
+type traceSpanMemory struct {
+	TotalAllocBytesDelta     uint64 `json:"total_alloc_bytes_delta"`
+	MallocsDelta             uint64 `json:"mallocs_delta"`
+	FreesDelta               uint64 `json:"frees_delta"`
+	SelfTotalAllocBytesDelta uint64 `json:"self_total_alloc_bytes_delta"`
+	SelfMallocsDelta         uint64 `json:"self_mallocs_delta"`
+	SelfFreesDelta           uint64 `json:"self_frees_delta"`
+}
+
 type traceSpan struct {
-	Name       string    `json:"name"`
-	TraceID    string    `json:"trace_id"`
-	SpanID     string    `json:"span_id"`
-	ParentID   string    `json:"parent_id"`
-	StartedAt  time.Time `json:"started_at"`
-	EndedAt    time.Time `json:"ended_at"`
-	DurationMS float64   `json:"duration_ms"`
+	Name           string           `json:"name"`
+	TraceID        string           `json:"trace_id"`
+	SpanID         string           `json:"span_id"`
+	ParentID       string           `json:"parent_id"`
+	StartedAt      time.Time        `json:"started_at"`
+	EndedAt        time.Time        `json:"ended_at"`
+	DurationMS     float64          `json:"duration_ms"`
+	SelfDurationMS *float64         `json:"self_duration_ms"`
+	Memory         *traceSpanMemory `json:"memory"`
 }
 
 func (s traceSpan) DurationText() string {
 	return formatDuration(s.DurationMS)
+}
+
+func (s traceSpan) SelfDurationText() string {
+	if s.SelfDurationMS == nil {
+		return "Not captured"
+	}
+	return formatDuration(*s.SelfDurationMS)
+}
+
+func (s traceSpan) DurationSummaryText() string {
+	if s.SelfDurationMS == nil {
+		return s.DurationText()
+	}
+	return fmt.Sprintf("%s total, %s self", s.DurationText(), s.SelfDurationText())
+}
+
+func (s traceSpan) AllocationSummaryText() string {
+	if s.Memory == nil {
+		return "Not captured per region"
+	}
+	return fmt.Sprintf("%s total, %s self",
+		formatBytes(s.Memory.TotalAllocBytesDelta),
+		formatBytes(s.Memory.SelfTotalAllocBytesDelta),
+	)
+}
+
+func (s traceSpan) MallocsSummaryText() string {
+	if s.Memory == nil {
+		return "Not captured per region"
+	}
+	return fmt.Sprintf("%s total, %s self",
+		formatCount(s.Memory.MallocsDelta, "malloc"),
+		formatCount(s.Memory.SelfMallocsDelta, "malloc"),
+	)
+}
+
+func (s traceSpan) FreesSummaryText() string {
+	if s.Memory == nil {
+		return "Not captured per region"
+	}
+	return fmt.Sprintf("%s total, %s self",
+		formatCount(s.Memory.FreesDelta, "free"),
+		formatCount(s.Memory.SelfFreesDelta, "free"),
+	)
+}
+
+func (s traceSpan) FlameLabel() string {
+	parts := []string{s.Name, s.DurationText()}
+	if s.SelfDurationMS != nil {
+		parts = append(parts, "self "+s.SelfDurationText())
+	}
+	if s.Memory != nil {
+		parts = append(parts, "self alloc "+formatBytes(s.Memory.SelfTotalAllocBytesDelta))
+	}
+	return strings.Join(parts, " | ")
 }
 
 func (s traceSpan) Framework() bool {
@@ -497,6 +563,13 @@ func formatBytes(value uint64) string {
 		return fmt.Sprintf("%.0f %s", size, units[unit])
 	}
 	return fmt.Sprintf("%.1f %s", size, units[unit])
+}
+
+func formatCount(value uint64, noun string) string {
+	if value == 1 {
+		return "1 " + noun
+	}
+	return fmt.Sprintf("%d %ss", value, noun)
 }
 
 func isFinite(value float64) bool {

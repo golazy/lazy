@@ -84,9 +84,15 @@
             <dt>Name</dt>
             <dd>{{.traces.SelectedSpan.Name}}</dd>
             <dt>Duration</dt>
-            <dd>{{.traces.SelectedSpan.DurationText}}</dd>
-            <dt>Allocations</dt>
-            <dd>Not captured per region</dd>
+            <dd>{{.traces.SelectedSpan.DurationSummaryText}}</dd>
+            <dt>Self time</dt>
+            <dd>{{.traces.SelectedSpan.SelfDurationText}}</dd>
+            <dt>Allocated</dt>
+            <dd>{{.traces.SelectedSpan.AllocationSummaryText}}</dd>
+            <dt>Mallocs</dt>
+            <dd>{{.traces.SelectedSpan.MallocsSummaryText}}</dd>
+            <dt>Frees</dt>
+            <dd>{{.traces.SelectedSpan.FreesSummaryText}}</dd>
             <dt>Trace drill-down</dt>
             <dd><code>{{if .traces.HasSelected}}go tool trace {{.traces.Selected.TraceFile}}{{end}}</code></dd>
           </dl>
@@ -98,7 +104,7 @@
             {{range .traces.FlameRows}}
               <a class="trace-flame-row" href="{{.URL}}" data-turbo-frame="_top" data-selected="{{.Selected}}" style="margin-left: {{.FlameMargin}}">
                 <span class="trace-flame-bar" style="margin-left: {{.LeftPercent}}; width: {{.WidthPercent}}"></span>
-                <span class="trace-flame-label">{{.Span.Name}} {{.Span.DurationText}}</span>
+                <span class="trace-flame-label">{{.Span.FlameLabel}}</span>
               </a>
             {{else}}
               <div class="empty-state">Select a timeline section.</div>
