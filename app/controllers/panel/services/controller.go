@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"golazy.dev/lazy/app/controllers/panel"
@@ -29,6 +30,24 @@ func (c *ServicesController) Index(w http.ResponseWriter, r *http.Request) error
 			return c.StreamTurbo(w, r, c.streamServices)
 		},
 	})
+}
+
+func (c *ServicesController) Restart(w http.ResponseWriter, r *http.Request) error {
+	service := strings.TrimSpace(r.PathValue("service_id"))
+	if service == "" {
+		http.Error(w, "service name is required", http.StatusBadRequest)
+		return nil
+	}
+	if !serviceExists(service, c.Snapshot()) {
+		http.Error(w, "service not found", http.StatusNotFound)
+		return nil
+	}
+	if err := c.Actions.EnqueueService(r.Context(), buildservice.ActionRestartService, service); err != nil {
+		http.Error(w, err.Error(), http.StatusConflict)
+		return nil
+	}
+	http.Redirect(w, r, "/_golazy/services?service="+url.QueryEscape(service), http.StatusSeeOther)
+	return nil
 }
 
 func (c *ServicesController) setServicesState(r *http.Request) {
@@ -72,6 +91,15 @@ func selectedService(r *http.Request, state buildservice.Snapshot) string {
 		return ""
 	}
 	return state.Services[0].Name
+}
+
+func serviceExists(name string, state buildservice.Snapshot) bool {
+	for _, service := range state.Services {
+		if service.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func serviceOutputRows(events []buildservice.Event, service string) []serviceOutputRow {

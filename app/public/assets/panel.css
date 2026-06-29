@@ -769,7 +769,15 @@ button:disabled:hover {
   padding: 0;
 }
 
-.service-list a {
+.service-list-item {
+  align-items: center;
+  display: grid;
+  gap: 2px;
+  grid-template-columns: minmax(0, 1fr) 27px;
+  min-width: 0;
+}
+
+.service-list-link {
   align-items: center;
   background: transparent;
   border: 1px solid transparent;
@@ -787,19 +795,71 @@ button:disabled:hover {
   width: 100%;
 }
 
-.service-list a:hover {
+.service-list-link:hover,
+.service-restart-button:hover {
   background: var(--row-hover);
 }
 
-.service-list a[aria-selected="true"] {
+.service-list-link[aria-selected="true"] {
   background: var(--sys-color-tonal-container);
   border-color: var(--sys-color-primary);
   color: var(--sys-color-on-tonal-container);
 }
 
-.service-list a span:last-child {
+.service-name {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.service-restart-form {
+  display: block;
+  height: 27px;
+  margin: 0;
+  min-width: 0;
+}
+
+.service-restart-button {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  height: 27px;
+  justify-content: center;
+  padding: 0;
+  position: relative;
+  width: 27px;
+}
+
+.service-restart-button:focus-visible {
+  outline: 2px solid var(--sys-color-state-focus-ring);
+  outline-offset: -2px;
+}
+
+.service-restart-button::before {
+  border: 1.5px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  content: "";
+  height: 12px;
+  position: absolute;
+  transform: rotate(-35deg);
+  width: 12px;
+}
+
+.service-restart-button::after {
+  border-bottom: 3px solid transparent;
+  border-left: 5px solid currentColor;
+  border-top: 3px solid transparent;
+  content: "";
+  height: 0;
+  position: absolute;
+  right: 5px;
+  top: 6px;
+  transform: rotate(-20deg);
+  width: 0;
 }
 
 .service-output-pane {

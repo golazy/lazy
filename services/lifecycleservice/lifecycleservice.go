@@ -57,11 +57,14 @@ type Service struct {
 }
 
 type Manager struct {
-	services    []string
-	ready       chan error
-	processesMu sync.Mutex
-	processes   map[string]Process
-	stopping    bool
+	services          []string
+	ready             chan error
+	service           Service
+	inventory         taskservice.Inventory
+	processesMu       sync.Mutex
+	processes         map[string]Process
+	stoppingProcesses map[Process]struct{}
+	stopping          bool
 }
 
 func (s Service) Start(ctx context.Context) (*Manager, error) {
@@ -75,9 +78,12 @@ func (s Service) Start(ctx context.Context) (*Manager, error) {
 	}
 
 	manager := &Manager{
-		services:  append([]string(nil), inventory.Services...),
-		ready:     make(chan error, 1),
-		processes: map[string]Process{},
+		services:          append([]string(nil), inventory.Services...),
+		ready:             make(chan error, 1),
+		service:           s,
+		inventory:         inventory,
+		processes:         map[string]Process{},
+		stoppingProcesses: map[Process]struct{}{},
 	}
 	if len(inventory.Services) == 0 {
 		manager.ready <- nil
@@ -128,6 +134,27 @@ func (m *Manager) Len() int {
 	return len(m.services)
 }
 
+func (m *Manager) Restart(ctx context.Context, service string) error {
+	if m == nil {
+		return fmt.Errorf("service manager is not running")
+	}
+	service = strings.TrimSpace(service)
+	if service == "" {
+		return fmt.Errorf("service name is required")
+	}
+	if !m.hasService(service) {
+		return fmt.Errorf("unknown service %q", service)
+	}
+
+	process := m.takeProcessForRestart(service)
+	if process != nil {
+		m.service.status(service, StateNotReady, "Restarting service.")
+		m.service.logf(service, "lazy: restarting %s service\n", service)
+		process.Stop()
+	}
+	return m.service.startService(ctx, m, m.inventory, service)
+}
+
 func (m *Manager) Stop() {
 	if m == nil {
 		return
@@ -165,12 +192,37 @@ func (m *Manager) addProcess(name string, process Process) bool {
 	return true
 }
 
+func (m *Manager) takeProcessForRestart(name string) Process {
+	m.processesMu.Lock()
+	defer m.processesMu.Unlock()
+	process := m.processes[name]
+	if process == nil {
+		return nil
+	}
+	delete(m.processes, name)
+	m.stoppingProcesses[process] = struct{}{}
+	return process
+}
+
 func (m *Manager) removeProcess(name string, process Process) {
 	m.processesMu.Lock()
 	defer m.processesMu.Unlock()
 	if m.processes[name] == process {
 		delete(m.processes, name)
 	}
+}
+
+func (m *Manager) ignoreProcessExit(process Process) bool {
+	m.processesMu.Lock()
+	defer m.processesMu.Unlock()
+	if m.stopping {
+		return true
+	}
+	if _, ok := m.stoppingProcesses[process]; ok {
+		delete(m.stoppingProcesses, process)
+		return true
+	}
+	return false
 }
 
 func (m *Manager) isStopping() bool {
@@ -190,6 +242,15 @@ func (m *Manager) snapshotProcesses(stopping bool) []Process {
 		processes = append(processes, process)
 	}
 	return processes
+}
+
+func (m *Manager) hasService(service string) bool {
+	for _, known := range m.services {
+		if known == service {
+			return true
+		}
+	}
+	return false
 }
 
 func (s Service) startService(ctx context.Context, manager *Manager, inventory taskservice.Inventory, service string) error {
@@ -283,7 +344,7 @@ func (s Service) waitForCheck(ctx context.Context, manager *Manager, service str
 func (s Service) watchProcess(manager *Manager, service string, process Process) {
 	err := <-process.Done()
 	manager.removeProcess(service, process)
-	if manager.isStopping() {
+	if manager.ignoreProcessExit(process) {
 		return
 	}
 	if err != nil {

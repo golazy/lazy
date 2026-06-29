@@ -77,13 +77,15 @@ type ServiceSnapshot struct {
 type Action string
 
 const (
-	ActionRebuild Action = "rebuild"
-	ActionRestart Action = "restart"
+	ActionRebuild        Action = "rebuild"
+	ActionRestart        Action = "restart"
+	ActionRestartService Action = "restart_service"
 )
 
 type ActionRequest struct {
-	Action Action
-	Reply  chan error
+	Action  Action
+	Service string
+	Reply   chan error
 }
 
 type Actions chan ActionRequest
@@ -120,9 +122,14 @@ func ActionsFromContext(ctx context.Context) (Actions, bool) {
 }
 
 func (a Actions) Enqueue(ctx context.Context, action Action) error {
+	return a.EnqueueService(ctx, action, "")
+}
+
+func (a Actions) EnqueueService(ctx context.Context, action Action, service string) error {
 	request := ActionRequest{
-		Action: action,
-		Reply:  make(chan error, 1),
+		Action:  action,
+		Service: service,
+		Reply:   make(chan error, 1),
 	}
 	select {
 	case a <- request:

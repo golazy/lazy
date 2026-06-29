@@ -39,7 +39,9 @@ func Draw(router *lazyroutes.Scope) {
 		panel.Resources(requests.New)
 		panel.Resources(console.New)
 		panel.Resources(logs.New)
-		panel.Resources(services.New)
+		panel.Resources(services.New, func(resource *lazyroutes.Resource) {
+			resource.MemberPost("restart", (*services.ServicesController).Restart)
+		})
 		panel.Resources(traces.New)
 		panel.Resources(routes.New)
 		panel.Resources(jobs.New)

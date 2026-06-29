@@ -596,6 +596,14 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 			case buildservice.ActionRestart:
 				store.AddEvent(buildservice.Event{Type: buildservice.EventManual, Message: "Manual restart requested.", Build: buildNumber})
 				err = restartLatest(ctx, d, app, store, server, &current, &appDone, lastBinary, buildNumber)
+			case buildservice.ActionRestartService:
+				store.AddEvent(buildservice.Event{
+					Type:    buildservice.EventManual,
+					Service: request.Service,
+					Message: fmt.Sprintf("Manual restart requested for %s service.", request.Service),
+					Build:   buildNumber,
+				})
+				err = lifecycle.Restart(ctx, request.Service)
 			default:
 				err = fmt.Errorf("unknown action %q", request.Action)
 			}

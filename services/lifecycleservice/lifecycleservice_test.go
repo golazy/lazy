@@ -187,6 +187,96 @@ func TestServiceWithoutCheckIsMarkedReadyAfterStart(t *testing.T) {
 	}
 }
 
+func TestRestartStopsSelectedServiceAndRunsLifecycleTasks(t *testing.T) {
+	dir := t.TempDir()
+	writeTask(t, dir, "postgres/start")
+	writeTask(t, dir, "postgres/check")
+	writeTask(t, dir, "postgres/create")
+	writeTask(t, dir, "postgres/migrate")
+	writeTask(t, dir, "minio/start")
+	writeTask(t, dir, "minio/check")
+
+	var mu sync.Mutex
+	var starts []string
+	var calls []string
+	processes := map[string][]*fakeProcess{}
+	starter := func(_ string, task string, _ io.Writer, _ io.Writer, _ time.Duration) (Process, error) {
+		process := newFakeProcess()
+		mu.Lock()
+		starts = append(starts, task)
+		processes[task] = append(processes[task], process)
+		mu.Unlock()
+		return process, nil
+	}
+	runner := func(_ context.Context, _ string, task string, _ []string, _ io.Reader, _ io.Writer, _ io.Writer, _ bool) error {
+		mu.Lock()
+		defer mu.Unlock()
+		calls = append(calls, task)
+		return nil
+	}
+
+	manager, err := (Service{
+		Dir:     dir,
+		Starter: starter,
+		Runner:  runner,
+	}).Start(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Stop()
+	if err := waitReady(t, manager); err != nil {
+		t.Fatal(err)
+	}
+
+	mu.Lock()
+	firstPostgres := processes["postgres:start"][0]
+	mu.Unlock()
+	if err := manager.Restart(context.Background(), "postgres"); err != nil {
+		t.Fatal(err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if !firstPostgres.Stopped() {
+		t.Fatalf("first postgres process was not stopped")
+	}
+	if got := countValues(starts, "postgres:start"); got != 2 {
+		t.Fatalf("postgres starts = %d, want 2; starts = %#v", got, starts)
+	}
+	if got := countValues(starts, "minio:start"); got != 1 {
+		t.Fatalf("minio starts = %d, want 1; starts = %#v", got, starts)
+	}
+	for _, task := range []string{"postgres:check", "postgres:create", "postgres:migrate"} {
+		if got := countValues(calls, task); got != 2 {
+			t.Fatalf("%s calls = %d, want 2; calls = %#v", task, got, calls)
+		}
+	}
+	if got := countValues(calls, "minio:check"); got != 1 {
+		t.Fatalf("minio:check calls = %d, want 1; calls = %#v", got, calls)
+	}
+}
+
+func TestRestartRejectsUnknownService(t *testing.T) {
+	dir := t.TempDir()
+	writeTask(t, dir, "postgres/start")
+
+	manager, err := (Service{
+		Dir:     dir,
+		Starter: fakeStarter,
+	}).Start(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Stop()
+	if err := waitReady(t, manager); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := manager.Restart(context.Background(), "minio"); err == nil {
+		t.Fatalf("Restart unknown service succeeded")
+	}
+}
+
 func waitReady(t *testing.T, manager *Manager) error {
 	t.Helper()
 	select {
@@ -196,6 +286,16 @@ func waitReady(t *testing.T, manager *Manager) error {
 		t.Fatal("timed out waiting for lifecycle readiness")
 		return nil
 	}
+}
+
+func countValues(values []string, target string) int {
+	count := 0
+	for _, value := range values {
+		if value == target {
+			count++
+		}
+	}
+	return count
 }
 
 func assertBefore(t *testing.T, values []string, before string, after string) {
@@ -226,8 +326,11 @@ func fakeStarter(_ string, _ string, _ io.Writer, _ io.Writer, _ time.Duration) 
 }
 
 type fakeProcess struct {
+	mu           sync.Mutex
 	done         chan error
 	completeOnce sync.Once
+	stopped      bool
+	killed       bool
 }
 
 func newFakeProcess() *fakeProcess {
@@ -239,6 +342,9 @@ func (p *fakeProcess) Done() <-chan error {
 }
 
 func (p *fakeProcess) Stop() {
+	p.mu.Lock()
+	p.stopped = true
+	p.mu.Unlock()
 	p.completeOnce.Do(func() {
 		p.done <- nil
 		close(p.done)
@@ -246,8 +352,17 @@ func (p *fakeProcess) Stop() {
 }
 
 func (p *fakeProcess) Kill() {
+	p.mu.Lock()
+	p.killed = true
+	p.mu.Unlock()
 	p.completeOnce.Do(func() {
 		p.done <- errors.New("killed")
 		close(p.done)
 	})
+}
+
+func (p *fakeProcess) Stopped() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.stopped
 }
