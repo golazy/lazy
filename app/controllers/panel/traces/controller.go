@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"golazy.dev/lazy/app/controllers/panel"
-	"golazy.dev/lazy/services/buildservice"
 	"golazy.dev/lazycontroller"
 )
 
@@ -30,10 +29,11 @@ func (c *TracesController) Index(w http.ResponseWriter, r *http.Request) error {
 	return c.Wants(lazycontroller.Formats{
 		lazycontroller.HTML: func() error {
 			c.setTracesState(r)
+			c.Set("defer_panel_lists", true)
 			return nil
 		},
 		lazycontroller.SSE: func() error {
-			return c.StreamTurbo(w, r, c.streamTraces)
+			return c.StreamTurboInitial(w, r, c.streamTracesInitial)
 		},
 	})
 }
@@ -44,8 +44,8 @@ func (c *TracesController) setTracesState(r *http.Request) {
 	c.Set("traces", c.traceView(r))
 }
 
-func (c *TracesController) streamTraces(r *http.Request, _ buildservice.Event) (string, error) {
-	body, err := c.RenderPanelPartial(r, "traces", "traces_frame", map[string]any{
+func (c *TracesController) streamTracesInitial(r *http.Request) (string, error) {
+	body, err := c.RenderPanelPartial(r, "traces", "trace_rows", map[string]any{
 		"state":      c.Snapshot(),
 		"monitoring": c.RequestMonitoringSnapshot(r.Context()),
 		"traces":     c.traceView(r),
@@ -53,7 +53,7 @@ func (c *TracesController) streamTraces(r *http.Request, _ buildservice.Event) (
 	if err != nil {
 		return "", err
 	}
-	return panel.TurboStream("replace", "traces", body), nil
+	return panel.TurboStreamTargets("update", "[data-trace-list]", body), nil
 }
 
 func (c *TracesController) traceView(r *http.Request) traceView {

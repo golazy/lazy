@@ -36,7 +36,10 @@ func (c *StatusController) setStatusState(r *http.Request) {
 	c.Set("monitoring", c.RequestMonitoringSnapshot(r.Context()))
 }
 
-func (c *StatusController) streamStatus(r *http.Request, _ buildservice.Event) (string, error) {
+func (c *StatusController) streamStatus(r *http.Request, event buildservice.Event) (string, error) {
+	if event.Type != buildservice.EventState && event.Type != buildservice.EventManual {
+		return "", nil
+	}
 	body, err := c.RenderPanelPartial(r, "status", "status_bar_content", map[string]any{
 		"state":      c.Snapshot(),
 		"cache":      c.CacheSnapshot(r.Context()),

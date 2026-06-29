@@ -21,7 +21,7 @@
       </label>
       <button type="button" class="select-button" disabled>No throttling</button>
       <span class="toolbar-spacer"></span>
-      <span class="toolbar-count">{{.requests.RequestCountText}}</span>
+      <span class="toolbar-count" data-request-count>{{.requests.RequestCountText}}</span>
     </div>
     <div class="filter-row">
       <form method="get" action="{{path_for "requests"}}" class="inline-form">
@@ -84,23 +84,10 @@
             <th>Time</th>
           </tr>
         </thead>
-        <tbody>
-          {{range .requests.Rows}}
-            <tr aria-selected="{{.Selected}}">
-              <td><span class="request-status-dot" data-status-class="{{.Trace.StatusClass}}"></span></td>
-              <td><a href="{{.URL}}" data-turbo-frame="_top">{{.Trace.PathText}}</a></td>
-              <td><a href="{{.URL}}" data-turbo-frame="_top">{{.Trace.MethodText}}</a></td>
-              <td><a href="{{.URL}}" data-turbo-frame="_top">{{.Trace.StatusText}}</a></td>
-              <td><a href="{{.URL}}" data-turbo-frame="_top">{{.Trace.DomainText}}</a></td>
-              <td><a href="{{.URL}}" data-turbo-frame="_top">{{.Trace.TypeText}}</a></td>
-              <td><a href="{{.URL}}" data-turbo-frame="_top">{{.Trace.InitiatorText}}</a></td>
-              <td><a href="{{.URL}}" data-turbo-frame="_top">{{.Trace.SizeText}}</a></td>
-              <td><a href="{{.URL}}" data-turbo-frame="_top">{{.Trace.DurationText}}</a></td>
-            </tr>
+        <tbody data-request-list>
+          {{if .defer_panel_lists}}
           {{else}}
-            <tr>
-              <td colspan="9" class="empty-cell">{{if .requests.Error}}{{.requests.Error}}{{else}}No request details recorded yet.{{end}}</td>
-            </tr>
+            {{partial "request_rows" .}}
           {{end}}
         </tbody>
       </table>

@@ -31,17 +31,9 @@
           </tr>
         </thead>
         <tbody data-trace-list>
-          {{range .traces.TraceRows}}
-            <tr aria-selected="{{.Selected}}">
-              <td><a href="{{.URL}}" data-turbo-frame="_top">{{.Trace.Method}}</a></td>
-              <td><a href="{{.URL}}" data-turbo-frame="_top">{{.Trace.Path}}</a></td>
-              <td><a href="{{.URL}}" data-turbo-frame="_top">{{.Trace.Status}}</a></td>
-              <td><a href="{{.URL}}" data-turbo-frame="_top">{{.Trace.DurationText}}</a></td>
-            </tr>
+          {{if .defer_panel_lists}}
           {{else}}
-            <tr>
-              <td colspan="4" class="empty-cell">{{if .traces.Error}}{{.traces.Error}}{{else}}No traces recorded.{{end}}</td>
-            </tr>
+            {{partial "trace_rows" .}}
           {{end}}
         </tbody>
       </table>

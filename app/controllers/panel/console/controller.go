@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"golazy.dev/lazy/app/controllers/panel"
-	"golazy.dev/lazy/services/buildservice"
 	"golazy.dev/lazycontroller"
 )
 
@@ -25,15 +24,7 @@ func (c *ConsoleController) Index(w http.ResponseWriter, r *http.Request) error 
 			return nil
 		},
 		lazycontroller.SSE: func() error {
-			return c.StreamTurbo(w, r, c.streamConsole)
+			return c.StreamTurboInitial(w, r, nil)
 		},
 	})
-}
-
-func (c *ConsoleController) streamConsole(r *http.Request, _ buildservice.Event) (string, error) {
-	body, err := c.RenderPanelPartial(r, "console", "console_frame", map[string]any{"state": c.Snapshot()})
-	if err != nil {
-		return "", err
-	}
-	return panel.TurboStream("replace", "console", body), nil
 }

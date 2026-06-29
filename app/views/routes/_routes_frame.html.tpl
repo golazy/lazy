@@ -4,7 +4,7 @@
       <input class="filter-input" type="search" name="q" value="{{.routes_query}}" placeholder="Filter routes">
     </form>
     <span class="toolbar-spacer"></span>
-    <span class="toolbar-count">
+    <span class="toolbar-count" data-routes-count>
       {{if .routes_error}}
         Routes unavailable
       {{else}}
@@ -28,22 +28,10 @@
             <th>Namespace</th>
           </tr>
         </thead>
-        <tbody>
-          {{range .routes}}
-            <tr>
-              <td><code>{{.Method}}</code></td>
-              <td><code>{{.Path}}</code></td>
-              <td>{{.Name}}</td>
-              <td>{{.Target}}</td>
-              <td>{{.Params}}</td>
-              <td>{{.Namespace}}</td>
-            </tr>
+        <tbody data-routes-list>
+          {{if .defer_panel_lists}}
           {{else}}
-            <tr>
-              <td colspan="6" class="empty-cell">
-                {{if .routes_query}}No routes match the current filter.{{else}}No routes registered.{{end}}
-              </td>
-            </tr>
+            {{partial "route_rows" .}}
           {{end}}
         </tbody>
       </table>

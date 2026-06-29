@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"golazy.dev/lazy/app/controllers/panel"
-	"golazy.dev/lazy/services/buildservice"
 	"golazy.dev/lazycontroller"
 )
 
@@ -30,10 +29,11 @@ func (c *RequestsController) Index(w http.ResponseWriter, r *http.Request) error
 	return c.Wants(lazycontroller.Formats{
 		lazycontroller.HTML: func() error {
 			c.setRequestsState(r)
+			c.Set("defer_panel_lists", true)
 			return nil
 		},
 		lazycontroller.SSE: func() error {
-			return c.StreamTurbo(w, r, c.streamRequests)
+			return c.StreamTurboInitial(w, r, c.streamRequestsInitial)
 		},
 	})
 }
@@ -44,16 +44,18 @@ func (c *RequestsController) setRequestsState(r *http.Request) {
 	c.Set("requests", c.requestView(r))
 }
 
-func (c *RequestsController) streamRequests(r *http.Request, _ buildservice.Event) (string, error) {
-	body, err := c.RenderPanelPartial(r, "requests", "requests_frame", map[string]any{
+func (c *RequestsController) streamRequestsInitial(r *http.Request) (string, error) {
+	view := c.requestView(r)
+	body, err := c.RenderPanelPartial(r, "requests", "request_rows", map[string]any{
 		"state":      c.Snapshot(),
 		"monitoring": c.RequestMonitoringSnapshot(r.Context()),
-		"requests":   c.requestView(r),
+		"requests":   view,
 	})
 	if err != nil {
 		return "", err
 	}
-	return panel.TurboStream("replace", "requests", body), nil
+	return panel.TurboStreamTargets("update", "[data-request-list]", body) +
+		panel.TurboStreamTargets("update", "[data-request-count]", view.RequestCountText()), nil
 }
 
 func (c *RequestsController) requestView(r *http.Request) requestView {

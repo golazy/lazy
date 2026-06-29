@@ -48,10 +48,11 @@
       <section class="runtime-pane events-pane">
         <h2>Events</h2>
         <ol class="event-list" id="panel_events" data-panel-events>
-          {{range .state.Events}}
-            {{partial "event_item" .}}
+          {{if .defer_panel_lists}}
           {{else}}
-            <li class="muted">Waiting for development events.</li>
+            {{range .state.Events}}
+              {{partial "event_item" .}}
+            {{end}}
           {{end}}
         </ol>
       </section>

@@ -133,18 +133,110 @@ func TestPanelRoutesPageFetchesApplicationRoutes(t *testing.T) {
 	body := response.Body.String()
 	for _, want := range []string{
 		`<table class="data-grid routes-grid">`,
-		`<code>/posts/{post_id}</code>`,
-		`post_id`,
-		`posts#Show`,
+		`<tbody data-routes-list>`,
 		`1 / 3 routes`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("body missing %q:\n%s", want, body)
 		}
 	}
+	if strings.Contains(body, `<code>/posts/{post_id}</code>`) || strings.Contains(body, `posts#Show`) {
+		t.Fatalf("body rendered route rows before stream hydration:\n%s", body)
+	}
 	if strings.Contains(body, `<code>/admin</code>`) {
 		t.Fatalf("body includes unfiltered route:\n%s", body)
 	}
+}
+
+func TestPanelRoutesStreamHydratesApplicationRoutes(t *testing.T) {
+	var gotPath string
+	appControl := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = w.Write([]byte(`[
+			{"method":"GET","path":"/posts","name":"posts","controller":"posts","action":"Index"},
+			{"method":"GET","path":"/posts/{post_id}","name":"post","controller":"posts","action":"Show","params":{"post_id":true}},
+			{"method":"GET","path":"/admin","name":"admin","controller":"admin","action":"Index"}
+		]`))
+	}))
+	defer appControl.Close()
+
+	store := buildservice.NewStore(10)
+	store.Update(buildservice.Snapshot{
+		State:            buildservice.StateRunning,
+		Message:          "running",
+		ControlPlaneAddr: strings.TrimPrefix(appControl.URL, "http://"),
+	})
+	app := App(Config{
+		Store:             store,
+		Actions:           buildservice.NewActions(),
+		ForceDetailErrors: true,
+	})
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	request, err := http.NewRequest(http.MethodGet, server.URL+"/_golazy/routes?q=post_id", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Accept", "text/event-stream")
+	response, err := server.Client().Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+
+	payload := readSSEPayload(t, bufio.NewReader(response.Body))
+	if gotPath != "/routes" {
+		t.Fatalf("app control path = %q, want /routes", gotPath)
+	}
+	for _, want := range []string{
+		`data: <turbo-stream action="update" targets="[data-routes-list]">`,
+		`<code>/posts/{post_id}</code>`,
+		`posts#Show`,
+		`<turbo-stream action="update" targets="[data-routes-count]">`,
+		`1 / 3 routes`,
+	} {
+		if !strings.Contains(payload, want) {
+			t.Fatalf("stream payload missing %q:\n%s", want, payload)
+		}
+	}
+	if strings.Contains(payload, `action="replace" target="routes"`) {
+		t.Fatalf("stream replaced whole routes frame:\n%s", payload)
+	}
+}
+
+func readSSEPayload(t *testing.T, reader *bufio.Reader) string {
+	t.Helper()
+	payload := make(chan string, 1)
+	errs := make(chan error, 1)
+	go func() {
+		var builder strings.Builder
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				errs <- err
+				return
+			}
+			builder.WriteString(line)
+			if line == "\n" {
+				payload <- builder.String()
+				return
+			}
+		}
+	}()
+	select {
+	case got := <-payload:
+		return got
+	case err := <-errs:
+		t.Fatal(err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for turbo-stream")
+	}
+	return ""
 }
 
 func TestPanelAssetsAndJobsPage(t *testing.T) {

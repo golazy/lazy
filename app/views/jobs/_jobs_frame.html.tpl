@@ -29,10 +29,9 @@
     <section class="runtime-pane output-pane">
       <h2>Definitions</h2>
       <ul class="compact-list" data-job-definitions>
-        {{range .jobs.Definitions}}
-          <li><code>{{.Kind}}</code> {{.Queue}} attempts {{.MaxAttempts}}</li>
+        {{if .defer_panel_lists}}
         {{else}}
-          <li class="muted">{{if $.jobs.Error}}{{$.jobs.Error}}{{else}}No job definitions.{{end}}</li>
+          {{partial "job_definitions" .}}
         {{end}}
       </ul>
     </section>
@@ -52,20 +51,9 @@
           </tr>
         </thead>
         <tbody data-jobs-recent>
-          {{range .jobs.Recent}}
-            <tr>
-              <td>{{.ID}}</td>
-              <td>{{.Kind}}</td>
-              <td>{{.Queue}}</td>
-              <td>{{.State}}</td>
-              <td>{{.AttemptText}}</td>
-              <td>{{.RunAtText}}</td>
-              <td>{{.LastError}}</td>
-            </tr>
+          {{if .defer_panel_lists}}
           {{else}}
-            <tr>
-              <td colspan="7" class="empty-cell">{{if $.jobs.Error}}{{$.jobs.Error}}{{else}}No recent jobs.{{end}}</td>
-            </tr>
+            {{partial "recent_jobs" .}}
           {{end}}
         </tbody>
       </table>

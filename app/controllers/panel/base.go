@@ -25,6 +25,9 @@ type Base struct {
 	Renderer *lazycontroller.Renderer
 }
 
+type TurboInitialRenderer func(*http.Request) (string, error)
+type TurboEventRenderer func(*http.Request, buildservice.Event) (string, error)
+
 var appControlClient = &http.Client{Timeout: 2 * time.Second}
 
 func NewBase(ctx context.Context) (Base, error) {
@@ -106,22 +109,51 @@ func (b *Base) PostAppControl(ctx context.Context, path string) error {
 	return nil
 }
 
-func (b *Base) StreamTurbo(w http.ResponseWriter, r *http.Request, render func(*http.Request, buildservice.Event) (string, error)) error {
+func (b *Base) StreamTurbo(w http.ResponseWriter, r *http.Request, render TurboEventRenderer) error {
+	return b.StreamTurboWithInitial(w, r, nil, render)
+}
+
+func (b *Base) StreamTurboInitial(w http.ResponseWriter, r *http.Request, initial TurboInitialRenderer) error {
+	return b.StreamTurboWithInitial(w, r, initial, nil)
+}
+
+func (b *Base) StreamTurboWithInitial(_ http.ResponseWriter, r *http.Request, initial TurboInitialRenderer, render TurboEventRenderer) error {
 	stream, err := b.SSEStream()
 	if err != nil {
 		return err
 	}
 	defer stream.Close()
 
-	events, unsubscribe := b.Store.Subscribe()
-	defer unsubscribe()
+	var events <-chan buildservice.Event
+	if render != nil {
+		var unsubscribe func()
+		events, unsubscribe = b.Store.Subscribe()
+		defer unsubscribe()
+	}
 	stream.Heartbeat(15 * time.Second)
+
+	if initial != nil {
+		body, err := initial(r)
+		if err != nil {
+			return err
+		}
+		if err := sendTurboStream(stream, body); err != nil {
+			return err
+		}
+	}
+	if render == nil {
+		<-stream.Done()
+		return nil
+	}
 
 	for {
 		select {
 		case <-stream.Done():
 			return nil
-		case event := <-events:
+		case event, ok := <-events:
+			if !ok {
+				return nil
+			}
 			if render == nil {
 				continue
 			}
@@ -129,11 +161,18 @@ func (b *Base) StreamTurbo(w http.ResponseWriter, r *http.Request, render func(*
 			if err != nil || body == "" {
 				continue
 			}
-			if err := stream.Send(lazysse.Event{Data: []string{body}}); err != nil {
+			if err := sendTurboStream(stream, body); err != nil {
 				return err
 			}
 		}
 	}
+}
+
+func sendTurboStream(stream *lazysse.Stream, body string) error {
+	if body == "" {
+		return nil
+	}
+	return stream.Send(lazysse.Event{Data: []string{body}})
 }
 
 func (b *Base) RenderPanelFrame(r *http.Request, id string, controller string, partial string, variables map[string]any) (string, error) {
@@ -184,11 +223,21 @@ func (b *Base) renderPanelPartial(r *http.Request, controller string, partial st
 }
 
 func TurboStream(action string, target string, body string) string {
+	return turboStream(action, "target", target, body)
+}
+
+func TurboStreamTargets(action string, targets string, body string) string {
+	return turboStream(action, "targets", targets, body)
+}
+
+func turboStream(action string, targetAttribute string, targetValue string, body string) string {
 	var builder strings.Builder
 	builder.WriteString(`<turbo-stream action="`)
 	builder.WriteString(html.EscapeString(action))
-	builder.WriteString(`" target="`)
-	builder.WriteString(html.EscapeString(target))
+	builder.WriteString(`" `)
+	builder.WriteString(targetAttribute)
+	builder.WriteString(`="`)
+	builder.WriteString(html.EscapeString(targetValue))
 	builder.WriteString(`"><template>`)
 	builder.WriteString(body)
 	builder.WriteString(`</template></turbo-stream>`)

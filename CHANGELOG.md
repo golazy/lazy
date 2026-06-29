@@ -43,6 +43,10 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   fresh data. Browser-facing panel endpoints render HTML, Turbo Frames, or
   Turbo Stream HTML; internal app-control JSON is read server-side and enriched
   before rendering.
+- Development panel tab streams now hydrate list content when their
+  `turbo-stream-source` connects, then send targeted row/count updates only
+  when a relevant backend event exists instead of repainting whole tabs from
+  generic build events.
 - The development panel Requests tab now reads captured request sidecars,
   lists request paths, and exposes Headers, Tracing, and Logs detail tabs.
   The Tracing detail renders per-region total and self duration plus sampled

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 
 	"golazy.dev/lazy/app/controllers/panel"
@@ -27,41 +28,26 @@ func (c *RoutesController) Index(w http.ResponseWriter, r *http.Request) error {
 	return c.Wants(lazycontroller.Formats{
 		lazycontroller.HTML: func() error {
 			c.setRoutesState(r)
+			c.Set("defer_panel_lists", true)
 			return nil
 		},
 		lazycontroller.SSE: func() error {
-			return c.StreamTurbo(w, r, c.streamRoutes)
+			return c.StreamTurboWithInitial(w, r, c.streamRoutesInitial, c.streamRoutes)
 		},
 	})
 }
 
 func (c *RoutesController) setRoutesState(r *http.Request) {
-	c.SetState()
-	query := strings.TrimSpace(r.URL.Query().Get("q"))
-	var routes lazyroutes.RouteTable
-	if err := c.FetchAppControlJSON(r.Context(), appRoutesPath, &routes); err != nil {
-		c.Set("routes_error", err.Error())
-		c.Set("routes_query", query)
-		c.Set("routes_total", 0)
-		c.Set("routes_visible", 0)
-		c.Set("routes", []routeRow{})
-		return
+	for key, value := range c.routesViewData(r) {
+		c.Set(key, value)
 	}
-
-	rows := routeRows(routes)
-	filtered := filterRoutes(rows, query)
-	c.Set("routes_query", query)
-	c.Set("routes_total", len(rows))
-	c.Set("routes_visible", len(filtered))
-	c.Set("routes", filtered)
 }
 
-func (c *RoutesController) streamRoutes(r *http.Request, _ buildservice.Event) (string, error) {
+func (c *RoutesController) routesViewData(r *http.Request) map[string]any {
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	var routes lazyroutes.RouteTable
-	var variables map[string]any
 	if err := c.FetchAppControlJSON(r.Context(), appRoutesPath, &routes); err != nil {
-		variables = map[string]any{
+		return map[string]any{
 			"state":          c.Snapshot(),
 			"routes_error":   err.Error(),
 			"routes_query":   query,
@@ -69,22 +55,38 @@ func (c *RoutesController) streamRoutes(r *http.Request, _ buildservice.Event) (
 			"routes_visible": 0,
 			"routes":         []routeRow{},
 		}
-	} else {
-		rows := routeRows(routes)
-		filtered := filterRoutes(rows, query)
-		variables = map[string]any{
-			"state":          c.Snapshot(),
-			"routes_query":   query,
-			"routes_total":   len(rows),
-			"routes_visible": len(filtered),
-			"routes":         filtered,
-		}
 	}
-	body, err := c.RenderPanelPartial(r, "routes", "routes_frame", variables)
+
+	rows := routeRows(routes)
+	filtered := filterRoutes(rows, query)
+	return map[string]any{
+		"state":          c.Snapshot(),
+		"routes_query":   query,
+		"routes_total":   len(rows),
+		"routes_visible": len(filtered),
+		"routes":         filtered,
+	}
+}
+
+func (c *RoutesController) streamRoutesInitial(r *http.Request) (string, error) {
+	return c.renderRouteList(r)
+}
+
+func (c *RoutesController) streamRoutes(r *http.Request, event buildservice.Event) (string, error) {
+	if event.Type != buildservice.EventState || event.State != buildservice.StateRunning {
+		return "", nil
+	}
+	return c.renderRouteList(r)
+}
+
+func (c *RoutesController) renderRouteList(r *http.Request) (string, error) {
+	variables := c.routesViewData(r)
+	body, err := c.RenderPanelPartial(r, "routes", "route_rows", variables)
 	if err != nil {
 		return "", err
 	}
-	return panel.TurboStream("replace", "routes", body), nil
+	return panel.TurboStreamTargets("update", "[data-routes-list]", body) +
+		panel.TurboStreamTargets("update", "[data-routes-count]", routeCountText(variables)), nil
 }
 
 type routeRow struct {
@@ -155,4 +157,17 @@ func routeParams(params map[string]bool) string {
 	}
 	sort.Strings(names)
 	return strings.Join(names, ", ")
+}
+
+func routeCountText(variables map[string]any) string {
+	if variables["routes_error"] != nil {
+		return "Routes unavailable"
+	}
+	total, _ := variables["routes_total"].(int)
+	visible, _ := variables["routes_visible"].(int)
+	query, _ := variables["routes_query"].(string)
+	if query != "" {
+		return strconv.Itoa(visible) + " / " + strconv.Itoa(total) + " routes"
+	}
+	return strconv.Itoa(total) + " routes"
 }

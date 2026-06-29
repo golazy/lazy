@@ -26,10 +26,11 @@ func (c *ServicesController) Index(w http.ResponseWriter, r *http.Request) error
 	return c.Wants(lazycontroller.Formats{
 		lazycontroller.HTML: func() error {
 			c.setServicesState(r)
+			c.Set("defer_panel_lists", true)
 			return nil
 		},
 		lazycontroller.SSE: func() error {
-			return c.StreamTurbo(w, r, c.streamServices)
+			return c.StreamTurboWithInitial(w, r, c.streamServicesInitial, c.streamServices)
 		},
 	})
 }
@@ -53,35 +54,82 @@ func (c *ServicesController) Restart(w http.ResponseWriter, r *http.Request) err
 }
 
 func (c *ServicesController) setServicesState(r *http.Request) {
-	state := c.Snapshot()
-	selected := selectedService(r, state)
-	tasks := serviceTasks(state.Events, selected)
-	selectedTask := selectedServiceTask(r, tasks)
-	c.Set("state", state)
-	c.Set("selected_service", selected)
-	c.Set("selected_service_task", selectedTask)
-	c.Set("service_task_filters", serviceTaskFilters(selected, tasks, selectedTask))
-	c.Set("services_stream_url", serviceURL(selected, selectedTask))
-	c.Set("service_output_rows", serviceOutputRows(state.Events, selected, selectedTask))
+	for key, value := range c.servicesViewData(r) {
+		c.Set(key, value)
+	}
 }
 
-func (c *ServicesController) streamServices(r *http.Request, _ buildservice.Event) (string, error) {
+func (c *ServicesController) servicesViewData(r *http.Request) map[string]any {
 	state := c.Snapshot()
 	selected := selectedService(r, state)
 	tasks := serviceTasks(state.Events, selected)
 	selectedTask := selectedServiceTask(r, tasks)
-	body, err := c.RenderPanelPartial(r, "services", "services_frame", map[string]any{
+	return map[string]any{
 		"state":                 state,
 		"selected_service":      selected,
 		"selected_service_task": selectedTask,
 		"service_task_filters":  serviceTaskFilters(selected, tasks, selectedTask),
 		"services_stream_url":   serviceURL(selected, selectedTask),
 		"service_output_rows":   serviceOutputRows(state.Events, selected, selectedTask),
+	}
+}
+
+func (c *ServicesController) streamServicesInitial(r *http.Request) (string, error) {
+	variables := c.servicesViewData(r)
+	body, err := c.RenderPanelPartial(r, "services", "service_output_rows", variables)
+	if err != nil {
+		return "", err
+	}
+	return panel.TurboStreamTargets("update", "[data-service-output]", body), nil
+}
+
+func (c *ServicesController) streamServices(r *http.Request, event buildservice.Event) (string, error) {
+	switch event.Type {
+	case buildservice.EventOutput:
+		return c.streamServiceOutput(r, event)
+	case buildservice.EventManual:
+		if event.Service == "" {
+			return "", nil
+		}
+		return c.streamServiceList(r)
+	default:
+		return "", nil
+	}
+}
+
+func (c *ServicesController) streamServiceOutput(r *http.Request, event buildservice.Event) (string, error) {
+	state := c.Snapshot()
+	selected := selectedService(r, state)
+	tasks := serviceTasks(state.Events, selected)
+	selectedTask := selectedServiceTask(r, tasks)
+	rows := serviceOutputRows([]buildservice.Event{event}, selected, selectedTask)
+	if len(rows) == 0 {
+		return "", nil
+	}
+	body, err := c.RenderPanelPartial(r, "services", "service_output_rows", map[string]any{
+		"service_output_rows": rows,
 	})
 	if err != nil {
 		return "", err
 	}
-	return panel.TurboStream("replace", "services", body), nil
+	filters, err := c.RenderPanelPartial(r, "services", "service_task_filters", map[string]any{
+		"service_task_filters": serviceTaskFilters(selected, tasks, selectedTask),
+	})
+	if err != nil {
+		return "", err
+	}
+	return panel.TurboStreamTargets("prepend", "[data-service-output]", body) +
+		panel.TurboStreamTargets("update", "[data-service-task-filter]", filters) +
+		panel.TurboStreamTargets("update", "[data-service-output-count]", strconv.Itoa(len(serviceOutputRows(state.Events, selected, selectedTask)))+" messages"), nil
+}
+
+func (c *ServicesController) streamServiceList(r *http.Request) (string, error) {
+	variables := c.servicesViewData(r)
+	body, err := c.RenderPanelPartial(r, "services", "service_list", variables)
+	if err != nil {
+		return "", err
+	}
+	return panel.TurboStreamTargets("update", "[data-service-list]", body), nil
 }
 
 type serviceOutputRow struct {
