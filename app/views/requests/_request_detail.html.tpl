@@ -55,7 +55,7 @@
           </div>
 
           <section class="runtime-pane request-trace-table-pane" data-panel-resize-target="primary">
-            <table class="data-grid request-region-grid">
+            <table class="data-grid request-region-grid" data-controller="table-resize">
               <thead>
                 <tr>
                   <th rowspan="2"></th>
@@ -115,7 +115,7 @@
       {{else if .requests.LogsTab}}
         <section class="runtime-pane request-logs-pane">
           <h2>Logs</h2>
-          <table class="data-grid trace-log-grid">
+          <table class="data-grid trace-log-grid" data-controller="table-resize">
             <thead>
               <tr>
                 <th>Time</th>

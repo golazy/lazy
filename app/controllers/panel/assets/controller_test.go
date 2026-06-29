@@ -58,7 +58,7 @@ func TestAssetsViewReadsApplicationControlPlaneManifest(t *testing.T) {
 		t.Fatalf("render assets frame: %v", err)
 	}
 	for _, want := range []string{
-		`<table class="data-grid assets-grid">`,
+		`<table class="data-grid assets-grid" data-controller="table-resize">`,
 		`<tbody data-assets-list>`,
 		`/assets/app.js`,
 		`/assets/app-123.js`,

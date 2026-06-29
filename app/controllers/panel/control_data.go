@@ -3,24 +3,44 @@ package panel
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"time"
 )
 
 const appJobsControlPath = "/jobs"
+const appCacheEntryPath = "/cache/entry"
 
 type CacheSnapshot struct {
-	Enabled bool       `json:"enabled"`
-	Stats   CacheStats `json:"stats"`
-	Keys    []string   `json:"keys"`
-	Error   string     `json:"-"`
+	Enabled bool         `json:"enabled"`
+	Stats   CacheStats   `json:"stats"`
+	Keys    []string     `json:"keys"`
+	Entries []CacheEntry `json:"entries"`
+	Error   string       `json:"-"`
 }
 
 type CacheStats struct {
-	Entries   int `json:"entries"`
-	Hits      int `json:"hits"`
-	Misses    int `json:"misses"`
-	Sets      int `json:"sets"`
-	Evictions int `json:"evictions"`
+	Entries    int   `json:"entries"`
+	MaxEntries int   `json:"max_entries"`
+	SizeBytes  int64 `json:"size_bytes"`
+	Hits       int   `json:"hits"`
+	Misses     int   `json:"misses"`
+	Sets       int   `json:"sets"`
+	Evictions  int   `json:"evictions"`
+}
+
+type CacheEntry struct {
+	Key            string    `json:"key"`
+	SizeBytes      int64     `json:"size_bytes"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+	LastAccessedAt time.Time `json:"last_accessed_at"`
+}
+
+type CacheEntryDetail struct {
+	CacheEntry
+	Content     string `json:"content"`
+	ContentType string `json:"content_type"`
+	Error       string `json:"-"`
 }
 
 func (c CacheSnapshot) StatusText() string {
@@ -124,7 +144,25 @@ func (b *Base) CacheSnapshot(ctx context.Context) CacheSnapshot {
 	if err := b.FetchAppControlJSON(ctx, appCachePath, &snapshot); err != nil {
 		snapshot.Error = err.Error()
 	}
+	if len(snapshot.Entries) == 0 && len(snapshot.Keys) > 0 {
+		for _, key := range snapshot.Keys {
+			snapshot.Entries = append(snapshot.Entries, CacheEntry{Key: key})
+		}
+	}
 	return snapshot
+}
+
+func (b *Base) CacheEntry(ctx context.Context, key string) CacheEntryDetail {
+	var detail CacheEntryDetail
+	if key == "" {
+		return detail
+	}
+	path := appCacheEntryPath + "?key=" + url.QueryEscape(key)
+	if err := b.FetchAppControlJSON(ctx, path, &detail); err != nil {
+		detail.CacheEntry.Key = key
+		detail.Error = err.Error()
+	}
+	return detail
 }
 
 func (b *Base) RequestMonitoringSnapshot(ctx context.Context) RequestMonitoringSnapshot {

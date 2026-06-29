@@ -19,7 +19,7 @@
     </aside>
 
     <section class="service-output-pane" aria-label="Service output">
-      <table class="data-grid service-output-grid">
+      <table class="data-grid service-output-grid" data-controller="table-resize">
         <thead>
           <tr>
             <th>source</th>

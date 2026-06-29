@@ -21,7 +21,7 @@
 
   <div class="traces-layout" data-traces-panel>
     <section class="trace-list-pane" aria-label="Recorded request traces">
-      <table class="data-grid trace-list-grid">
+      <table class="data-grid trace-list-grid" data-controller="table-resize">
         <thead>
           <tr>
             <th>Method</th>
@@ -106,7 +106,7 @@
 
         <section class="runtime-pane trace-log-pane">
           <h2>Logs</h2>
-          <table class="data-grid trace-log-grid">
+          <table class="data-grid trace-log-grid" data-controller="table-resize">
             <thead>
               <tr>
                 <th>Time</th>

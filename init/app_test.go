@@ -103,7 +103,7 @@ func TestPanelTabPageLoadsImportmapNavAndPermanentStatus(t *testing.T) {
 		`data-panel-close`,
 		`<turbo-stream-source src="/_golazy/app"></turbo-stream-source>`,
 		`<section id="app" class="tool-view is-active app-view" data-view="app" data-app-panel>`,
-		`<table class="data-grid app-log-grid">`,
+		`<table class="data-grid app-log-grid" data-controller="table-resize">`,
 		`<button type="submit" class="toolbar-button">Rebuild</button>`,
 		`<button type="submit" class="toolbar-button">Restart</button>`,
 		`<a class="toolbar-button" href="http://127.0.0.1:3001" target="_blank" rel="noreferrer">Open App</a>`,
@@ -202,7 +202,7 @@ func TestPanelRoutesPageFetchesApplicationRoutes(t *testing.T) {
 	}
 	body := response.Body.String()
 	for _, want := range []string{
-		`<table class="data-grid routes-grid">`,
+		`<table class="data-grid routes-grid" data-controller="table-resize">`,
 		`<tbody data-routes-list>`,
 		`1 / 3 routes`,
 	} {
@@ -362,7 +362,7 @@ func TestPanelAssetsAndJobsPage(t *testing.T) {
 	for _, want := range []string{
 		`<turbo-stream-source src="/_golazy/assets"></turbo-stream-source>`,
 		`<section id="assets" class="tool-view is-active" data-view="assets">`,
-		`<table class="data-grid assets-grid">`,
+		`<table class="data-grid assets-grid" data-controller="table-resize">`,
 	} {
 		if !strings.Contains(assets.Body.String(), want) {
 			t.Fatalf("assets body missing %q:\n%s", want, assets.Body.String())

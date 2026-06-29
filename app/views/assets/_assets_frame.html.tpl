@@ -6,7 +6,7 @@
     <span class="toolbar-spacer"></span>
     <span class="toolbar-count" data-assets-count>{{if .assets_error}}Assets unavailable{{else}}{{.assets_visible}} / {{.assets_total}} assets{{end}}</span>
   </div>
-  <table class="data-grid assets-grid">
+  <table class="data-grid assets-grid" data-controller="table-resize">
     <thead>
       <tr>
         <th>Public Path</th>

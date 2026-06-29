@@ -51,7 +51,7 @@
 
   <div class="split-view" data-controller="panel-resize" data-panel-resize-direction-value="right" data-panel-resize-min-value="240px" data-panel-resize-max-value="70%">
     <section class="request-table-pane" aria-label="Request log" data-panel-resize-target="primary">
-      <table class="data-grid network-log-grid">
+      <table class="data-grid network-log-grid" data-controller="table-resize">
         <thead>
           <tr>
             <th></th>

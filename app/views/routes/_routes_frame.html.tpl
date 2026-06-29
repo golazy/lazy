@@ -17,7 +17,7 @@
     <div class="empty-state">Route table unavailable: {{.routes_error}}</div>
   {{else}}
     <div class="details-pane">
-      <table class="data-grid routes-grid">
+      <table class="data-grid routes-grid" data-controller="table-resize">
         <thead>
           <tr>
             <th>Method</th>

@@ -11,20 +11,6 @@ import (
 	"golazy.dev/lazy/services/buildservice"
 )
 
-func TestCacheRedirectsToActions(t *testing.T) {
-	controller := &Controller{Base: Base{Store: buildservice.NewStore(10)}}
-	response := httptest.NewRecorder()
-	if err := controller.Cache(response, httptest.NewRequest(http.MethodGet, "/_golazy/cache", nil)); err != nil {
-		t.Fatal(err)
-	}
-	if response.Code != http.StatusSeeOther {
-		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusSeeOther, response.Body.String())
-	}
-	if got, want := response.Header().Get("Location"), "/_golazy/actions"; got != want {
-		t.Fatalf("Location = %q, want %q", got, want)
-	}
-}
-
 func TestCacheOnAndOffProxyApplicationControlPlane(t *testing.T) {
 	var paths []string
 	appControl := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -58,7 +44,7 @@ func TestCacheOnAndOffProxyApplicationControlPlane(t *testing.T) {
 		if response.Code != http.StatusSeeOther {
 			t.Fatalf("%s status = %d, want %d", call.name, response.Code, http.StatusSeeOther)
 		}
-		if got, want := response.Header().Get("Location"), "/_golazy/actions"; got != want {
+		if got, want := response.Header().Get("Location"), "/_golazy/cache"; got != want {
 			t.Fatalf("%s Location = %q, want %q", call.name, got, want)
 		}
 	}
@@ -163,7 +149,7 @@ func TestRequestToolbarCommandsPreserveSafePanelRedirect(t *testing.T) {
 	if err := controller.CacheOff(response, request); err != nil {
 		t.Fatal(err)
 	}
-	if got, want := response.Header().Get("Location"), "/_golazy/actions"; got != want {
+	if got, want := response.Header().Get("Location"), "/_golazy/cache"; got != want {
 		t.Fatalf("unsafe redirect Location = %q, want fallback %q", got, want)
 	}
 

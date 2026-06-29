@@ -22,7 +22,7 @@
       <div class="section-heading">
         <h2>Services</h2>
       </div>
-      <table class="data-grid app-services-grid">
+      <table class="data-grid app-services-grid" data-controller="table-resize">
         <thead>
           <tr>
             <th>service</th>
@@ -50,7 +50,7 @@
       <div class="section-heading">
         <h2>Lazy Logs</h2>
       </div>
-      <table class="data-grid app-log-grid">
+      <table class="data-grid app-log-grid" data-controller="table-resize">
         <thead>
           <tr>
             <th>time</th>

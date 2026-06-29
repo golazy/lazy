@@ -6,7 +6,7 @@
     <span class="panel-tab">{{link_to "Routes" (path_for "routes") (data "turbo-frame" "_top") (unless_current)}}</span>
     <span class="panel-tab">{{link_to "Jobs" (path_for "jobs") (data "turbo-frame" "_top") (unless_current)}}</span>
     <span class="panel-tab">{{link_to "Assets" (path_for "assets") (data "turbo-frame" "_top") (unless_current)}}</span>
-    <span class="panel-tab">{{link_to "Actions" (path_for "actions") (data "turbo-frame" "_top") (unless_current)}}</span>
+    <span class="panel-tab">{{link_to "Cache" (path_for "cache") (data "turbo-frame" "_top") (unless_current)}}</span>
   </div>
   <button type="button" class="panel-close-button" data-panel-close hidden aria-label="Close GoLazy development panel" title="Close GoLazy development panel" data-panel-close-target="button" data-action="panel-close#close"></button>
 </nav>

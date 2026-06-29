@@ -30,17 +30,12 @@ func (c *Controller) Index(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-func (c *Controller) Cache(w http.ResponseWriter, r *http.Request) error {
-	http.Redirect(w, r, "/_golazy/actions", http.StatusSeeOther)
-	return nil
-}
-
 func (c *Controller) CacheOn(w http.ResponseWriter, r *http.Request) error {
 	if err := c.PostAppControl(r.Context(), appCacheOnPath); err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return nil
 	}
-	c.redirectPanel(w, r, "/_golazy/actions")
+	c.redirectPanel(w, r, "/_golazy/cache")
 	return nil
 }
 
@@ -49,7 +44,7 @@ func (c *Controller) CacheOff(w http.ResponseWriter, r *http.Request) error {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return nil
 	}
-	c.redirectPanel(w, r, "/_golazy/actions")
+	c.redirectPanel(w, r, "/_golazy/cache")
 	return nil
 }
 

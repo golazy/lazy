@@ -28,6 +28,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   open-app controls.
 - The development panel Assets tab now lists lazy asset manifest entries and
   their public paths from the app lazydev control plane.
+- The development panel Cache tab now shows cache size, usage, hit/miss/set
+  counters, a searchable key table with age and size, and selected cache entry
+  content when the app backend exposes inspectable entries.
 - The `lazy` development proxy now accepts HTTP and HTTPS on the same port.
   Plain HTTP serves the local certificate authority setup and download page,
   while HTTPS serves the development panel and proxied app traffic with HTTP/2
@@ -83,9 +86,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   tab for app lifecycle state, and a full-height Services page.
 - The status bar app chip now opens App, and selected service chips keep
   the same background as the rest of the status bar.
-- The development panel no longer renders Console or App Logs tabs. App logs
-  are merged into Services through a synthetic App service, and Actions only
-  exposes cache controls.
+- The development panel no longer renders Console, App Logs, or Actions tabs.
+  App logs are merged into Services through a synthetic App service, and Cache
+  owns the cache controls and cache inspection table.
 - `lazy docs --json` includes package, value, function, type, and method source
   file and line metadata from `golazy.dev/lazydoc`.
 - The default `lazy` command now discovers local services from `lazy.toml` or
@@ -106,6 +109,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   split panes use a reusable Stimulus resize controller with `left`, `right`,
   `top`, and `bottom` directions plus pixel or percentage `min`, `max`, and
   `size` values.
+- Development panel data tables now use a reusable Stimulus column-resize
+  controller, with per-header minimum widths and resize handles across the
+  panel's shared table component.
 - Embedded development panels can now be resized from their top edge, and the
   proxied page's bottom padding follows the selected panel height.
 - `lazy js` and `lazy tailwind` now choose Node package managers from active

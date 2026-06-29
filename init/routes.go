@@ -10,9 +10,9 @@ import (
 	"strings"
 
 	panelcontroller "golazy.dev/lazy/app/controllers/panel"
-	"golazy.dev/lazy/app/controllers/panel/actions"
 	panelapp "golazy.dev/lazy/app/controllers/panel/app"
 	"golazy.dev/lazy/app/controllers/panel/assets"
+	"golazy.dev/lazy/app/controllers/panel/cache"
 	"golazy.dev/lazy/app/controllers/panel/jobs"
 	"golazy.dev/lazy/app/controllers/panel/requests"
 	"golazy.dev/lazy/app/controllers/panel/routes"
@@ -29,6 +29,7 @@ const devToolsWorkspacePath = "/.well-known/appspecific/com.chrome.devtools.json
 var devToolsWorkspaceNamespace = [16]byte{0x67, 0x6f, 0x6c, 0x61, 0x7a, 0x79, 0x2d, 0x64, 0x65, 0x76, 0x74, 0x6f, 0x6f, 0x6c, 0x73, 0x31}
 
 func init() {
+	inflection.Irregular("cache", "cache")
 	inflection.Irregular("status", "status")
 }
 
@@ -41,7 +42,6 @@ func Draw(router *lazyroutes.Scope) {
 			resource.Singular("panel")
 			resource.Plural("panel")
 			resource.Path("")
-			resource.Get("cache", (*panelcontroller.Controller).Cache)
 			resource.Post("cache/on", (*panelcontroller.Controller).CacheOn)
 			resource.Post("cache/off", (*panelcontroller.Controller).CacheOff)
 			resource.Get("request-monitoring", (*panelcontroller.Controller).RequestMonitoring)
@@ -66,7 +66,11 @@ func Draw(router *lazyroutes.Scope) {
 		panel.Resources(routes.New)
 		panel.Resources(jobs.New)
 		panel.Resources(assets.New)
-		panel.Resources(actions.New)
+		panel.Resources(cache.New, func(resource *lazyroutes.Resource) {
+			resource.Singular("cache")
+			resource.Plural("cache")
+			resource.Path("cache")
+		})
 		panel.Resources(status.New)
 	})
 }

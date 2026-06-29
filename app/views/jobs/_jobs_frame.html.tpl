@@ -38,7 +38,7 @@
 
     <section class="runtime-pane output-pane">
       <h2>Recent Jobs</h2>
-      <table class="data-grid">
+      <table class="data-grid" data-controller="table-resize">
         <thead>
           <tr>
             <th>ID</th>
