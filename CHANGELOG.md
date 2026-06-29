@@ -96,8 +96,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   The Tracing detail renders per-region total and self duration plus sampled
   allocation bytes, malloc counts, and free counts when the app sidecar
   provides lazydev allocation samples.
-- The development panel Requests tab now combines its path filter and request
-  domain chips in one toolbar row, refreshes new matching requests through its
+- The development panel Requests tab now combines its DevTools-style path
+  filter and request handler chips in one toolbar row, includes an `All`
+  handler filter as the default, refreshes new matching requests through its
   tab stream, clears trace sidecars from the clear button, and lazy-loads
   request details in a nested Turbo frame.
 - The Requests Tracing detail now renders a status strip, an Include golazy

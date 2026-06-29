@@ -792,7 +792,11 @@ func requestDomainFilters(traces []requestTrace, selected string, query string, 
 	}
 	sort.Strings(domains)
 
-	filters := make([]requestDomainFilter, 0, len(domains))
+	filters := []requestDomainFilter{{
+		Label:    "All",
+		URL:      requestURL("", "", query, tab, "", framework, sortKey),
+		Selected: selected == "",
+	}}
 	for _, domain := range domains {
 		next := domain
 		selectedDomain := domain == selected

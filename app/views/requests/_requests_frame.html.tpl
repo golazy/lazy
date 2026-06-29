@@ -21,7 +21,7 @@
       <span class="toolbar-count" data-request-count>{{.requests.RequestCountText}}</span>
     </div>
     <div class="filter-row">
-      <form method="get" action="{{path_for "requests"}}" class="inline-form">
+      <form method="get" action="{{path_for "requests"}}" class="inline-form request-filter-form">
         {{if .requests.HasSelected}}
           <input type="hidden" name="request" value="{{.requests.SelectedRequestID}}">
         {{end}}
@@ -37,11 +37,11 @@
         {{if .requests.DomainValue}}<input type="hidden" name="domain" value="{{.requests.DomainValue}}">{{end}}
         <input type="hidden" name="framework" value="{{.requests.FrameworkValue}}">
         <input type="hidden" name="sort" value="{{.requests.SortValue}}">
-        <input class="filter-input network-filter" type="search" name="q" placeholder="Filter" value="{{.requests.Query}}">
+        <input class="filter-input network-filter" type="search" name="q" placeholder="Filter" value="{{.requests.Query}}" aria-label="Filter requests">
       </form>
-      <div class="type-filter domain-filter" aria-label="Request domains">
+      <div class="type-filter domain-filter" aria-label="Request handlers">
         {{range .requests.DomainFilters}}
-          <a href="{{.URL}}" data-turbo-frame="_top" aria-current="{{if .Selected}}page{{end}}">{{.Label}}</a>
+          <a href="{{.URL}}" data-turbo-frame="_top" aria-current="{{if .Selected}}page{{else}}false{{end}}">{{.Label}}</a>
         {{end}}
       </div>
     </div>

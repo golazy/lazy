@@ -374,6 +374,34 @@ button:disabled:hover {
   min-width: 12rem;
 }
 
+.request-filter-form {
+  position: relative;
+}
+
+.request-filter-form::before {
+  background: var(--text-muted);
+  clip-path: polygon(10% 12%, 90% 12%, 62% 48%, 62% 82%, 44% 82%, 44% 48%);
+  content: "";
+  height: 14px;
+  left: 10px;
+  pointer-events: none;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  z-index: 1;
+}
+
+.request-filter-form .network-filter {
+  background: color-mix(in srgb, var(--surface-raised) 72%, var(--base));
+  border-color: transparent;
+  border-radius: 12px;
+  height: 25px;
+  max-width: none;
+  padding-left: 30px;
+  width: 100%;
+}
+
 .filter-row .inline-form {
   flex: 1 1 22rem;
 }
@@ -519,6 +547,11 @@ button:disabled:hover {
   padding: 0;
 }
 
+.filter-row .domain-filter {
+  flex: 0 1 auto;
+  gap: 4px;
+}
+
 .type-filter button,
 .type-filter a {
   border-color: var(--border-strong);
@@ -528,6 +561,20 @@ button:disabled:hover {
   height: 25px;
   padding: 0 9px;
   text-decoration: none;
+}
+
+.domain-filter a {
+  background: color-mix(in srgb, var(--surface-raised) 72%, var(--base));
+  border-color: var(--border-strong);
+  border-radius: 11px;
+  font-weight: 500;
+  height: 23px;
+}
+
+.domain-filter a[aria-current="page"] {
+  background: var(--row-selected);
+  border-color: var(--sys-color-primary);
+  color: var(--sys-color-on-tonal-container);
 }
 
 .split-view {

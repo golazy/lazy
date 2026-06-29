@@ -85,8 +85,13 @@ func TestRequestViewReadsTracesAndRendersRequestDetails(t *testing.T) {
 	if len(view.Rows) != 1 || view.Rows[0].Trace.PathText() != "/pools" {
 		t.Fatalf("rows = %#v, want /pools request row", view.Rows)
 	}
-	if len(view.DomainFilters) != 2 || view.DomainFilters[0].Label != "lazyassets.Registry" || view.DomainFilters[1].Label != "lazydispatch.Router" || !view.DomainFilters[1].Selected {
-		t.Fatalf("domain filters = %#v, want sorted domains with lazydispatch selected", view.DomainFilters)
+	if len(view.DomainFilters) != 3 || view.DomainFilters[0].Label != "All" || view.DomainFilters[0].Selected || view.DomainFilters[1].Label != "lazyassets.Registry" || view.DomainFilters[2].Label != "lazydispatch.Router" || !view.DomainFilters[2].Selected {
+		t.Fatalf("domain filters = %#v, want All then sorted domains with lazydispatch selected", view.DomainFilters)
+	}
+	allRequest := httptest.NewRequest(http.MethodGet, "/_golazy/requests?q=pools&request=req-123", nil)
+	allView := controller.requestView(allRequest)
+	if len(allView.DomainFilters) == 0 || allView.DomainFilters[0].Label != "All" || !allView.DomainFilters[0].Selected {
+		t.Fatalf("default domain filters = %#v, want selected All filter", allView.DomainFilters)
 	}
 	if !view.HasSelectedSpan || view.SelectedSpan.SpanID != "controller" {
 		t.Fatalf("selected span = %#v, want controller", view.SelectedSpan)
@@ -121,6 +126,8 @@ func TestRequestViewReadsTracesAndRendersRequestDetails(t *testing.T) {
 		`data-turbo-frame="request_detail"`,
 		`<turbo-frame id="request_detail" src="/_golazy/requests?`,
 		`domain=lazydispatch.Router`,
+		`aria-label="Request handlers"`,
+		">All</a>",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("rendered requests frame does not contain %q:\n%s", want, body)
