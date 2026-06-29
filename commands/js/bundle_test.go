@@ -107,21 +107,21 @@ func TestBundleWritesAppJavaScriptWithoutBundlingOrMinifyingAndExpandsDirectives
 		t.Fatal(err)
 	}
 
-	appPath := result.Imports["/js/app.js"]
+	appPath := result.Imports["app.js"]
 	if !strings.HasPrefix(appPath, "/assets/lazyshaft/app/app-") {
-		t.Fatalf("/js/app.js import = %q", appPath)
+		t.Fatalf("app.js import = %q", appPath)
 	}
-	controllerPath := result.Imports["/js/controllers/hello_controller.js"]
+	controllerPath := result.Imports["controllers/hello_controller.js"]
 	if !strings.HasPrefix(controllerPath, "/assets/lazyshaft/app/controllers/hello_controller-") {
 		t.Fatalf("controller import = %q", controllerPath)
 	}
 
 	importmap := readImportmap(t, filepath.Join(dir, "app", "public", "assets", "importmap.json"))
-	if importmap.Imports["/js/app.js"] != appPath {
-		t.Fatalf("importmap app import = %q, want %q", importmap.Imports["/js/app.js"], appPath)
+	if importmap.Imports["app.js"] != appPath {
+		t.Fatalf("importmap app import = %q, want %q", importmap.Imports["app.js"], appPath)
 	}
-	if importmap.Imports["/js/controllers/hello_controller.js"] != controllerPath {
-		t.Fatalf("importmap controller import = %q, want %q", importmap.Imports["/js/controllers/hello_controller.js"], controllerPath)
+	if importmap.Imports["controllers/hello_controller.js"] != controllerPath {
+		t.Fatalf("importmap controller import = %q, want %q", importmap.Imports["controllers/hello_controller.js"], controllerPath)
 	}
 
 	appBundle, err := os.ReadFile(publicAssetFile(dir, appPath))
@@ -131,7 +131,7 @@ func TestBundleWritesAppJavaScriptWithoutBundlingOrMinifyingAndExpandsDirectives
 	for _, want := range []string{
 		"import \"@hotwired/turbo\"\n",
 		"import { Application } from \"@hotwired/stimulus\"\n",
-		"import HelloController from \"/js/controllers/hello_controller.js\"\n",
+		"import HelloController from \"controllers/hello_controller.js\"\n",
 		"const application = Application.start()\n",
 		"application.register(\"hello\", HelloController)\n",
 		"const message = \"ready\";\nconsole.log(message);\n",

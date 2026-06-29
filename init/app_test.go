@@ -35,8 +35,8 @@ func TestPanelTabPageLoadsImportmapNavAndPermanentStatus(t *testing.T) {
 	body := response.Body.String()
 	for _, want := range []string{
 		`<script type="importmap">`,
-		`"/js/app.js": "/_golazy/assets/lazyshaft/app/`,
-		`<script type="module">import "/js/app.js"</script>`,
+		`"app.js": "/_golazy/assets/lazyshaft/app/`,
+		`<script type="module">import "app.js"</script>`,
 		`<nav class="panel-tabs tabbed-pane-header" aria-label="GoLazy panel sections" data-controller="panel-close">`,
 		`<span class="panel-tab">App Logs</span>`,
 		`<a href="/_golazy/requests" data-turbo-frame="_top">Requests</a>`,
@@ -247,8 +247,8 @@ func TestPanelAssetsAndJobsPage(t *testing.T) {
 	if asset.Code != http.StatusOK {
 		t.Fatalf("asset status = %d, want %d: %s", asset.Code, http.StatusOK, asset.Body.String())
 	}
-	if !strings.Contains(asset.Body.String(), `"/js/app.js"`) {
-		t.Fatalf("importmap body = %s, want /js/app.js", asset.Body.String())
+	if !strings.Contains(asset.Body.String(), `"app.js"`) {
+		t.Fatalf("importmap body = %s, want app.js", asset.Body.String())
 	}
 
 	panelScript := httptest.NewRecorder()

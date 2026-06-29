@@ -1,7 +1,7 @@
 import "@hotwired/turbo"
 import { Application } from "@hotwired/stimulus"
-import PanelCloseController from "/js/controllers/panel_close_controller.js"
-import PanelResizeController from "/js/controllers/panel_resize_controller.js"
+import PanelCloseController from "controllers/panel_close_controller.js"
+import PanelResizeController from "controllers/panel_resize_controller.js"
 
 const application = Application.start()
 application.register("panel-close", PanelCloseController)

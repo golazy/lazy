@@ -46,9 +46,8 @@ type appController struct {
 }
 
 const (
-	appSourceDir    = "app/js"
-	appImportPrefix = "/js"
-	appEntryFile    = "app.js"
+	appSourceDir = "app/js"
+	appEntryFile = "app.js"
 )
 
 func Bundle(manifest Manifest, root, packageDir string) (BuildResult, error) {
@@ -335,10 +334,14 @@ func writeAppJavaScript(manifest Manifest, root, outputDir string) (map[string]s
 			return nil, fmt.Errorf("write app JavaScript: %w", err)
 		}
 
-		specifier := path.Join(appImportPrefix, filepath.ToSlash(relative))
+		specifier := appImportSpecifier(relative)
 		imports[specifier] = publicAssetPath(manifest.Output.PublicPath, outputDir, target)
 	}
 	return imports, nil
+}
+
+func appImportSpecifier(relative string) string {
+	return path.Clean(filepath.ToSlash(relative))
 }
 
 func hashedAppOutputPath(relative string, data []byte) string {
@@ -408,7 +411,7 @@ func stimulusBoilerplate(appRoot string) (string, error) {
 	var builder strings.Builder
 	builder.WriteString("import { Application } from \"@hotwired/stimulus\"\n")
 	for _, controller := range controllers {
-		fmt.Fprintf(&builder, "import %s from %q\n", controller.ImportName, path.Join(appImportPrefix, "controllers", controller.Path))
+		fmt.Fprintf(&builder, "import %s from %q\n", controller.ImportName, appImportSpecifier(path.Join("controllers", controller.Path)))
 	}
 	builder.WriteString("\nconst application = Application.start()\n")
 	for _, controller := range controllers {

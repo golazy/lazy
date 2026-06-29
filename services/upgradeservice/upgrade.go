@@ -39,6 +39,7 @@ var releaseVersions = []string{
 	"v0.1.14",
 	"v0.1.15",
 	"v0.1.16",
+	"v0.1.17",
 }
 
 const firstUpgradeAwareVersion = "v0.1.10"
@@ -261,6 +262,8 @@ func (c Command) runStepWithStreams(dir string, from string, to string, force bo
 		err = executor.upgradeTo015()
 	case from == "v0.1.15" && to == "v0.1.16":
 		err = executor.upgradeTo016()
+	case from == "v0.1.16" && to == "v0.1.17":
+		err = executor.upgradeTo017()
 	default:
 		err = fmt.Errorf("upgrade from %s to %s is not implemented; use the versioned upgrade guide", from, to)
 	}
@@ -391,6 +394,8 @@ func hasBuiltInStep(from string, to string) bool {
 		return true
 	case from == "v0.1.15" && to == "v0.1.16":
 		return true
+	case from == "v0.1.16" && to == "v0.1.17":
+		return true
 	default:
 		return false
 	}
@@ -442,6 +447,113 @@ func (e stepExecutor) upgradeTo015() error {
 
 func (e stepExecutor) upgradeTo016() error {
 	return nil
+}
+
+func (e stepExecutor) upgradeTo017() error {
+	return e.rewriteAppJavaScriptImportSpecifiers()
+}
+
+func (e stepExecutor) rewriteAppJavaScriptImportSpecifiers() error {
+	roots := []string{
+		filepath.Join(e.dir, "app", "views"),
+		filepath.Join(e.dir, "app", "js"),
+	}
+	var rewritten []string
+	for _, root := range roots {
+		info, err := os.Stat(root)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("inspect %s: %w", root, err)
+		}
+		if !info.IsDir() {
+			continue
+		}
+		if err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if entry.IsDir() {
+				switch entry.Name() {
+				case ".git", ".golazy", "node_modules":
+					return filepath.SkipDir
+				default:
+					return nil
+				}
+			}
+			switch filepath.Ext(path) {
+			case ".js", ".tpl", ".html":
+				// Continue below.
+			default:
+				return nil
+			}
+			changed, err := e.rewriteAppJavaScriptImportSpecifiersInFile(path)
+			if err != nil {
+				return err
+			}
+			if changed {
+				relative, relErr := filepath.Rel(e.dir, path)
+				if relErr != nil {
+					return relErr
+				}
+				rewritten = append(rewritten, relative)
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+	}
+	if len(rewritten) == 0 {
+		fmt.Fprintln(e.stdout, "  no /js app JavaScript imports to rewrite")
+		return nil
+	}
+	slices.Sort(rewritten)
+	for _, path := range rewritten {
+		if e.dryRun {
+			fmt.Fprintf(e.stdout, "  would rewrite JavaScript imports in %s\n", path)
+		} else {
+			fmt.Fprintf(e.stdout, "  rewrote JavaScript imports in %s\n", path)
+		}
+	}
+	return nil
+}
+
+func (e stepExecutor) rewriteAppJavaScriptImportSpecifiersInFile(path string) (bool, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false, fmt.Errorf("read %s: %w", path, err)
+	}
+	updated := appJavaScriptImportSpecifierReplacer.Replace(string(data))
+	if updated == string(data) {
+		return false, nil
+	}
+	if e.dryRun {
+		return true, nil
+	}
+	if err := os.WriteFile(path, []byte(updated), fileMode(path)); err != nil {
+		return false, fmt.Errorf("write %s: %w", path, err)
+	}
+	return true, nil
+}
+
+var appJavaScriptImportSpecifierReplacer = strings.NewReplacer(
+	`import "/js/app.js"`, `import "app.js"`,
+	`import '/js/app.js'`, `import 'app.js'`,
+	`from "/js/`, `from "`,
+	`from '/js/`, `from '`,
+	`import "/js/`, `import "`,
+	`import '/js/`, `import '`,
+	`import("/js/`, `import("`,
+	`import('/js/`, `import('`,
+)
+
+func fileMode(path string) os.FileMode {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0o644
+	}
+	return info.Mode().Perm()
 }
 
 func (e stepExecutor) replaceFileIfHash(relative string, previous string, target string, mode os.FileMode) error {

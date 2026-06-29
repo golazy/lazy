@@ -7,7 +7,7 @@
     {{stylesheet "/assets/devtools.css"}}
     {{stylesheet "/assets/panel.css"}}
     {{importmap "/assets/importmap.json"}}
-    <script type="module">import "/js/app.js"</script>
+    <script type="module">import "app.js"</script>
   </head>
   <body>
     <main class="devtools-panel" data-panel data-state="{{.state.State}}">

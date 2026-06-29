@@ -85,6 +85,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `lazy js` now keeps app-owned files under `app/js` readable and unbundled
   while still writing content-hashed lazyshaft assets and importmap entries.
   Manifest-declared library entrypoints remain bundled.
+- `lazy js` now writes app-owned importmap specifiers relative to `app/js`, so
+  layouts import `app.js` and generated Stimulus wiring imports controllers as
+  `controllers/<name>_controller.js` instead of `/js/...` URL paths.
 
 ### Fixed
 
