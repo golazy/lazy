@@ -330,13 +330,27 @@ func TestPanelAssetsAndJobsPage(t *testing.T) {
 		"window.__golazyDevPanelClient",
 		"window.disableDevPanel",
 		"window.__lazyReloadSource",
+		"/_golazy/assets/devpanel_controller.js",
 		"EventSource.CLOSED",
-		"Resize GoLazy development panel",
-		"golazy:devpanel:height",
 		`location.pathname.startsWith("/_golazy")`,
 	} {
 		if !strings.Contains(panelScript.Body.String(), want) {
 			t.Fatalf("panel script missing %q:\n%s", want, panelScript.Body.String())
+		}
+	}
+
+	controllerScript := httptest.NewRecorder()
+	app.ServeHTTP(controllerScript, httptest.NewRequest(http.MethodGet, "/_golazy/assets/devpanel_controller.js", nil))
+	if controllerScript.Code != http.StatusOK {
+		t.Fatalf("controller script status = %d, want %d: %s", controllerScript.Code, http.StatusOK, controllerScript.Body.String())
+	}
+	for _, want := range []string{
+		"DevPanelController",
+		"golazy:devpanel:height",
+		"togglePanel",
+	} {
+		if !strings.Contains(controllerScript.Body.String(), want) {
+			t.Fatalf("controller script missing %q:\n%s", want, controllerScript.Body.String())
 		}
 	}
 

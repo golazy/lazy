@@ -45,6 +45,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The injected development-panel host script now exposes
   `window.disableDevPanel()` so the Chrome DevTools extension can hide the
   in-page panel and launcher once the inspected page has loaded.
+- The development proxy now injects hidden panel host markup into proxied app
+  HTML, while `/_golazy/assets/devpanel_controller.js` owns the in-page panel,
+  spacer, launcher, resize, and extension state.
 - `lazy upgrade` now migrates `v0.1.16 -> v0.1.17` controller calls from
   `SetLayout` to `Layout` and rewrites common `CacheKey` / `CacheKeyF` action
   returns for the new boolean cache-hit contract.

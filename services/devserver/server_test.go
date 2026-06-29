@@ -30,10 +30,25 @@ func TestInjectScriptAddsExternalPanelClientBeforeBodyClose(t *testing.T) {
 	if bytes.Contains(got, []byte("new EventSource")) {
 		t.Fatalf("injectScript() embedded JavaScript: %s", got)
 	}
+	for _, want := range []string{
+		`id="golazy-dev-panel-root"`,
+		`id="golazy-dev-panel-padding"`,
+		`id="golazy-dev-panel"`,
+		`id="golazy-dev-panel-launcher"`,
+		`iframe src="/_golazy/"`,
+		`hidden`,
+	} {
+		if !bytes.Contains(got, []byte(want)) {
+			t.Fatalf("injectScript() missing %q: %s", want, got)
+		}
+	}
 
 	again := injectScript(got)
 	if bytes.Count(again, []byte(PanelClientPath)) != 1 {
 		t.Fatalf("injectScript() duplicated panel client: %s", again)
+	}
+	if bytes.Count(again, []byte(`id="`+PanelClientRootID+`"`)) != 1 {
+		t.Fatalf("injectScript() duplicated panel root: %s", again)
 	}
 }
 
