@@ -43,9 +43,11 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   fresh data. Browser-facing panel endpoints render HTML, Turbo Frames, or
   Turbo Stream HTML; internal app-control JSON is read server-side and enriched
   before rendering.
-- The development panel Traces tab now renders per-region total and self
-  duration plus sampled allocation bytes, malloc counts, and free counts when
-  the app sidecar provides lazydev allocation samples.
+- The development panel Requests tab now reads captured request sidecars,
+  lists request paths, and exposes Headers, Tracing, and Logs detail tabs.
+  The Tracing detail renders per-region total and self duration plus sampled
+  allocation bytes, malloc counts, and free counts when the app sidecar
+  provides lazydev allocation samples.
 - The development iframe client now relies on Turbo Stream sources and
   Stimulus controllers for panel UI behavior, removing the old shared
   `/_golazy/state` fetch loop and `/_golazy/events` panel renderer while

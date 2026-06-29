@@ -1,0 +1,117 @@
+package requests
+
+import (
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"golazy.dev/lazy/app"
+	"golazy.dev/lazy/app/controllers/panel"
+	"golazy.dev/lazy/services/buildservice"
+	"golazy.dev/lazycontroller"
+
+	_ "golazy.dev/lazyview/gotmpl"
+)
+
+func TestRequestViewReadsTracesAndRendersRequestDetails(t *testing.T) {
+	var gotMethod string
+	var gotPath string
+	appControl := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = fmt.Fprint(w, `{
+			"directory":".tmp/traces",
+			"traces":[{
+				"request_id":"req-123",
+				"method":"GET",
+				"path":"/pools",
+				"status":200,
+				"bytes":2048,
+				"duration_ms":12.5,
+				"trace_file":".tmp/traces/req-123.trace",
+				"runtime":{"go_version":"go1.26","goos":"linux","goarch":"amd64"},
+				"memory":{"total_alloc_bytes_delta":4096,"mallocs_delta":12},
+				"spans":[
+					{"name":"http.server.request","span_id":"root","started_at":"2026-06-29T08:00:00Z","ended_at":"2026-06-29T08:00:00.012Z","duration_ms":12,"self_duration_ms":7},
+					{"name":"controller pools#Index","span_id":"controller","parent_id":"root","started_at":"2026-06-29T08:00:00.001Z","ended_at":"2026-06-29T08:00:00.006Z","duration_ms":5,"self_duration_ms":2,"memory":{"total_alloc_bytes_delta":4096,"mallocs_delta":12,"frees_delta":3,"self_total_alloc_bytes_delta":1024,"self_mallocs_delta":4,"self_frees_delta":1}}
+				],
+				"logs":[{"time":"2026-06-29T08:00:00Z","level":"info","message":"handled","span_id":"controller"}]
+			}]
+		}`)
+	}))
+	defer appControl.Close()
+
+	store := buildservice.NewStore(10)
+	store.Update(buildservice.Snapshot{
+		State:            buildservice.StateRunning,
+		ControlPlaneAddr: strings.TrimPrefix(appControl.URL, "http://"),
+	})
+	controller := &RequestsController{Base: panel.Base{Store: store}}
+
+	request := httptest.NewRequest(http.MethodGet, "/_golazy/requests?q=pools&request=req-123&span=controller&tab=tracing&framework=1", nil)
+	view := controller.requestView(request)
+	if gotMethod != http.MethodGet || gotPath != appRequestTracesPath {
+		t.Fatalf("proxied request = %s %s, want GET %s", gotMethod, gotPath, appRequestTracesPath)
+	}
+	if view.Error != "" {
+		t.Fatalf("view error = %q", view.Error)
+	}
+	if !view.HasSelected || view.Selected.RequestID != "req-123" {
+		t.Fatalf("selected request = %#v, want req-123", view.Selected)
+	}
+	if !view.TracingTab() {
+		t.Fatalf("selected tab = %q, want tracing", view.Tab)
+	}
+	if len(view.Rows) != 1 || view.Rows[0].Trace.PathText() != "/pools" {
+		t.Fatalf("rows = %#v, want /pools request row", view.Rows)
+	}
+	if !view.HasSelectedSpan || view.SelectedSpan.SpanID != "controller" {
+		t.Fatalf("selected span = %#v, want controller", view.SelectedSpan)
+	}
+	if got := view.SelectedSpan.AllocationSummaryText(); !strings.Contains(got, "4.0 KiB total") || !strings.Contains(got, "1.0 KiB self") {
+		t.Fatalf("selected allocation summary = %q, want total and self allocations", got)
+	}
+	if got := view.StreamURL(); !strings.Contains(got, "request=req-123") || !strings.Contains(got, "span=controller") || !strings.Contains(got, "tab=tracing") {
+		t.Fatalf("StreamURL = %q, want selected request/span/tab", got)
+	}
+
+	renderer := newRequestTestRenderer(t)
+	controller.Renderer = renderer
+	body, err := controller.RenderPanelPartial(request, "requests", "requests_frame", map[string]any{
+		"state":      controller.Snapshot(),
+		"monitoring": panel.RequestMonitoringSnapshot{Enabled: true, Directory: ".tmp/traces"},
+		"requests":   view,
+	})
+	if err != nil {
+		t.Fatalf("render requests frame: %v", err)
+	}
+	for _, want := range []string{
+		"/pools",
+		"Tracing",
+		"controller pools#Index",
+		"4.0 KiB total, 1.0 KiB self",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("rendered requests frame does not contain %q:\n%s", want, body)
+		}
+	}
+}
+
+func newRequestTestRenderer(t *testing.T) *lazycontroller.Renderer {
+	t.Helper()
+	views, err := app.Views()
+	if err != nil {
+		t.Fatalf("open app views: %v", err)
+	}
+	renderer, err := lazycontroller.NewRenderer(views)
+	if err != nil {
+		t.Fatalf("new renderer: %v", err)
+	}
+	renderer.Helper("path_for", func(name string, values ...any) (string, error) {
+		return "/_golazy/" + name, nil
+	})
+	return renderer
+}
