@@ -21,6 +21,7 @@ import (
 	"golazy.dev/lazy/app/controllers/panel/routes"
 	"golazy.dev/lazy/app/controllers/panel/services"
 	"golazy.dev/lazy/app/controllers/panel/status"
+	"golazy.dev/lazy/app/controllers/panel/terminal"
 	"golazy.dev/lazy/app/controllers/panel/traces"
 	"golazy.dev/lazy/services/buildservice"
 	"golazy.dev/lazyroutes"
@@ -67,6 +68,11 @@ func Draw(router *lazyroutes.Scope) {
 			resource.MemberPost("start", (*services.ServicesController).Start)
 			resource.MemberPost("stop", (*services.ServicesController).Stop)
 			resource.MemberPost("restart", (*services.ServicesController).Restart)
+		})
+		panel.Resources(terminal.New, func(resource *lazyroutes.Resource) {
+			resource.Singular("terminal")
+			resource.Plural("terminal")
+			resource.Path("terminal")
 		})
 		panel.Resources(traces.New)
 		panel.Resources(routes.New)

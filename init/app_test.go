@@ -5,13 +5,17 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
 	"golazy.dev/lazy/services/buildservice"
+	"golazy.dev/lazy/services/terminalservice"
+	"golazy.dev/lazywebsocket"
 )
 
 func TestPanelRootRedirectsToApp(t *testing.T) {
@@ -95,13 +99,17 @@ func TestPanelTabPageLoadsImportmapNavAndPermanentStatus(t *testing.T) {
 	body := response.Body.String()
 	for _, want := range []string{
 		`<script type="importmap">`,
+		`"@xterm/addon-fit": "/_golazy/assets/lazyshaft/xterm_fit-`,
+		`"@xterm/xterm": "/_golazy/assets/lazyshaft/xterm-`,
 		`"app.js": "/_golazy/assets/lazyshaft/app/`,
 		`"controllers/panel_nav_controller.js": "/_golazy/assets/lazyshaft/app/controllers/panel_nav_controller-`,
 		`"controllers/route_visit_controller.js": "/_golazy/assets/lazyshaft/app/controllers/route_visit_controller-`,
+		`"controllers/terminal_controller.js": "/_golazy/assets/lazyshaft/app/controllers/terminal_controller-`,
 		`<script type="module">import "app.js"</script>`,
 		`<nav class="panel-tabs tabbed-pane-header" aria-label="GoLazy panel sections" data-controller="panel-close panel-nav" data-panel-nav-default-path-value="/_golazy/app">`,
 		`<span class="panel-tab">App</span>`,
 		`<a href="/_golazy/requests" data-turbo-frame="_top">Requests</a>`,
+		`<a href="/_golazy/terminal" data-turbo-frame="_top">Terminal</a>`,
 		`<a href="/_golazy/buildinfo" data-turbo-frame="_top">BuildInfo</a>`,
 		`<a href="/_golazy/dependencies" data-turbo-frame="_top">Dependencies</a>`,
 		`data-panel-close`,
@@ -141,6 +149,7 @@ func TestPanelFrameRoutes(t *testing.T) {
 	}{
 		{path: "/_golazy/app", frame: "app", want: `data-view="app"`},
 		{path: "/_golazy/services", frame: "services", want: `data-view="services"`},
+		{path: "/_golazy/terminal", frame: "terminal", want: `data-terminal-url-value="/_golazy/terminal/connect"`},
 		{path: "/_golazy/traces", frame: "traces", want: `data-traces-panel`},
 		{path: "/_golazy/dependencies", frame: "dependencies", want: `data-dependencies-panel`},
 		{path: "/_golazy/status", frame: "status_bar", want: `<a class="app-status-chip" href="/_golazy/app" data-turbo-frame="_top" data-app-status="running">`},
@@ -168,6 +177,96 @@ func TestPanelFrameRoutes(t *testing.T) {
 		}
 		if test.path == "/_golazy/status" && !strings.Contains(body, `<a class="service-status-button" href="/_golazy/services?service=postgres" data-turbo-frame="_top" data-service-state="ready" title="ready">`) {
 			t.Fatalf("%s body missing service status button:\n%s", test.path, body)
+		}
+	}
+}
+
+func TestTerminalConnectPlainHTTPDoesNotStartSession(t *testing.T) {
+	store := buildservice.NewStore(10)
+	store.Update(buildservice.Snapshot{
+		State:       buildservice.StateRunning,
+		Message:     "running",
+		WatchedRoot: t.TempDir(),
+	})
+	manager := terminalservice.NewManager()
+	started := 0
+	manager.Shell = func() string {
+		started++
+		return "/bin/sh"
+	}
+	app := Handler(Config{
+		Store:             store,
+		Actions:           buildservice.NewActions(),
+		Terminal:          manager,
+		ForceDetailErrors: true,
+	})
+
+	response := httptest.NewRecorder()
+	app.ServeHTTP(response, httptest.NewRequest(http.MethodGet, terminalConnectPath, nil))
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusBadRequest, response.Body.String())
+	}
+	if started != 0 {
+		t.Fatalf("terminal shell started for plain HTTP request")
+	}
+}
+
+func TestTerminalConnectEndpointUpgradesBeforePanelApp(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("test uses /bin/sh")
+	}
+	if _, err := os.Stat("/bin/sh"); err != nil {
+		t.Skip("/bin/sh is unavailable")
+	}
+
+	store := buildservice.NewStore(10)
+	store.Update(buildservice.Snapshot{
+		State:       buildservice.StateRunning,
+		Message:     "running",
+		WatchedRoot: t.TempDir(),
+	})
+	manager := terminalservice.NewManager()
+	manager.Shell = func() string { return "/bin/sh" }
+	manager.Env = func() []string { return []string{"TERM=xterm-256color"} }
+	app := Handler(Config{
+		Store:             store,
+		Actions:           buildservice.NewActions(),
+		Terminal:          manager,
+		ForceDetailErrors: true,
+	})
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	url := "ws" + strings.TrimPrefix(server.URL, "http") + terminalConnectPath + "?rows=12&cols=40"
+	conn, response, err := lazywebsocket.DefaultDialer.Dial(url, nil)
+	if err != nil {
+		status := 0
+		if response != nil {
+			status = response.StatusCode
+		}
+		t.Fatalf("dial terminal websocket: status=%d err=%v", status, err)
+	}
+	defer conn.Close()
+
+	const marker = "__golazy_terminal_test__"
+	if err := conn.WriteMessage(lazywebsocket.BinaryMessage, []byte("printf "+marker+"\\nexit\\n")); err != nil {
+		t.Fatalf("write terminal input: %v", err)
+	}
+	if err := conn.SetReadDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		t.Fatalf("set read deadline: %v", err)
+	}
+	var output strings.Builder
+	for {
+		messageType, data, err := conn.ReadMessage()
+		if err != nil {
+			t.Fatalf("read terminal output: %v\noutput so far:\n%s", err, output.String())
+		}
+		if messageType != lazywebsocket.BinaryMessage {
+			continue
+		}
+		output.Write(data)
+		if strings.Contains(output.String(), marker) {
+			break
 		}
 	}
 }
@@ -609,7 +708,7 @@ func testApp() http.Handler {
 		WatchedRoot: ".",
 	})
 	store.UpdateService("postgres", buildservice.ServiceReady, "ready")
-	return App(Config{
+	return Handler(Config{
 		Store:             store,
 		Actions:           buildservice.NewActions(),
 		ForceDetailErrors: true,

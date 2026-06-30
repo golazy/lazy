@@ -233,7 +233,7 @@ func (d *devRunner) run(ctx context.Context) (int, error) {
 
 	store := buildservice.NewStore(300)
 	actions := buildservice.NewActions()
-	panel := appinit.App(appinit.Config{Store: store, Actions: actions})
+	panel := appinit.Handler(appinit.Config{Store: store, Actions: actions})
 
 	var server *devserver.Server
 	if err := d.runProgress(progress.Tasks{

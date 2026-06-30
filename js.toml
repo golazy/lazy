@@ -6,3 +6,12 @@ module = "@hotwired/turbo"
 
 [entrypoint.stimulus]
 module = "@hotwired/stimulus"
+
+[entrypoint.xterm]
+module = "@xterm/xterm"
+imports = ["@xterm/xterm"]
+assets = ["node_modules/@xterm/xterm/css/xterm.css"]
+
+[entrypoint.xterm_fit]
+module = "@xterm/addon-fit"
+imports = ["@xterm/addon-fit"]

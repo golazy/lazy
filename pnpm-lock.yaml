@@ -14,6 +14,12 @@ importers:
       '@hotwired/turbo':
         specifier: latest
         version: 8.0.23
+      '@xterm/addon-fit':
+        specifier: latest
+        version: 0.11.0
+      '@xterm/xterm':
+        specifier: latest
+        version: 6.0.0
 
 packages:
 
@@ -24,8 +30,18 @@ packages:
     resolution: {integrity: sha512-GZ7cijxEZ6Ig71u7rD6LHaRv/wcE/hNsc+nEfiWOkLNqUgLOwo5MNGWOy5ZV9ZUDSiQx1no7YxjTNnT4O6//cQ==}
     engines: {node: '>= 18'}
 
+  '@xterm/addon-fit@0.11.0':
+    resolution: {integrity: sha512-jYcgT6xtVYhnhgxh3QgYDnnNMYTcf8ElbxxFzX0IZo+vabQqSPAjC3c1wJrKB5E19VwQei89QCiZZP86DCPF7g==}
+
+  '@xterm/xterm@6.0.0':
+    resolution: {integrity: sha512-TQwDdQGtwwDt+2cgKDLn0IRaSxYu1tSUjgKarSDkUM0ZNiSRXFpjxEsvc/Zgc5kq5omJ+V0a8/kIM2WD3sMOYg==}
+
 snapshots:
 
   '@hotwired/stimulus@3.2.2': {}
 
   '@hotwired/turbo@8.0.23': {}
+
+  '@xterm/addon-fit@0.11.0': {}
+
+  '@xterm/xterm@6.0.0': {}

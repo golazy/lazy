@@ -7,6 +7,14 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- The development panel now includes a Terminal tab. It bundles xterm.js,
+  renders the tab at `/_golazy/terminal`, and connects
+  `/_golazy/terminal/connect` to a `lazy`-owned WebSocket backed by
+  `lazytui/pty`, so the shell starts in the current app root without adding
+  application routes or app control-plane endpoints.
+
 ## [0.1.18] - 2026-06-30
 
 ### Changed

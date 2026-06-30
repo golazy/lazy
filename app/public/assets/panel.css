@@ -236,6 +236,10 @@ pre {
   grid-template-rows: 62px minmax(0, 1fr);
 }
 
+.tool-view[data-view="terminal"] {
+  grid-template-rows: 31px minmax(0, 1fr);
+}
+
 .network-toolbar {
   display: grid;
   grid-template-rows: 31px 31px;
@@ -249,6 +253,30 @@ pre {
   gap: 6px;
   overflow: hidden;
   padding: 0 6px;
+}
+
+.terminal-toolbar {
+  border-bottom: 1px solid var(--border);
+}
+
+.terminal-cwd {
+  color: var(--text-muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.terminal-pane {
+  background: var(--base);
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  padding: 6px;
+}
+
+.terminal-pane .xterm {
+  height: 100%;
 }
 
 .icon-button,
