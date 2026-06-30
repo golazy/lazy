@@ -8,6 +8,7 @@
     <span class="panel-tab">{{link_to "BuildInfo" (path_for "buildinfo") (data "turbo-frame" "_top") (unless_current)}}</span>
     <span class="panel-tab">{{link_to "Dependencies" (path_for "dependencies") (data "turbo-frame" "_top") (unless_current)}}</span>
     <span class="panel-tab">{{link_to "Assets" (path_for "assets") (data "turbo-frame" "_top") (unless_current)}}</span>
+    <span class="panel-tab">{{link_to "PWA" (path_for "pwa") (data "turbo-frame" "_top") (unless_current)}}</span>
     <span class="panel-tab">{{link_to "Cache" (path_for "cache") (data "turbo-frame" "_top") (unless_current)}}</span>
   </div>
   <button type="button" class="panel-close-button" data-panel-close hidden aria-label="Close GoLazy development panel" title="Close GoLazy development panel" data-panel-close-target="button" data-action="panel-close#close"></button>

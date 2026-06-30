@@ -16,6 +16,7 @@ import (
 	"golazy.dev/lazy/app/controllers/panel/cache"
 	paneldependencies "golazy.dev/lazy/app/controllers/panel/dependencies"
 	"golazy.dev/lazy/app/controllers/panel/jobs"
+	"golazy.dev/lazy/app/controllers/panel/pwa"
 	"golazy.dev/lazy/app/controllers/panel/requests"
 	"golazy.dev/lazy/app/controllers/panel/routes"
 	"golazy.dev/lazy/app/controllers/panel/services"
@@ -34,6 +35,7 @@ func init() {
 	inflection.Irregular("cache", "cache")
 	inflection.Irregular("buildinfo", "buildinfo")
 	inflection.Irregular("dependency", "dependencies")
+	inflection.Irregular("pwa", "pwa")
 	inflection.Irregular("status", "status")
 }
 
@@ -82,6 +84,11 @@ func Draw(router *lazyroutes.Scope) {
 			resource.Get("shutdown/events", (*paneldependencies.DependenciesController).ShutdownEvents)
 		})
 		panel.Resources(assets.New)
+		panel.Resources(pwa.New, func(resource *lazyroutes.Resource) {
+			resource.Singular("pwa")
+			resource.Plural("pwa")
+			resource.Path("pwa")
+		})
 		panel.Resources(cache.New, func(resource *lazyroutes.Resource) {
 			resource.Singular("cache")
 			resource.Plural("cache")
