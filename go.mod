@@ -5,7 +5,7 @@ go 1.26.2
 require (
 	github.com/evanw/esbuild v0.28.1
 	golang.org/x/mod v0.37.0
-	golazy.dev v0.1.17
+	golazy.dev v0.1.18
 )
 
 require (
