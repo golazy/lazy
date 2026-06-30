@@ -240,6 +240,10 @@ pre {
   grid-template-rows: 31px minmax(0, 1fr);
 }
 
+.tool-view[data-view="docs"] {
+  grid-template-rows: 31px minmax(0, 1fr);
+}
+
 .network-toolbar {
   display: grid;
   grid-template-rows: 31px 31px;
@@ -277,6 +281,235 @@ pre {
 
 .terminal-pane .xterm {
   height: 100%;
+}
+
+.docs-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 26%) minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.docs-sidebar {
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.docs-module {
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0 8px;
+}
+
+.docs-module code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.docs-sidebar-heading {
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  flex: 0 0 auto;
+  font-size: 11px;
+  height: 24px;
+  line-height: 24px;
+  padding: 0 8px;
+  text-transform: uppercase;
+}
+
+.docs-module-list {
+  border-bottom: 1px solid var(--border);
+  flex: 0 1 35%;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px 0;
+}
+
+.docs-package-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px 0;
+}
+
+.docs-module-list a,
+.docs-package-list a {
+  border-left: 2px solid transparent;
+  display: grid;
+  gap: 2px;
+  padding: 5px 8px 5px 10px;
+}
+
+.docs-module-list a:hover,
+.docs-package-list a:hover {
+  background: var(--row-hover);
+}
+
+.docs-module-list a.is-current,
+.docs-package-list a.is-current {
+  background: var(--row-selected);
+  border-left-color: var(--sys-color-primary);
+}
+
+.docs-module-list code {
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.docs-sidebar-note {
+  color: var(--text-muted);
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 6px 8px;
+}
+
+.docs-module-list small,
+.docs-package-list small,
+.docs-search-results small {
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.docs-content {
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  padding: 12px 14px 24px;
+}
+
+.docs-package {
+  max-width: 980px;
+}
+
+.docs-package h1,
+.docs-search-results h2,
+.docs-section h2 {
+  font-size: 16px;
+  line-height: 1.25;
+  margin: 0 0 8px;
+}
+
+.docs-package h3,
+.docs-package h4 {
+  font-size: 13px;
+  margin: 14px 0 6px;
+}
+
+.docs-package pre,
+.docs-source-view pre,
+.docs-examples pre {
+  background: var(--row);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  margin: 6px 0;
+  overflow: auto;
+  padding: 8px;
+}
+
+.docs-package header > pre {
+  display: inline-block;
+  max-width: 100%;
+}
+
+.docs-package .source-link {
+  color: var(--link);
+  margin-left: 8px;
+}
+
+.doc-comment {
+  color: var(--text);
+  margin: 8px 0 10px;
+  white-space: pre-wrap;
+}
+
+.docs-symbol-index {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 14px;
+}
+
+.docs-symbol-index a,
+.docs-symbol h3 a,
+.docs-method h4 a,
+.docs-search-results a {
+  color: var(--link);
+}
+
+.docs-symbol,
+.docs-method,
+.docs-search-results {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.docs-examples figure {
+  margin: 8px 0 0;
+}
+
+.docs-source-view {
+  border: 1px solid var(--border);
+  margin: 0 0 12px;
+}
+
+.docs-source-toolbar {
+  align-items: center;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 8px;
+  height: 27px;
+  padding: 0 8px;
+}
+
+.docs-source-view pre {
+  border: 0;
+  border-radius: 0;
+  margin: 0;
+  max-height: 340px;
+  padding: 0;
+}
+
+.docs-source-view pre code {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  min-height: 18px;
+  padding-right: 8px;
+  white-space: pre;
+}
+
+.docs-source-view pre code span {
+  color: var(--text-muted);
+  padding-right: 8px;
+  text-align: right;
+  user-select: none;
+}
+
+.docs-source-view pre code.is-highlighted {
+  background: var(--row-selected);
+}
+
+.docs-search-results ol {
+  margin: 0 0 14px;
+  padding-left: 18px;
+}
+
+.docs-search-results li {
+  margin: 0 0 8px;
 }
 
 .icon-button,

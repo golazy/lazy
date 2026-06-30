@@ -14,6 +14,10 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `/_golazy/terminal/connect` to a `lazy`-owned WebSocket backed by
   `lazytui/pty`, so the shell starts in the current app root without adding
   application routes or app control-plane endpoints.
+- The development panel now includes a Docs tab at `/_golazy/docs`. It uses
+  `golazy.dev/lazydoc` to browse the current project, lists dependency modules
+  with `go list -m -json all`, and opens package docs, search results, and
+  source files relative to the selected module root.
 
 ## [0.1.18] - 2026-06-30
 

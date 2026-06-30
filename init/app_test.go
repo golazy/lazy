@@ -110,6 +110,7 @@ func TestPanelTabPageLoadsImportmapNavAndPermanentStatus(t *testing.T) {
 		`<span class="panel-tab">App</span>`,
 		`<a href="/_golazy/requests" data-turbo-frame="_top">Requests</a>`,
 		`<a href="/_golazy/terminal" data-turbo-frame="_top">Terminal</a>`,
+		`<a href="/_golazy/docs" data-turbo-frame="_top">Docs</a>`,
 		`<a href="/_golazy/buildinfo" data-turbo-frame="_top">BuildInfo</a>`,
 		`<a href="/_golazy/dependencies" data-turbo-frame="_top">Dependencies</a>`,
 		`data-panel-close`,
@@ -150,6 +151,7 @@ func TestPanelFrameRoutes(t *testing.T) {
 		{path: "/_golazy/app", frame: "app", want: `data-view="app"`},
 		{path: "/_golazy/services", frame: "services", want: `data-view="services"`},
 		{path: "/_golazy/terminal", frame: "terminal", want: `data-terminal-url-value="/_golazy/terminal/connect"`},
+		{path: "/_golazy/docs", frame: "docs", want: `data-view="docs"`},
 		{path: "/_golazy/traces", frame: "traces", want: `data-traces-panel`},
 		{path: "/_golazy/dependencies", frame: "dependencies", want: `data-dependencies-panel`},
 		{path: "/_golazy/status", frame: "status_bar", want: `<a class="app-status-chip" href="/_golazy/app" data-turbo-frame="_top" data-app-status="running">`},
@@ -177,6 +179,116 @@ func TestPanelFrameRoutes(t *testing.T) {
 		}
 		if test.path == "/_golazy/status" && !strings.Contains(body, `<a class="service-status-button" href="/_golazy/services?service=postgres" data-turbo-frame="_top" data-service-state="ready" title="ready">`) {
 			t.Fatalf("%s body missing service status button:\n%s", test.path, body)
+		}
+	}
+}
+
+func TestDocsPanelBrowsesCurrentProjectPackagesAndSource(t *testing.T) {
+	root := testDocsModule(t)
+	store := buildservice.NewStore(10)
+	store.Update(buildservice.Snapshot{
+		State:       buildservice.StateRunning,
+		Message:     "running",
+		WatchedRoot: root,
+	})
+	app := Handler(Config{
+		Store:             store,
+		Actions:           buildservice.NewActions(),
+		ForceDetailErrors: true,
+	})
+
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/_golazy/docs?pkg=example.com.app.posts&source=posts/doc.go&line=4", nil)
+	app.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	body := response.Body.String()
+	for _, want := range []string{
+		`<section id="docs" class="tool-view is-active docs-view" data-view="docs">`,
+		`<code>example.com/app</code>`,
+		`package posts`,
+		`import "example.com/app/posts"`,
+		`Post is a documented type.`,
+		`type Post struct{}`,
+		`posts/doc.go`,
+		`line 4`,
+		`is-highlighted"><span>4</span>// Post is a documented type.`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("body missing %q:\n%s", want, body)
+		}
+	}
+}
+
+func TestDocsPanelSearchesCurrentProjectSymbols(t *testing.T) {
+	root := testDocsModule(t)
+	store := buildservice.NewStore(10)
+	store.Update(buildservice.Snapshot{
+		State:       buildservice.StateRunning,
+		Message:     "running",
+		WatchedRoot: root,
+	})
+	app := Handler(Config{
+		Store:             store,
+		Actions:           buildservice.NewActions(),
+		ForceDetailErrors: true,
+	})
+
+	response := httptest.NewRecorder()
+	app.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/_golazy/docs?q=Post", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	body := response.Body.String()
+	for _, want := range []string{
+		`<section class="docs-search-results" aria-label="Search results">`,
+		`<a href="/_golazy/docs?module=example.com%2Fapp&amp;pkg=example.com.app.posts#Post" data-turbo-frame="_top"><span>type</span> Post</a>`,
+		`example.com/app/posts`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("body missing %q:\n%s", want, body)
+		}
+	}
+}
+
+func TestDocsPanelBrowsesDependencyModuleSource(t *testing.T) {
+	root := testDocsModuleWithDependency(t)
+	store := buildservice.NewStore(10)
+	store.Update(buildservice.Snapshot{
+		State:       buildservice.StateRunning,
+		Message:     "running",
+		WatchedRoot: root,
+	})
+	app := Handler(Config{
+		Store:             store,
+		Actions:           buildservice.NewActions(),
+		ForceDetailErrors: true,
+	})
+
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/_golazy/docs?module=example.com%2Flib&pkg=example.com.lib&source=lib.go&line=4", nil)
+	app.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	body := response.Body.String()
+	for _, want := range []string{
+		`<section id="docs" class="tool-view is-active docs-view" data-view="docs">`,
+		`<code>example.com/lib</code>`,
+		`<span>Project</span>`,
+		`<code>example.com/app</code>`,
+		`<span>example.com/lib</span>`,
+		`package lib`,
+		`import "example.com/lib"`,
+		`DependencyThing is documented in a dependency module.`,
+		`type DependencyThing struct{}`,
+		`lib.go`,
+		`line 4`,
+		`is-highlighted"><span>4</span>// DependencyThing is documented in a dependency module.`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("body missing %q:\n%s", want, body)
 		}
 	}
 }
@@ -717,4 +829,41 @@ func testApp() http.Handler {
 
 func validDevToolsWorkspaceUUID(value string) bool {
 	return regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`).MatchString(value)
+}
+
+func testDocsModule(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	writeTestFile(t, filepath.Join(root, "go.mod"), "module example.com/app\n\ngo 1.24\n")
+	writeTestFile(t, filepath.Join(root, "posts", "doc.go"), `// Package posts documents posts.
+package posts
+
+// Post is a documented type.
+type Post struct{}
+`)
+	return root
+}
+
+func testDocsModuleWithDependency(t *testing.T) string {
+	t.Helper()
+	root := testDocsModule(t)
+	writeTestFile(t, filepath.Join(root, "go.mod"), "module example.com/app\n\ngo 1.24\n\nrequire example.com/lib v0.0.0\n\nreplace example.com/lib => ./lib\n")
+	writeTestFile(t, filepath.Join(root, "lib", "go.mod"), "module example.com/lib\n\ngo 1.24\n")
+	writeTestFile(t, filepath.Join(root, "lib", "lib.go"), `// Package lib documents a local replacement dependency.
+package lib
+
+// DependencyThing is documented in a dependency module.
+type DependencyThing struct{}
+`)
+	return root
+}
+
+func writeTestFile(t *testing.T, path string, data string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatal(err)
+	}
 }

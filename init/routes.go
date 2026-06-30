@@ -15,6 +15,7 @@ import (
 	"golazy.dev/lazy/app/controllers/panel/buildinfo"
 	"golazy.dev/lazy/app/controllers/panel/cache"
 	paneldependencies "golazy.dev/lazy/app/controllers/panel/dependencies"
+	"golazy.dev/lazy/app/controllers/panel/docs"
 	"golazy.dev/lazy/app/controllers/panel/jobs"
 	"golazy.dev/lazy/app/controllers/panel/pwa"
 	"golazy.dev/lazy/app/controllers/panel/requests"
@@ -73,6 +74,11 @@ func Draw(router *lazyroutes.Scope) {
 			resource.Singular("terminal")
 			resource.Plural("terminal")
 			resource.Path("terminal")
+		})
+		panel.Resources(docs.New, func(resource *lazyroutes.Resource) {
+			resource.Singular("docs")
+			resource.Plural("docs")
+			resource.Path("docs")
 		})
 		panel.Resources(traces.New)
 		panel.Resources(routes.New)

@@ -9,6 +9,7 @@ import (
 	"golazy.dev/lazy/app"
 
 	"golazy.dev/lazy/services/buildservice"
+	"golazy.dev/lazy/services/docsservice"
 	"golazy.dev/lazy/services/terminalservice"
 	"golazy.dev/lazyapp"
 	"golazy.dev/lazyassets"
@@ -24,6 +25,7 @@ const terminalConnectPath = "/_golazy/terminal/connect"
 type Config struct {
 	Store             *buildservice.Store
 	Actions           buildservice.Actions
+	Docs              *docsservice.Manager
 	Terminal          *terminalservice.Manager
 	ForceDetailErrors bool
 }
@@ -47,6 +49,9 @@ func normalizeConfig(config Config) Config {
 	}
 	if config.Actions == nil {
 		config.Actions = buildservice.NewActions()
+	}
+	if config.Docs == nil {
+		config.Docs = docsservice.NewManager()
 	}
 	if config.Terminal == nil {
 		config.Terminal = terminalservice.NewManager()
@@ -130,6 +135,7 @@ func dependencies(config Config) func(*lazydeps.Scope) error {
 		_, err := lazydeps.Service(scope, "dev-panel", func(ctx context.Context) (context.Context, struct{}, error, context.CancelFunc) {
 			ctx = buildservice.WithStore(ctx, config.Store)
 			ctx = buildservice.WithActions(ctx, config.Actions)
+			ctx = docsservice.WithManager(ctx, config.Docs)
 			ctx = terminalservice.WithManager(ctx, config.Terminal)
 			return ctx, struct{}{}, nil, nil
 		})
