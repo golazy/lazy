@@ -7,6 +7,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.18] - 2026-06-30
+
 ### Changed
 
 - `lazy upgrade` now migrates `v0.1.17 -> v0.1.18` static
@@ -509,7 +511,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The CLI version now comes from the checked-in `VERSION` file embedded into
   the binary at build time.
 
-[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.17...HEAD
+[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.18...HEAD
+[0.1.18]: https://github.com/golazy/lazy/compare/v0.1.17...v0.1.18
 [0.1.17]: https://github.com/golazy/lazy/compare/v0.1.16...v0.1.17
 [0.1.16]: https://github.com/golazy/lazy/compare/v0.1.15...v0.1.16
 [0.1.15]: https://github.com/golazy/lazy/compare/v0.1.14...v0.1.15
