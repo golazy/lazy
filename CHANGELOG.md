@@ -18,6 +18,10 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `golazy.dev/lazydoc` to browse the current project, lists dependency modules
   with `go list -m -json all`, and opens package docs, search results, and
   source files relative to the selected module root.
+- The development panel now includes a Media tab at `/_golazy/media`. It reads
+  the app lazydev media control plane to list configured storages, storage
+  objects, file catalog rows, and media variants, with upload, download,
+  remove, and URL actions when the underlying service supports them.
 
 ## [0.1.18] - 2026-06-30
 

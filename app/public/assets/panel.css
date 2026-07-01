@@ -1278,6 +1278,192 @@ button:disabled:hover {
   min-width: 54rem;
 }
 
+.media-view {
+  grid-template-rows: 31px minmax(0, 1fr);
+}
+
+.media-toolbar {
+  gap: 8px;
+}
+
+.media-upload-form,
+.media-storage-upload,
+.media-detail-actions,
+.media-actions {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+
+.media-upload-form {
+  flex: 0 1 auto;
+  overflow: hidden;
+}
+
+.media-storage-upload {
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  padding: 6px;
+}
+
+.media-file-input,
+.media-select {
+  background: var(--input);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  color: var(--text);
+  height: 23px;
+  min-width: 0;
+}
+
+.media-file-input {
+  max-width: 180px;
+}
+
+.media-key-input {
+  min-width: 9rem;
+  width: 12rem;
+}
+
+.media-layout {
+  display: grid;
+  grid-template-columns: minmax(180px, 22%) minmax(360px, 1fr) minmax(280px, 30%);
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.media-storage-pane,
+.media-files-pane,
+.media-detail-pane {
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+}
+
+.media-storage-pane,
+.media-files-pane {
+  border-right: 1px solid var(--border);
+}
+
+.media-pane-header {
+  align-items: center;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 8px;
+  height: 27px;
+  justify-content: space-between;
+  padding: 0 8px;
+}
+
+.media-pane-header span,
+.media-storage-row small {
+  color: var(--text-muted);
+}
+
+.media-storage-list {
+  border-bottom: 1px solid var(--border);
+}
+
+.media-storage-row {
+  border-left: 2px solid transparent;
+  display: grid;
+  gap: 2px;
+  padding: 6px 8px;
+}
+
+.media-storage-row:hover {
+  background: var(--row-hover);
+}
+
+.media-storage-row.is-selected {
+  background: var(--row-selected);
+  border-left-color: var(--sys-color-primary);
+}
+
+.media-object-grid,
+.media-file-grid,
+.media-variant-grid {
+  min-width: 35rem;
+}
+
+.media-file-grid {
+  min-width: 58rem;
+}
+
+.media-object-grid th:nth-child(3),
+.media-object-grid td:nth-child(3),
+.media-file-grid th:nth-child(7),
+.media-file-grid td:nth-child(7),
+.media-variant-grid th:nth-child(4),
+.media-variant-grid td:nth-child(4) {
+  width: 9.5rem;
+}
+
+.media-file-grid td:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.media-file-grid td:first-child code {
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.media-actions {
+  flex-wrap: wrap;
+}
+
+.media-actions a,
+.link-button {
+  color: var(--link);
+}
+
+.link-button {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  height: auto;
+  padding: 0;
+}
+
+.link-button:hover {
+  text-decoration: underline;
+}
+
+.media-variant-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.media-variant-badge {
+  align-items: center;
+  background: color-mix(in srgb, var(--sys-color-primary) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sys-color-primary) 38%, var(--border));
+  border-radius: 3px;
+  color: var(--text);
+  display: inline-flex;
+  font-size: 11px;
+  height: 18px;
+  justify-content: center;
+  min-width: 22px;
+  padding: 0 4px;
+}
+
+.media-detail-actions {
+  border-bottom: 1px solid var(--border);
+  padding: 6px 8px;
+}
+
+.media-section-header {
+  border-top: 1px solid var(--border);
+}
+
 .detail-header {
   align-items: center;
   border-bottom: 1px solid var(--border);
@@ -2632,6 +2818,7 @@ button:disabled:hover {
   .split-view,
   .buildinfo-layout,
   .dependencies-layout,
+  .media-layout,
   .runtime-grid,
   .runtime-summary-grid,
   .action-layout {
@@ -2645,9 +2832,18 @@ button:disabled:hover {
 
   .runtime-left-stack,
   .buildinfo-detail-pane,
+  .media-storage-pane,
+  .media-files-pane,
+  .media-detail-pane,
   .runtime-summary-grid {
     grid-template-rows: auto;
     overflow: visible;
+  }
+
+  .media-storage-pane,
+  .media-files-pane {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
   }
 
   .runtime-output-resize {

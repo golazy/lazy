@@ -7,6 +7,7 @@
     <span class="panel-tab">{{link_to "Docs" (path_for "docs") (data "turbo-frame" "_top") (unless_current)}}</span>
     <span class="panel-tab">{{link_to "Routes" (path_for "routes") (data "turbo-frame" "_top") (unless_current)}}</span>
     <span class="panel-tab">{{link_to "Jobs" (path_for "jobs") (data "turbo-frame" "_top") (unless_current)}}</span>
+    <span class="panel-tab">{{link_to "Media" (path_for "media") (data "turbo-frame" "_top") (unless_current)}}</span>
     <span class="panel-tab">{{link_to "BuildInfo" (path_for "buildinfo") (data "turbo-frame" "_top") (unless_current)}}</span>
     <span class="panel-tab">{{link_to "Dependencies" (path_for "dependencies") (data "turbo-frame" "_top") (unless_current)}}</span>
     <span class="panel-tab">{{link_to "Assets" (path_for "assets") (data "turbo-frame" "_top") (unless_current)}}</span>

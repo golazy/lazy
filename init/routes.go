@@ -17,6 +17,7 @@ import (
 	paneldependencies "golazy.dev/lazy/app/controllers/panel/dependencies"
 	"golazy.dev/lazy/app/controllers/panel/docs"
 	"golazy.dev/lazy/app/controllers/panel/jobs"
+	"golazy.dev/lazy/app/controllers/panel/media"
 	"golazy.dev/lazy/app/controllers/panel/pwa"
 	"golazy.dev/lazy/app/controllers/panel/requests"
 	"golazy.dev/lazy/app/controllers/panel/routes"
@@ -83,6 +84,17 @@ func Draw(router *lazyroutes.Scope) {
 		panel.Resources(traces.New)
 		panel.Resources(routes.New)
 		panel.Resources(jobs.New)
+		panel.Resources(media.New, func(resource *lazyroutes.Resource) {
+			resource.Singular("media")
+			resource.Plural("media")
+			resource.Path("media")
+			resource.Get("download", (*media.MediaController).Download)
+			resource.Post("storage/upload", (*media.MediaController).StorageUpload)
+			resource.Post("storage/delete", (*media.MediaController).StorageDelete)
+			resource.Post("file/upload", (*media.MediaController).FileUpload)
+			resource.Post("file/delete", (*media.MediaController).FileDelete)
+			resource.Post("variant/delete", (*media.MediaController).VariantDelete)
+		})
 		panel.Resources(buildinfo.New, func(resource *lazyroutes.Resource) {
 			resource.Singular("buildinfo")
 			resource.Plural("buildinfo")
