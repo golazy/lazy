@@ -26,4 +26,6 @@ golang.org/x/sys v0.44.0 h1:ildZl3J4uzeKP07r2F++Op7E9B29JRUy+a27EibtBTQ=
 golang.org/x/sys v0.44.0/go.mod h1:4GL1E5IUh+htKOUEOaiffhrAeqysfVGipDYzABqnCmw=
 golazy.dev v0.1.18 h1:UegIoKCH5cM3V9e0u8wHUO4Ucx9MnS81T1IgixK4yW4=
 golazy.dev v0.1.18/go.mod h1:IxnVwqAV8dk61axqJ3d1cbGWfj0wcmOhXqxaFdw2YvE=
+golazy.dev v0.1.19 h1:gFoM6bGJiF6EPx4BpxaIE5KevJvSwpbAUWkVk4ZaaKo=
+golazy.dev v0.1.19/go.mod h1:IxnVwqAV8dk61axqJ3d1cbGWfj0wcmOhXqxaFdw2YvE=
 gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
