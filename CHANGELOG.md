@@ -7,6 +7,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.19] - 2026-07-03
+
 ### Added
 
 - The development panel now includes a Terminal tab. It bundles xterm.js,
@@ -527,7 +529,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The CLI version now comes from the checked-in `VERSION` file embedded into
   the binary at build time.
 
-[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.18...HEAD
+[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.19...HEAD
+[0.1.19]: https://github.com/golazy/lazy/compare/v0.1.18...v0.1.19
 [0.1.18]: https://github.com/golazy/lazy/compare/v0.1.17...v0.1.18
 [0.1.17]: https://github.com/golazy/lazy/compare/v0.1.16...v0.1.17
 [0.1.16]: https://github.com/golazy/lazy/compare/v0.1.15...v0.1.16
