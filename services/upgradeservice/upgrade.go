@@ -41,6 +41,7 @@ var releaseVersions = []string{
 	"v0.1.16",
 	"v0.1.17",
 	"v0.1.18",
+	"v0.1.19",
 }
 
 const firstUpgradeAwareVersion = "v0.1.10"
@@ -267,6 +268,8 @@ func (c Command) runStepWithStreams(dir string, from string, to string, force bo
 		err = executor.upgradeTo017()
 	case from == "v0.1.17" && to == "v0.1.18":
 		err = executor.upgradeTo018()
+	case from == "v0.1.18" && to == "v0.1.19":
+		err = executor.upgradeTo019()
 	default:
 		err = fmt.Errorf("upgrade from %s to %s is not implemented; use the versioned upgrade guide", from, to)
 	}
@@ -401,6 +404,8 @@ func hasBuiltInStep(from string, to string) bool {
 		return true
 	case from == "v0.1.17" && to == "v0.1.18":
 		return true
+	case from == "v0.1.18" && to == "v0.1.19":
+		return true
 	default:
 		return false
 	}
@@ -463,6 +468,10 @@ func (e stepExecutor) upgradeTo017() error {
 
 func (e stepExecutor) upgradeTo018() error {
 	return e.rewriteStaticJobConfigs()
+}
+
+func (e stepExecutor) upgradeTo019() error {
+	return nil
 }
 
 func (e stepExecutor) rewriteStaticJobConfigs() error {

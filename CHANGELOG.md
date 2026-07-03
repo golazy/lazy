@@ -25,6 +25,11 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   objects, file catalog rows, and media variants, with upload, download,
   remove, and URL actions when the underlying service supports them.
 
+### Changed
+
+- `lazy upgrade` now migrates `v0.1.18 -> v0.1.19` by updating the
+  `golazy.dev` module requirement and running the standard follow-up checks.
+
 ## [0.1.18] - 2026-06-30
 
 ### Changed
