@@ -247,6 +247,11 @@ func (v cacheView) SizeText() string {
 }
 
 func (v cacheView) UsageText() string {
+	maxSizeBytes := v.Snapshot.Stats.MaxSizeBytes
+	if maxSizeBytes > 0 {
+		usage := float64(v.Snapshot.Stats.SizeBytes) / float64(maxSizeBytes) * 100
+		return formatPercent(usage)
+	}
 	maxEntries := v.Snapshot.Stats.MaxEntries
 	if maxEntries <= 0 {
 		return "n/a"

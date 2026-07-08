@@ -25,13 +25,14 @@ type CacheSnapshot struct {
 }
 
 type CacheStats struct {
-	Entries    int   `json:"entries"`
-	MaxEntries int   `json:"max_entries"`
-	SizeBytes  int64 `json:"size_bytes"`
-	Hits       int   `json:"hits"`
-	Misses     int   `json:"misses"`
-	Sets       int   `json:"sets"`
-	Evictions  int   `json:"evictions"`
+	Entries      int   `json:"entries"`
+	MaxEntries   int   `json:"max_entries"`
+	SizeBytes    int64 `json:"size_bytes"`
+	MaxSizeBytes int64 `json:"max_size_bytes"`
+	Hits         int   `json:"hits"`
+	Misses       int   `json:"misses"`
+	Sets         int   `json:"sets"`
+	Evictions    int   `json:"evictions"`
 }
 
 type CacheEntry struct {

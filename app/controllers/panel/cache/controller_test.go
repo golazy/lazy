@@ -25,7 +25,7 @@ func TestCacheViewReadsApplicationControlPlaneAndRendersSelection(t *testing.T) 
 		case "/cache":
 			_, _ = fmt.Fprint(w, `{
 				"enabled":true,
-				"stats":{"entries":2,"max_entries":20,"size_bytes":1048576,"hits":4,"misses":1,"sets":2,"evictions":0},
+				"stats":{"entries":2,"max_entries":20,"size_bytes":1048576,"max_size_bytes":10485760,"hits":4,"misses":1,"sets":2,"evictions":0},
 				"entries":[
 					{"key":"build-test-post-1","size_bytes":18,"updated_at":"2026-06-29T12:00:00Z","hits":3,"sets":1},
 					{"key":"build-test-home","size_bytes":8,"updated_at":"2026-06-29T12:00:00Z","hits":1,"sets":1}
@@ -87,12 +87,13 @@ func TestCacheViewReadsApplicationControlPlaneAndRendersSelection(t *testing.T) 
 	stream, err := controller.renderCacheEventStream(request, cacheEvent{
 		Enabled: true,
 		Stats: panel.CacheStats{
-			Entries:    3,
-			MaxEntries: 20,
-			SizeBytes:  2097152,
-			Hits:       5,
-			Misses:     1,
-			Sets:       3,
+			Entries:      3,
+			MaxEntries:   20,
+			SizeBytes:    2097152,
+			MaxSizeBytes: 4194304,
+			Hits:         5,
+			Misses:       1,
+			Sets:         3,
 		},
 		Entry: &panel.CacheEntry{
 			Key:       "build-test-post-2",
