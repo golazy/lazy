@@ -37,6 +37,26 @@
     </section>
 
     <section class="runtime-pane output-pane">
+      <h2>Queue Limits</h2>
+      <ul class="compact-list" data-job-queue-limits>
+        {{if .defer_panel_lists}}
+        {{else}}
+          {{partial "queue_limits" .}}
+        {{end}}
+      </ul>
+    </section>
+
+    <section class="runtime-pane output-pane">
+      <h2>Schedules</h2>
+      <ul class="compact-list" data-job-schedules>
+        {{if .defer_panel_lists}}
+        {{else}}
+          {{partial "schedules" .}}
+        {{end}}
+      </ul>
+    </section>
+
+    <section class="runtime-pane output-pane">
       <h2>Recent Jobs</h2>
       <table class="data-grid" data-controller="table-resize">
         <thead>
@@ -44,6 +64,7 @@
             <th>ID</th>
             <th>Kind</th>
             <th>Queue</th>
+            <th>Schedule</th>
             <th>State</th>
             <th>Attempt</th>
             <th>Run At</th>

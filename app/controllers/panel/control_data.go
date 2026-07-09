@@ -79,11 +79,13 @@ func (s RequestMonitoringSnapshot) StatusText() string {
 }
 
 type JobsSnapshot struct {
-	Running     bool            `json:"running"`
-	Definitions []JobDefinition `json:"definitions"`
-	Stats       JobStats        `json:"stats"`
-	Recent      []JobRecord     `json:"recent"`
-	Error       string          `json:"-"`
+	Running     bool                 `json:"running"`
+	Definitions []JobDefinition      `json:"definitions"`
+	Schedules   []JobSchedule        `json:"schedules"`
+	QueueLimits []JobQueueLimitState `json:"queue_limits"`
+	Stats       JobStats             `json:"stats"`
+	Recent      []JobRecord          `json:"recent"`
+	Error       string               `json:"-"`
 }
 
 type JobDefinition struct {
@@ -94,16 +96,33 @@ type JobDefinition struct {
 }
 
 type JobStats struct {
-	Total   int            `json:"total"`
-	ByState map[string]int `json:"by_state"`
-	ByKind  map[string]int `json:"by_kind"`
-	ByQueue map[string]int `json:"by_queue"`
+	Total        int                       `json:"total"`
+	ByState      map[string]int            `json:"by_state"`
+	ByKind       map[string]int            `json:"by_kind"`
+	ByQueue      map[string]int            `json:"by_queue"`
+	ByQueueState map[string]map[string]int `json:"by_queue_state"`
+}
+
+type JobSchedule struct {
+	Key       string    `json:"key"`
+	Kind      string    `json:"kind"`
+	Queue     string    `json:"queue"`
+	Interval  string    `json:"interval"`
+	NextRunAt time.Time `json:"next_run_at"`
+}
+
+type JobQueueLimitState struct {
+	Queue      string `json:"queue"`
+	MaxRunning int    `json:"max_running"`
+	Running    int    `json:"running"`
+	Available  int    `json:"available"`
 }
 
 type JobRecord struct {
 	ID          int64     `json:"id"`
 	Kind        string    `json:"kind"`
 	Queue       string    `json:"queue"`
+	ScheduleKey string    `json:"schedule_key"`
 	State       string    `json:"state"`
 	Attempt     int       `json:"attempt"`
 	MaxAttempts int       `json:"max_attempts"`
@@ -331,6 +350,10 @@ func (m BuildInfoModule) ReplaceText() string {
 
 func (r JobRecord) RunAtText() string {
 	return formatTime(r.RunAt)
+}
+
+func (s JobSchedule) NextRunAtText() string {
+	return formatTime(s.NextRunAt)
 }
 
 func (b *Base) CacheSnapshot(ctx context.Context) CacheSnapshot {

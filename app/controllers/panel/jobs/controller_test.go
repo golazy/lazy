@@ -19,7 +19,7 @@ func TestJobsSnapshotReadsApplicationControlPlane(t *testing.T) {
 		gotMethod = r.Method
 		gotPath = r.URL.Path
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		_, _ = fmt.Fprint(w, `{"running":true,"definitions":[{"kind":"imports.whatsapp"}],"recent":[]}`)
+		_, _ = fmt.Fprint(w, `{"running":true,"definitions":[{"kind":"imports.whatsapp"}],"queue_limits":[{"queue":"scraping","max_running":1,"running":0,"available":1}],"schedules":[{"key":"prices.azure","kind":"prices.azure","queue":"scraping","interval":"1h0m0s","next_run_at":"2026-07-09T12:00:00Z"}],"recent":[{"id":1,"kind":"prices.azure","queue":"scraping","schedule_key":"prices.azure"}]}`)
 	}))
 	defer appControl.Close()
 
@@ -42,5 +42,14 @@ func TestJobsSnapshotReadsApplicationControlPlane(t *testing.T) {
 	}
 	if len(snapshot.Definitions) != 1 || snapshot.Definitions[0].Kind != "imports.whatsapp" {
 		t.Fatalf("definitions = %#v, want imports.whatsapp", snapshot.Definitions)
+	}
+	if len(snapshot.QueueLimits) != 1 || snapshot.QueueLimits[0].Queue != "scraping" || snapshot.QueueLimits[0].MaxRunning != 1 {
+		t.Fatalf("queue limits = %#v, want scraping limit", snapshot.QueueLimits)
+	}
+	if len(snapshot.Schedules) != 1 || snapshot.Schedules[0].Key != "prices.azure" {
+		t.Fatalf("schedules = %#v, want prices.azure", snapshot.Schedules)
+	}
+	if len(snapshot.Recent) != 1 || snapshot.Recent[0].ScheduleKey != "prices.azure" {
+		t.Fatalf("recent = %#v, want scheduled record", snapshot.Recent)
 	}
 }

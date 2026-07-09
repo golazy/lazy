@@ -54,10 +54,20 @@ func (c *JobsController) renderJobsLists(r *http.Request) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	queueLimits, err := c.RenderPanelPartial(r, "jobs", "queue_limits", variables)
+	if err != nil {
+		return "", err
+	}
+	schedules, err := c.RenderPanelPartial(r, "jobs", "schedules", variables)
+	if err != nil {
+		return "", err
+	}
 	recent, err := c.RenderPanelPartial(r, "jobs", "recent_jobs", variables)
 	if err != nil {
 		return "", err
 	}
 	return panel.TurboStreamTargets("update", "[data-job-definitions]", definitions) +
+		panel.TurboStreamTargets("update", "[data-job-queue-limits]", queueLimits) +
+		panel.TurboStreamTargets("update", "[data-job-schedules]", schedules) +
 		panel.TurboStreamTargets("update", "[data-jobs-recent]", recent), nil
 }

@@ -12,6 +12,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The development panel Cache tab now calculates usage from
   `max_size_bytes` when the app cache reports a byte ceiling, falling back to
   entry-count usage for entry-limited backends.
+- The development panel Jobs tab now displays lazyjobs queue limits, registered
+  schedules, and schedule keys for recent jobs when the app reports them from
+  its control plane.
 
 ## [0.1.19] - 2026-07-03
 

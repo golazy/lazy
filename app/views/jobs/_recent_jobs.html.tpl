@@ -3,6 +3,7 @@
     <td>{{.ID}}</td>
     <td>{{.Kind}}</td>
     <td>{{.Queue}}</td>
+    <td>{{.ScheduleKey}}</td>
     <td>{{.State}}</td>
     <td>{{.AttemptText}}</td>
     <td>{{.RunAtText}}</td>
