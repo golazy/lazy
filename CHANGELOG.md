@@ -7,6 +7,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.20] - 2026-07-12
+
 ### Changed
 
 - The development panel Cache tab now calculates usage from
@@ -15,6 +17,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The development panel Jobs tab now displays lazyjobs queue limits, registered
   schedules, and schedule keys for recent jobs when the app reports them from
   its control plane.
+- `lazy upgrade` now migrates `v0.1.19 -> v0.1.20` by updating the
+  `golazy.dev` module requirement and running the standard follow-up checks.
 
 ## [0.1.19] - 2026-07-03
 
@@ -543,7 +547,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The CLI version now comes from the checked-in `VERSION` file embedded into
   the binary at build time.
 
-[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.19...HEAD
+[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.20...HEAD
+[0.1.20]: https://github.com/golazy/lazy/compare/v0.1.19...v0.1.20
 [0.1.19]: https://github.com/golazy/lazy/compare/v0.1.18...v0.1.19
 [0.1.18]: https://github.com/golazy/lazy/compare/v0.1.17...v0.1.18
 [0.1.17]: https://github.com/golazy/lazy/compare/v0.1.16...v0.1.17

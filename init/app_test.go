@@ -833,6 +833,7 @@ func validDevToolsWorkspaceUUID(value string) bool {
 
 func testDocsModule(t *testing.T) string {
 	t.Helper()
+	t.Setenv("GOWORK", "off")
 	root := t.TempDir()
 	writeTestFile(t, filepath.Join(root, "go.mod"), "module example.com/app\n\ngo 1.24\n")
 	writeTestFile(t, filepath.Join(root, "posts", "doc.go"), `// Package posts documents posts.

@@ -109,6 +109,7 @@ func TestSourceReadsHighlightedLines(t *testing.T) {
 
 func testModule(t *testing.T) string {
 	t.Helper()
+	t.Setenv("GOWORK", "off")
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "go.mod"), "module example.com/app\n\ngo 1.24\n")
 	writeFile(t, filepath.Join(root, "posts", "doc.go"), `// Package posts documents posts.
