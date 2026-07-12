@@ -517,6 +517,39 @@ func TestUpgradeTo020UpdatesGoModOnly(t *testing.T) {
 	}
 }
 
+func TestUpgradeTo021UpdatesGoModOnly(t *testing.T) {
+	dir := t.TempDir()
+	writeUpgradeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n\ngo 1.26.0\n\nrequire golazy.dev v0.1.20\n")
+
+	var calls []upgradeInvocation
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code, err := (Command{
+		Dir:          dir,
+		Stdout:       &stdout,
+		Stderr:       &stderr,
+		SkipCommands: true,
+		Runner:       goGetRunner(t, &calls),
+	}).Execute()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != 0 {
+		t.Fatalf("code = %d, want 0", code)
+	}
+
+	assertUpgradeFileContains(t, filepath.Join(dir, "go.mod"), "golazy.dev v0.1.21")
+	if len(calls) != 1 || !slices.Equal(calls[0].args, []string{"get", "golazy.dev@v0.1.21"}) {
+		t.Fatalf("calls = %#v, want go get golazy.dev@v0.1.21", calls)
+	}
+	if !strings.Contains(stdout.String(), "* Upgrade v0.1.20 -> v0.1.21 ... DONE") {
+		t.Fatalf("stdout = %q", stdout.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+}
+
 func TestUpgradeTargetRunsEachStepInOrder(t *testing.T) {
 	dir := t.TempDir()
 	writeUpgradeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n\ngo 1.26.0\n\nrequire golazy.dev v0.1.10\n")
@@ -612,11 +645,11 @@ func TestUpgradeForceRejectsTarget(t *testing.T) {
 
 func TestUpgradeForceRejectsLatestVersion(t *testing.T) {
 	dir := t.TempDir()
-	writeUpgradeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n\ngo 1.26.0\n\nrequire golazy.dev v0.1.20\n")
+	writeUpgradeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n\ngo 1.26.0\n\nrequire golazy.dev v0.1.21\n")
 
 	code, err := (Command{
 		Dir:   dir,
-		Force: "v0.1.20",
+		Force: "v0.1.21",
 	}).Execute()
 	if err == nil {
 		t.Fatal("err = nil, want no next step error")
@@ -624,7 +657,7 @@ func TestUpgradeForceRejectsLatestVersion(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("code = %d, want 1", code)
 	}
-	if !strings.Contains(err.Error(), "v0.1.20 has no later upgrade step") {
+	if !strings.Contains(err.Error(), "v0.1.21 has no later upgrade step") {
 		t.Fatalf("err = %v", err)
 	}
 }
@@ -647,7 +680,7 @@ func TestUpgradeRejectsUnimplementedNextVersion(t *testing.T) {
 
 func TestUpgradeAlreadyCurrentCommentsObsoleteMiseGoTool(t *testing.T) {
 	dir := t.TempDir()
-	writeUpgradeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n\ngo 1.26.0\n\nrequire golazy.dev v0.1.20\n")
+	writeUpgradeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n\ngo 1.26.0\n\nrequire golazy.dev v0.1.21\n")
 	writeUpgradeFile(t, filepath.Join(dir, "mise.toml"), "[tools]\ngo = \"1.26.0\"\nnode = \"24\"\n")
 
 	var stdout bytes.Buffer
@@ -663,11 +696,11 @@ func TestUpgradeAlreadyCurrentCommentsObsoleteMiseGoTool(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code = %d, want 0", code)
 	}
-	assertUpgradeFileContent(t, filepath.Join(dir, "mise.toml"), "[tools]\n# go = \"1.26.0\" # not needed by GoLazy v0.1.20; Go uses the go.mod go directive and toolchain selection.\nnode = \"24\"\n")
+	assertUpgradeFileContent(t, filepath.Join(dir, "mise.toml"), "[tools]\n# go = \"1.26.0\" # not needed by GoLazy v0.1.21; Go uses the go.mod go directive and toolchain selection.\nnode = \"24\"\n")
 	if stderr.Len() != 0 {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
-	if !strings.Contains(stdout.String(), "already at v0.1.20") {
+	if !strings.Contains(stdout.String(), "already at v0.1.21") {
 		t.Fatalf("stdout = %q", stdout.String())
 	}
 }

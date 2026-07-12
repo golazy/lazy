@@ -7,6 +7,11 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- `lazy upgrade` now recognizes the `v0.1.21` development target and migrates
+  `v0.1.20` apps by updating the `golazy.dev` module requirement.
+
 ## [0.1.20] - 2026-07-12
 
 ### Changed
