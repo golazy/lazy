@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	panelcontroller "golazy.dev/lazy/app/controllers/panel"
+	"golazy.dev/lazy/app/controllers/panel/addons"
 	panelapp "golazy.dev/lazy/app/controllers/panel/app"
 	"golazy.dev/lazy/app/controllers/panel/assets"
 	"golazy.dev/lazy/app/controllers/panel/buildinfo"
@@ -70,6 +71,10 @@ func Draw(router *lazyroutes.Scope) {
 			resource.MemberPost("start", (*services.ServicesController).Start)
 			resource.MemberPost("stop", (*services.ServicesController).Stop)
 			resource.MemberPost("restart", (*services.ServicesController).Restart)
+		})
+		panel.Resources(addons.New, func(resource *lazyroutes.Resource) {
+			resource.Get("content", (*addons.AddonsController).Content)
+			resource.Post("action", (*addons.AddonsController).Action)
 		})
 		panel.Resources(terminal.New, func(resource *lazyroutes.Resource) {
 			resource.Singular("terminal")

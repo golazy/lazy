@@ -3,6 +3,7 @@
     <span class="panel-tab">{{link_to "App" (path_for "app") (data "turbo-frame" "_top") (unless_current)}}</span>
     <span class="panel-tab">{{link_to "Requests" (path_for "requests") (data "turbo-frame" "_top") (unless_current)}}</span>
     <span class="panel-tab">{{link_to "Services" (path_for "services") (data "turbo-frame" "_top") (unless_current)}}</span>
+    <span class="panel-tab">{{link_to "Add-ons" (path_for "addons") (data "turbo-frame" "_top") (unless_current)}}</span>
     <span class="panel-tab">{{link_to "Terminal" (path_for "terminal") (data "turbo-frame" "_top") (unless_current)}}</span>
     <span class="panel-tab">{{link_to "Docs" (path_for "docs") (data "turbo-frame" "_top") (unless_current)}}</span>
     <span class="panel-tab">{{link_to "Routes" (path_for "routes") (data "turbo-frame" "_top") (unless_current)}}</span>
