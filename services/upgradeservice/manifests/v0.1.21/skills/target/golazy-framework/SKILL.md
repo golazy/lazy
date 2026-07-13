@@ -1,6 +1,6 @@
 ---
 name: golazy-framework
-description: Develop, extend, debug, or review a GoLazy application using its generated-app conventions. Use for app architecture, services and dependency lifecycle, routes, controllers, views, forms, SEO, caching, Turbo, Tailwind, JavaScript, assets, mailers, jobs, PWA, MCP, and application tests.
+description: Develop, extend, debug, or review a GoLazy application using its generated-app conventions. Use for app architecture, add-ons, services and dependency lifecycle, routes, controllers, views, forms, SEO, caching, Turbo, Tailwind, JavaScript, assets, mailers, jobs, PWA, MCP, and application tests.
 ---
 
 # Develop A GoLazy Application
@@ -105,6 +105,7 @@ repository, or workspace documentation to perform ordinary app work. Use
 
 ### Runtime Adapters
 
+- [Add-ons](references/addons.md)
 - [Mailers](references/mailers.md)
 - [Jobs](references/jobs.md)
 - [Services](references/services.md)
