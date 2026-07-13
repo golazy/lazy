@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	addonscommand "golazy.dev/lazy/commands/addons"
 	"golazy.dev/lazy/commands/appcmd"
 	bastardcommand "golazy.dev/lazy/commands/bastard"
 	commandcenter "golazy.dev/lazy/commands/commandcenter"
@@ -20,6 +21,7 @@ import (
 	runcommand "golazy.dev/lazy/commands/run"
 	tailwindcommand "golazy.dev/lazy/commands/tailwind"
 	upgradecommand "golazy.dev/lazy/commands/upgrade"
+	"golazy.dev/lazy/services/addonservice"
 )
 
 func main() {
@@ -62,6 +64,19 @@ func execute(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer)
 		return code
 	case "tailwind":
 		return executeTailwind(args[1:], stdout, stderr)
+	case "add", "remove", "update", "addons":
+		code, err := (addonscommand.Command{
+			FrameworkVersion: currentVersion(),
+			Stdout:           stdout,
+			Stderr:           stderr,
+			Sources: []addonservice.Source{
+				addonservice.FirstPartySource(currentVersion()),
+			},
+		}).Execute(args[0], args[1:])
+		if err != nil {
+			fmt.Fprintf(stderr, "lazy: %v\n", err)
+		}
+		return code
 	case "new":
 		flags := flag.NewFlagSet("new", flag.ContinueOnError)
 		flags.SetOutput(stderr)
@@ -150,6 +165,10 @@ func printUsage(stdout io.Writer) {
 	fmt.Fprintln(stdout, "  lazy native")
 	fmt.Fprintln(stdout, "  lazy native build")
 	fmt.Fprintln(stdout, "  lazy docs")
+	fmt.Fprintln(stdout, "  lazy add [--dry-run] [--manifest <path>] [--config key=value] [--unset-config key] <addon>[@version]")
+	fmt.Fprintln(stdout, "  lazy remove [--dry-run] [--manifest <path>] <addon>")
+	fmt.Fprintln(stdout, "  lazy update [--dry-run] [--manifest <path>] [addon ...]")
+	fmt.Fprintln(stdout, "  lazy addons")
 	fmt.Fprintln(stdout, "  lazy js")
 	fmt.Fprintln(stdout, "  lazy tailwind")
 	fmt.Fprintln(stdout, "  lazy --version")

@@ -131,7 +131,7 @@ func skipProjectVersionCheck(args []string) bool {
 		return false
 	}
 	switch args[0] {
-	case "--version", "new", "upgrade", "command-center", "bastard":
+	case "--version", "new", "upgrade", "add", "remove", "update", "addons", "command-center", "bastard":
 		return true
 	default:
 		return false

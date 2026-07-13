@@ -1,6 +1,7 @@
 package taskservice
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -143,12 +144,22 @@ func TaskName(service string, action string) string {
 }
 
 func RunTask(runner execservice.Runner, dir string, task string, args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer, capture bool) error {
+	return RunTaskContext(context.Background(), runner, dir, task, args, stdin, stdout, stderr, capture)
+}
+
+// RunTaskContext runs a mise task with cancellation. RunTask remains the
+// compatibility entrypoint for callers that do not own a context.
+func RunTaskContext(ctx context.Context, runner execservice.Runner, dir string, task string, args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer, capture bool) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	injected := runner != nil
 	if runner == nil {
 		runner = execservice.Exec
 	}
 	command, runArgs, env := miseRunCommand(injected, task, args)
 	return runner(command, runArgs, execservice.Options{
+		Context: ctx,
 		Dir:     dir,
 		Stdin:   stdin,
 		Stdout:  stdout,
@@ -156,6 +167,12 @@ func RunTask(runner execservice.Runner, dir string, task string, args []string, 
 		Env:     env,
 		Capture: capture,
 	})
+}
+
+// TaskNameFromFile returns the mise task name for a path relative to
+// .mise/tasks. File extensions are not part of the task name.
+func TaskNameFromFile(path string) string {
+	return taskName(path)
 }
 
 func TaskCommand(task string, args []string) (string, []string, []string) {

@@ -2,7 +2,9 @@ package native
 
 import (
 	"bytes"
+	"context"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -12,6 +14,7 @@ import (
 	"testing"
 
 	"golazy.dev/lazy/commands"
+	"golazy.dev/lazycode"
 )
 
 type nativeInvocation struct {
@@ -136,13 +139,57 @@ import _ "golazy.dev/lazyapp"
 
 func main() {}
 `)
+	prepareTask := "#!/bin/sh\n# prepare\n"
+	finishTask := "#!/bin/sh\n# finish\n"
+	writeFile(t, filepath.Join(dir, ".mise", "tasks", "assets", "prepare"), prepareTask)
+	writeFile(t, filepath.Join(dir, ".mise", "tasks", "assets", "finish"), finishTask)
+	for _, name := range []string{"prepare", "finish"} {
+		if err := os.Chmod(filepath.Join(dir, ".mise", "tasks", "assets", name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeFile(t, filepath.Join(dir, "addons.toml"), fmt.Sprintf(`manifest = 1
+
+[[addons]]
+id = "assets"
+version = "v1.0.0"
+direct = true
+package = "example.com/assets"
+package_version = "v1.0.0"
+manifest_digest = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+source = "test"
+go_import = "example.com/assets/addon"
+go_module = "example.com/assets"
+go_version = "v1.0.0"
+build_hooks = ["after-build=assets:finish", "before-build=assets:prepare"]
+tasks = ["assets:finish", "assets:prepare"]
+files = ["tasks/finish=>.mise/tasks/assets/finish", "tasks/prepare=>.mise/tasks/assets/prepare"]
+
+[[managed]]
+path = ".mise/tasks/assets/finish"
+kind = "addon-file"
+owners = ["assets"]
+baseline = %q
+mode = 493
+
+[[managed]]
+path = ".mise/tasks/assets/prepare"
+kind = "addon-file"
+owners = ["assets"]
+baseline = %q
+mode = 493
+`, lazycode.Hash([]byte(finishTask)), lazycode.Hash([]byte(prepareTask))))
 
 	cacheDir := t.TempDir()
 	helper := writeCachedHelper(t, cacheDir, "abc123", "linux")
 	workDir := filepath.Join(t.TempDir(), "work")
 
 	var calls []nativeInvocation
+	var order []string
+	type contextKey string
+	ctx := context.WithValue(context.Background(), contextKey("native-build"), "test")
 	command := Command{
+		Context:      ctx,
 		Dir:          dir,
 		UserCacheDir: func() (string, error) { return cacheDir, nil },
 		TempDir: func(string, string) (string, error) {
@@ -155,8 +202,25 @@ func main() {}
 			return []byte("abc123\tHEAD\n"), nil
 		},
 		Runner: func(command string, args []string, options commands.Options) error {
+			if command == "mise" && options.Context != ctx {
+				t.Fatalf("hook context = %v, want native build context", options.Context)
+			}
+			switch command {
+			case "mise":
+				order = append(order, args[1])
+			case "go":
+				order = append(order, "go-build")
+			default:
+				order = append(order, "native-package")
+			}
 			calls = append(calls, nativeInvocation{command: command, args: slices.Clone(args), dir: options.Dir})
 			return nil
+		},
+		Stat: func(path string) (os.FileInfo, error) {
+			if filepath.Base(path) == "js.toml" {
+				order = append(order, "javascript-assets")
+			}
+			return os.Stat(path)
 		},
 		GOOS:   "linux",
 		GOARCH: "amd64",
@@ -173,8 +237,18 @@ func main() {}
 	appBinary := filepath.Join(workDir, "app")
 	want := []nativeInvocation{
 		{
+			command: "mise",
+			args:    []string{"run", "assets:prepare"},
+			dir:     dir,
+		},
+		{
 			command: "go",
 			args:    []string{"build", "-o", appBinary, "./cmd/app"},
+			dir:     dir,
+		},
+		{
+			command: "mise",
+			args:    []string{"run", "assets:finish"},
 			dir:     dir,
 		},
 		{
@@ -191,6 +265,10 @@ func main() {}
 	}
 	if !reflect.DeepEqual(calls, want) {
 		t.Fatalf("calls = %#v, want %#v", calls, want)
+	}
+	wantOrder := []string{"assets:prepare", "javascript-assets", "go-build", "assets:finish", "native-package"}
+	if !reflect.DeepEqual(order, wantOrder) {
+		t.Fatalf("build order = %#v, want %#v", order, wantOrder)
 	}
 }
 

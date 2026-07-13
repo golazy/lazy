@@ -7,7 +7,49 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Added `lazy add`, `lazy remove`, `lazy update`, and `lazy addons`. Add-on
+  installation resolves exact dependencies from first-party or local manifest
+  sources, plans one baseline-bound transaction, and records desired state,
+  lock metadata, ownership, and output hashes in root `addons.toml`.
+- The bundled `postgres` and `postgres/jobs` add-ons create the application
+  migration tree, local PostgreSQL mise tasks and service configuration, module
+  and runtime wiring, and the dependent durable-jobs integration.
+- Added the standalone `golazy.dev/lazycode` module with reusable in-memory
+  changesets and bounded Go, TOML, JSON, and JavaScript editors.
+- The development panel includes an Add-ons tab that discovers descriptors
+  from the running application and proxies only validated loopback endpoints
+  through response limits and a sandboxed frame.
+- Manifest-declared files, JavaScript libraries and entrypoints, mise tasks,
+  and named before/after build hooks are installed declaratively with ownership
+  and drift checks; add-on installer code is never executed by `lazy add`.
+- Package-local schema-1 source-edit descriptors add reversible TOML string or
+  string-array properties and Go imports without executing package code. Their
+  bytes are release-digest-bound, and shared ownership, conflicts, drift, and
+  uninstall restoration are handled per property.
+- Add-on panels can expose named actions backed only by discovered same-owner
+  POST endpoints. The trusted panel host resolves stable IDs, applies CSRF and
+  same-origin checks, and sends an empty request to the loopback control plane
+  without forwarding browser input.
+- `lazy add --config key=value` and `--unset-config key` manage committed,
+  non-secret per-add-on runtime configuration in `addons.toml` and generated
+  `lazyaddon.Use` selections.
+
 ### Changed
+
+- Add-on planning now preserves restrictive modes on application-owned files,
+  binds executable mode-only updates to file hashes, rejects leaf symlinks,
+  never downgrades a newer application framework requirement, and restores an
+  app-owned module version after an add-on update and final removal. Generated
+  package wiring also accepts local module paths such as the sample app's
+  `sample_app` module.
+- Add-on sources must return an exact one-to-one match between declared files
+  or source edits and their transient artifacts. Offline exact pins retain the
+  explicit locked-state fallback; marketplace sources remain responsible for
+  signature, entitlement, and artifact-digest verification.
+- The first-party PostgreSQL catalog is embedded from a release-validated
+  manifest snapshot synchronized with `golazy/pg/lazyaddon.toml`.
 
 - `lazy upgrade` now recognizes the `v0.1.21` development target, updates the
   `golazy.dev` module requirement, and synchronizes the generated app's

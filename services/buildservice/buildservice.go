@@ -16,7 +16,9 @@ import (
 	"sync"
 	"time"
 
+	"golazy.dev/lazy/services/addonservice"
 	"golazy.dev/lazy/services/appservice"
+	"golazy.dev/lazy/services/execservice"
 	"golazy.dev/lazy/services/workspaceservice"
 )
 
@@ -346,6 +348,7 @@ type Config struct {
 	Stderr         io.Writer
 	StartupTimeout time.Duration
 	StopTimeout    time.Duration
+	HookRunner     execservice.Runner
 }
 
 type BuildResult struct {
@@ -370,10 +373,25 @@ func (c Config) Build(ctx context.Context, tmpDir string, buildNumber int) Build
 	tracePath := filepath.Join(tmpDir, "build-"+strconv.Itoa(buildNumber)+"-debug-trace.json")
 
 	var output bytes.Buffer
-	workspaceActive, err := workspaceservice.Active(c.Root, c.GoWork)
-	if err != nil {
-		err = fmt.Errorf("inspect Go workspace: %w", err)
-	} else if !workspaceActive {
+	hookRunner := addonservice.BuildHookRunner{
+		Root:   c.Root,
+		Stdin:  c.Stdin,
+		Stdout: &output,
+		Stderr: &output,
+		Runner: c.HookRunner,
+	}
+	hooks, err := addonservice.LoadBuildHookPlan(c.Root)
+	if err == nil {
+		err = hooks.RunContext(ctx, addonservice.BeforeBuild, hookRunner)
+	}
+	workspaceActive := false
+	if err == nil {
+		workspaceActive, err = workspaceservice.Active(c.Root, c.GoWork)
+		if err != nil {
+			err = fmt.Errorf("inspect Go workspace: %w", err)
+		}
+	}
+	if err == nil && !workspaceActive {
 		tidy := exec.CommandContext(ctx, "go", "mod", "tidy")
 		tidy.Dir = c.Root
 		tidy.Stdout = &output
@@ -392,6 +410,9 @@ func (c Config) Build(ctx context.Context, tmpDir string, buildNumber int) Build
 			build.Stderr = &output
 			err = build.Run()
 		}
+	}
+	if err == nil {
+		err = hooks.RunContext(ctx, addonservice.AfterBuild, hookRunner)
 	}
 	return BuildResult{
 		Binary:     binary,

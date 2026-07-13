@@ -1,12 +1,18 @@
 package buildservice
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"golazy.dev/lazy/services/execservice"
+	"golazy.dev/lazycode"
 )
 
 func TestStorePreservesServicesAcrossSnapshotUpdates(t *testing.T) {
@@ -91,6 +97,67 @@ func TestAddDebugTraceArgKeepsGoBuildFlagsBeforePackage(t *testing.T) {
 	want := []string{"build", "-debug-trace=trace.json", "-tags", "lazydev", "-o", "app", "./cmd/app"}
 	if !reflect.DeepEqual(args, want) {
 		t.Fatalf("args = %#v, want %#v", args, want)
+	}
+}
+
+func TestBuildRunsLockedBeforeBuildHookAndIncludesFailureOutput(t *testing.T) {
+	root := t.TempDir()
+	task := []byte("#!/bin/sh\nexit 0\n")
+	taskPath := filepath.Join(root, ".mise", "tasks", "assets", "prepare")
+	if err := os.MkdirAll(filepath.Dir(taskPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(taskPath, task, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	state := fmt.Sprintf(`manifest = 1
+
+[[addons]]
+id = "assets"
+version = "v1.0.0"
+direct = true
+package = "example.com/assets"
+package_version = "v1.0.0"
+manifest_digest = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+source = "test"
+go_import = "example.com/assets/addon"
+go_module = "example.com/assets"
+go_version = "v1.0.0"
+build_hooks = ["before-build=assets:prepare"]
+tasks = ["assets:prepare"]
+files = ["tasks/prepare=>.mise/tasks/assets/prepare"]
+
+[[managed]]
+path = ".mise/tasks/assets/prepare"
+kind = "addon-file"
+owners = ["assets"]
+baseline = %q
+mode = 493
+`, lazycode.Hash(task))
+	if err := os.WriteFile(filepath.Join(root, "addons.toml"), []byte(state), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	wantErr := errors.New("prepare failed")
+	type contextKey string
+	ctx := context.WithValue(context.Background(), contextKey("build"), "test")
+	result := (Config{
+		Root: root,
+		HookRunner: func(command string, args []string, options execservice.Options) error {
+			if command != "mise" || !reflect.DeepEqual(args, []string{"run", "assets:prepare"}) {
+				t.Fatalf("hook command = %s %#v", command, args)
+			}
+			if options.Context != ctx {
+				t.Fatalf("hook context = %v, want build context", options.Context)
+			}
+			_, _ = options.Stderr.Write([]byte("generated asset failed\n"))
+			return wantErr
+		},
+	}).Build(ctx, t.TempDir(), 1)
+	if !errors.Is(result.Err, wantErr) || !strings.Contains(result.Err.Error(), "before-build") {
+		t.Fatalf("err = %v, want contextual hook error", result.Err)
+	}
+	if !strings.Contains(result.Output, "generated asset failed") {
+		t.Fatalf("output = %q, want hook output", result.Output)
 	}
 }
 

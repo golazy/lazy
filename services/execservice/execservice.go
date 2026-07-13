@@ -2,6 +2,7 @@ package execservice
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -13,6 +14,7 @@ import (
 )
 
 type Options struct {
+	Context context.Context
 	Dir     string
 	Stdin   io.Reader
 	Stdout  io.Writer
@@ -39,7 +41,8 @@ func (e *ExitError) Unwrap() error {
 }
 
 func Exec(command string, args []string, options Options) error {
-	process := exec.Command(command, args...)
+	ctx := commandContext(options.Context)
+	process := exec.CommandContext(ctx, command, args...)
 	process.Dir = options.Dir
 	process.Stdin = options.Stdin
 	if len(options.Env) != 0 {
@@ -56,6 +59,12 @@ func Exec(command string, args []string, options Options) error {
 	}
 
 	if err := process.Run(); err != nil {
+		if contextErr := ctx.Err(); contextErr != nil {
+			if options.Capture && output.Len() > 0 {
+				return fmt.Errorf("%w\n%s", contextErr, strings.TrimSpace(output.String()))
+			}
+			return contextErr
+		}
 		var processError *exec.ExitError
 		if errors.As(err, &processError) && !options.Capture {
 			return &ExitError{Code: processError.ExitCode(), Err: err}
@@ -69,7 +78,8 @@ func Exec(command string, args []string, options Options) error {
 }
 
 func ExecOutput(command string, args []string, options Options) ([]byte, error) {
-	process := exec.Command(command, args...)
+	ctx := commandContext(options.Context)
+	process := exec.CommandContext(ctx, command, args...)
 	process.Dir = options.Dir
 	process.Stdin = options.Stdin
 	if len(options.Env) != 0 {
@@ -81,6 +91,9 @@ func ExecOutput(command string, args []string, options Options) ([]byte, error) 
 	process.Stderr = options.Stderr
 
 	if err := process.Run(); err != nil {
+		if contextErr := ctx.Err(); contextErr != nil {
+			return output.Bytes(), contextErr
+		}
 		var processError *exec.ExitError
 		if errors.As(err, &processError) {
 			return output.Bytes(), &ExitError{Code: processError.ExitCode(), Err: err}
@@ -88,6 +101,13 @@ func ExecOutput(command string, args []string, options Options) ([]byte, error) 
 		return output.Bytes(), err
 	}
 	return output.Bytes(), nil
+}
+
+func commandContext(ctx context.Context) context.Context {
+	if ctx == nil {
+		return context.Background()
+	}
+	return ctx
 }
 
 func ResolveMiseCommand() (string, []string) {

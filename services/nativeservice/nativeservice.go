@@ -1,6 +1,7 @@
 package nativeservice
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"golazy.dev/lazy/services/addonservice"
 	"golazy.dev/lazy/services/appservice"
 	"golazy.dev/lazy/services/execservice"
 	"golazy.dev/lazy/services/jsservice"
@@ -20,6 +22,7 @@ import (
 const helperRepo = "https://github.com/golazy/native"
 
 type Command struct {
+	Context    context.Context
 	Dir        string
 	CmdPath    string
 	ViewPath   string
@@ -122,6 +125,14 @@ func (c Command) ExecuteBuild() (int, error) {
 	if err != nil {
 		return 1, err
 	}
+	hooks, err := addonservice.LoadBuildHookPlan(dir)
+	if err != nil {
+		return buildHookFailure(err)
+	}
+	hookRunner := c.buildHookRunner(dir)
+	if err := hooks.RunContext(c.context(), addonservice.BeforeBuild, hookRunner); err != nil {
+		return buildHookFailure(err)
+	}
 	helper, err := c.helperBinary()
 	if err != nil {
 		return 1, err
@@ -152,6 +163,9 @@ func (c Command) ExecuteBuild() (int, error) {
 		}
 		return 1, fmt.Errorf("build application binary: %w", err)
 	}
+	if err := hooks.RunContext(c.context(), addonservice.AfterBuild, hookRunner); err != nil {
+		return buildHookFailure(err)
+	}
 
 	out := c.Out
 	if strings.TrimSpace(out) == "" {
@@ -176,6 +190,31 @@ func (c Command) ExecuteBuild() (int, error) {
 		return 1, fmt.Errorf("run native helper: %w", err)
 	}
 	return 0, nil
+}
+
+func (c Command) context() context.Context {
+	if c.Context == nil {
+		return context.Background()
+	}
+	return c.Context
+}
+
+func (c Command) buildHookRunner(dir string) addonservice.BuildHookRunner {
+	return addonservice.BuildHookRunner{
+		Root:   dir,
+		Stdin:  c.Stdin,
+		Stdout: c.Stdout,
+		Stderr: c.Stderr,
+		Runner: c.Runner,
+	}
+}
+
+func buildHookFailure(err error) (int, error) {
+	var processExit *execservice.ExitError
+	if errors.As(err, &processExit) {
+		return processExit.Code, err
+	}
+	return 1, err
 }
 
 func (c Command) prepareGeneratedAssets(dir string) (int, error) {

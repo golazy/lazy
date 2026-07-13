@@ -219,6 +219,53 @@ func TestTailwindRejectsArguments(t *testing.T) {
 	}
 }
 
+func TestAddPostgresUsesCurrentFirstPartyCatalogWithoutManifestFlag(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	writeGoMod(t, "v0.1.20")
+	if err := os.MkdirAll("init", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	application := `package appinit
+
+import "golazy.dev/lazyapp"
+
+func App() *lazyapp.App {
+	return lazyapp.New(lazyapp.Config{Name: "app"})
+}
+`
+	if err := os.WriteFile(filepath.Join("init", "app.go"), []byte(application), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	restoreVersionHandoffTestHooks(t)
+	runCommand = func(string, []string, commandOptions) (int, error) {
+		t.Fatalf("project-version handoff should not run for lazy add")
+		return 1, nil
+	}
+
+	var stdout, stderr bytes.Buffer
+	if code := execute([]string{"add", "postgres"}, nil, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit code = %d; stderr=%s", code, stderr.String())
+	}
+	state, err := os.ReadFile("addons.toml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(state), `id = "postgres"`) || !strings.Contains(string(state), `go_version = "`+currentVersion()+`"`) {
+		t.Fatalf("addons.toml =\n%s", state)
+	}
+	generated, err := os.ReadFile(filepath.Join("init", "addons_gen.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(generated), `golazy.dev/pg/addon/postgres`) {
+		t.Fatalf("generated imports =\n%s", generated)
+	}
+	if _, err := os.Stat(filepath.Join(".mise", "tasks", "postgres", "start")); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestBastardRejectsArguments(t *testing.T) {
 	var stderr bytes.Buffer
 
@@ -452,6 +499,24 @@ func TestProjectVersionCheckSkipsUpgrade(t *testing.T) {
 	handled, code := maybeExecuteProjectVersion([]string{"upgrade"}, nil, &bytes.Buffer{}, &bytes.Buffer{})
 	if handled {
 		t.Fatalf("handled = true, code = %d", code)
+	}
+}
+
+func TestProjectVersionCheckSkipsAddonManagement(t *testing.T) {
+	t.Chdir(t.TempDir())
+	writeGoMod(t, "v0.1.7")
+	restoreVersionHandoffTestHooks(t)
+
+	runCommand = func(string, []string, commandOptions) (int, error) {
+		t.Fatalf("runCommand should not be called")
+		return 1, nil
+	}
+
+	for _, name := range []string{"add", "remove", "update", "addons"} {
+		handled, code := maybeExecuteProjectVersion([]string{name}, nil, &bytes.Buffer{}, &bytes.Buffer{})
+		if handled {
+			t.Fatalf("%s handled = true, code = %d", name, code)
+		}
 	}
 }
 
