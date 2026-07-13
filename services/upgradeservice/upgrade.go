@@ -98,11 +98,18 @@ func (c Command) Execute() (int, error) {
 		return 1, err
 	}
 	if len(steps) == 0 {
-		if err := c.runProgress(progress.Tasks{
-			progress.UITask("Check mise tools", func(ui *progress.UI) error {
-				return c.applyCurrentMiseManifest(dir, module.GoLazyVersion, ui)
-			}),
-		}); err != nil {
+		tasks := progress.Tasks{}
+		if _, ok, err := currentSkillsManifest(module.GoLazyVersion); err != nil {
+			return 1, err
+		} else if ok {
+			tasks = append(tasks, progress.UITask("Sync app skills", func(ui *progress.UI) error {
+				return c.applyCurrentSkillsManifest(dir, module, ui)
+			}))
+		}
+		tasks = append(tasks, progress.UITask("Check mise tools", func(ui *progress.UI) error {
+			return c.applyCurrentMiseManifest(dir, module.GoLazyVersion, ui)
+		}))
+		if err := c.runProgress(tasks); err != nil {
 			return 1, err
 		}
 		fmt.Fprintf(c.stdout(), "lazy: %s is already at %s\n", module.Path, module.GoLazyVersion)
@@ -190,6 +197,33 @@ func (c Command) applyCurrentMiseManifest(dir string, version string, ui *progre
 		stdout: stdout,
 		stderr: stderr,
 	}).applyMiseManifest(currentMiseCleanupManifest(version))
+}
+
+func (c Command) applyCurrentSkillsManifest(dir string, module moduleInfo, ui *progress.UI) error {
+	manifest, ok, err := currentSkillsManifest(module.GoLazyVersion)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+	stdout := c.stdout()
+	stderr := c.stderr()
+	if ui != nil {
+		stdout = ui.Stdout()
+		stderr = ui.Stderr()
+	}
+	return (stepExecutor{
+		dir:        dir,
+		modulePath: module.Path,
+		from:       manifest.From,
+		to:         manifest.To,
+		dryRun:     c.DryRun,
+		stdin:      c.Stdin,
+		stdout:     stdout,
+		stderr:     stderr,
+		ui:         ui,
+	}).applySkillsManifest(manifest)
 }
 
 func upgradeTaskName(from string, to string) string {
@@ -281,6 +315,13 @@ func (c Command) runStepWithStreams(dir string, from string, to string, force bo
 	}
 	if err != nil {
 		return 1, err
+	}
+	if manifest, ok, err := currentSkillsManifest(to); err != nil {
+		return 1, err
+	} else if ok {
+		if err := executor.applySkillsManifest(manifest); err != nil {
+			return 1, err
+		}
 	}
 	if err := executor.applyGoModManifest(goModManifestFor(from, to)); err != nil {
 		return 1, err

@@ -219,6 +219,8 @@ This first implementation carries backfilled migrations for:
   `lazyapp.Config.Dependencies`, and updates simple initializer returns to the
   new `func(*lazydeps.Scope) error` shape. It also moves inline
   `lazyapp.Config.SEO` option slices into `init/seo.go` and wires `SEO: SEO`.
+- `v0.1.20 -> v0.1.21`: synchronizes `.skills/golazy-framework` with the
+  target sample app while updating the `golazy.dev` module requirement.
 
 Template-owned files are manifest-gated with SHA-256 hashes. New files are
 created directly. Replacements are applied directly only when the current file
@@ -233,6 +235,10 @@ file looks customized, the command asks whether to delete it with a dated
 backup, keep it and continue, or abort. Keeping a removed file can create
 issues when the app still loads it. Non-interactive conflicts stop and write
 the proposed replacement under `.golazy/upgrade/conflicts`.
+
+The `v0.1.21` skill migration also runs when an app already requires
+`golazy.dev v0.1.21`. This makes rerunning `lazy upgrade` repair missing or
+stale template-owned skill files without overwriting local customizations.
 
 After each successful step, `lazy upgrade` runs:
 

@@ -517,9 +517,10 @@ func TestUpgradeTo020UpdatesGoModOnly(t *testing.T) {
 	}
 }
 
-func TestUpgradeTo021UpdatesGoModOnly(t *testing.T) {
+func TestUpgradeTo021UpdatesSkillsAndGoMod(t *testing.T) {
 	dir := t.TempDir()
 	writeUpgradeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n\ngo 1.26.0\n\nrequire golazy.dev v0.1.20\n")
+	writeEmbeddedSkillsTree(t, dir, v021SkillsPreviousRoot, "example.com/app")
 
 	var calls []upgradeInvocation
 	var stdout bytes.Buffer
@@ -539,6 +540,7 @@ func TestUpgradeTo021UpdatesGoModOnly(t *testing.T) {
 	}
 
 	assertUpgradeFileContains(t, filepath.Join(dir, "go.mod"), "golazy.dev v0.1.21")
+	assertEmbeddedSkillsTree(t, dir, v021SkillsTargetRoot, "example.com/app")
 	if len(calls) != 1 || !slices.Equal(calls[0].args, []string{"get", "golazy.dev@v0.1.21"}) {
 		t.Fatalf("calls = %#v, want go get golazy.dev@v0.1.21", calls)
 	}
@@ -547,6 +549,65 @@ func TestUpgradeTo021UpdatesGoModOnly(t *testing.T) {
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("stderr = %q", stderr.String())
+	}
+}
+
+func TestUpgradeTo021AddsSkillsWhenMissing(t *testing.T) {
+	dir := t.TempDir()
+	writeUpgradeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n\ngo 1.26.0\n\nrequire golazy.dev v0.1.20\n")
+
+	code, err := (Command{
+		Dir:          dir,
+		SkipCommands: true,
+		Runner:       goGetRunner(t, nil),
+	}).Execute()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != 0 {
+		t.Fatalf("code = %d, want 0", code)
+	}
+
+	assertUpgradeFileContains(t, filepath.Join(dir, "go.mod"), "golazy.dev v0.1.21")
+	assertEmbeddedSkillsTree(t, dir, v021SkillsTargetRoot, "example.com/app")
+}
+
+func TestUpgradeTo021PreservesCustomizedSkillsOnConflict(t *testing.T) {
+	dir := t.TempDir()
+	writeUpgradeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n\ngo 1.26.0\n\nrequire golazy.dev v0.1.20\n")
+	writeEmbeddedSkillsTree(t, dir, v021SkillsPreviousRoot, "example.com/app")
+	customSkill := "custom app skill\n"
+	writeUpgradeFile(t, filepath.Join(dir, ".skills", "golazy-framework", "SKILL.md"), customSkill)
+
+	var stderr bytes.Buffer
+	code, upgradeErr := (Command{
+		Dir:          dir,
+		SkipCommands: true,
+		Stderr:       &stderr,
+	}).Execute()
+	if upgradeErr == nil {
+		t.Fatal("err = nil, want skill conflict")
+	}
+	if code != 1 {
+		t.Fatalf("code = %d, want 1", code)
+	}
+
+	assertUpgradeFileContains(t, filepath.Join(dir, "go.mod"), "golazy.dev v0.1.20")
+	assertUpgradeFileContent(t, filepath.Join(dir, ".skills", "golazy-framework", "SKILL.md"), customSkill)
+	target, err := readSkillsManifestTree(v021SkillsTargetRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertUpgradeFileContent(
+		t,
+		filepath.Join(dir, ".golazy", "upgrade", "conflicts", "v0.1.21", ".skills", "golazy-framework", "SKILL.md"),
+		strings.ReplaceAll(target[".skills/golazy-framework/SKILL.md"], "sample_app", "example.com/app"),
+	)
+	if !strings.Contains(stderr.String(), "--- .skills/golazy-framework/SKILL.md") {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+	if !strings.Contains(upgradeErr.Error(), "upgrade conflict in .skills/golazy-framework/SKILL.md") {
+		t.Fatalf("err = %v", upgradeErr)
 	}
 }
 
@@ -682,6 +743,7 @@ func TestUpgradeAlreadyCurrentCommentsObsoleteMiseGoTool(t *testing.T) {
 	dir := t.TempDir()
 	writeUpgradeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n\ngo 1.26.0\n\nrequire golazy.dev v0.1.21\n")
 	writeUpgradeFile(t, filepath.Join(dir, "mise.toml"), "[tools]\ngo = \"1.26.0\"\nnode = \"24\"\n")
+	writeEmbeddedSkillsTree(t, dir, v021SkillsPreviousRoot, "example.com/app")
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -697,8 +759,12 @@ func TestUpgradeAlreadyCurrentCommentsObsoleteMiseGoTool(t *testing.T) {
 		t.Fatalf("code = %d, want 0", code)
 	}
 	assertUpgradeFileContent(t, filepath.Join(dir, "mise.toml"), "[tools]\n# go = \"1.26.0\" # not needed by GoLazy v0.1.21; Go uses the go.mod go directive and toolchain selection.\nnode = \"24\"\n")
+	assertEmbeddedSkillsTree(t, dir, v021SkillsTargetRoot, "example.com/app")
 	if stderr.Len() != 0 {
 		t.Fatalf("stderr = %q", stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "* Sync app skills ... DONE") {
+		t.Fatalf("stdout = %q", stdout.String())
 	}
 	if !strings.Contains(stdout.String(), "already at v0.1.21") {
 		t.Fatalf("stdout = %q", stdout.String())
@@ -868,6 +934,45 @@ func TestUpgradeFileManifestDeletesMatchingRemovedFile(t *testing.T) {
 	}
 	assertUpgradeFileMissing(t, filepath.Join(dir, "old.txt"))
 	if !strings.Contains(stdout.String(), "removed old.txt") {
+		t.Fatalf("stdout = %q", stdout.String())
+	}
+}
+
+func TestUpgradeFileManifestEnsuresMissingFileAndKeepsExistingCustomization(t *testing.T) {
+	dir := t.TempDir()
+	writeUpgradeFile(t, filepath.Join(dir, "custom.md"), "local customization\n")
+
+	var stdout bytes.Buffer
+	err := (stepExecutor{
+		dir:    dir,
+		from:   "vOld",
+		to:     "vNew",
+		stdout: &stdout,
+	}).applyFileManifest(upgradeFileManifest{
+		From: "vOld",
+		To:   "vNew",
+		Files: []upgradeFileOperation{
+			{
+				Action: upgradeFileEnsure,
+				Path:   "custom.md",
+				Target: upgradeManifestContent("template\n"),
+			},
+			{
+				Action: upgradeFileEnsure,
+				Path:   "missing.md",
+				Target: upgradeManifestContent("template\n"),
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertUpgradeFileContent(t, filepath.Join(dir, "custom.md"), "local customization\n")
+	assertUpgradeFileContent(t, filepath.Join(dir, "missing.md"), "template\n")
+	if !strings.Contains(stdout.String(), "kept existing custom.md; target template is unchanged") {
+		t.Fatalf("stdout = %q", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "added missing.md") {
 		t.Fatalf("stdout = %q", stdout.String())
 	}
 }
@@ -1062,6 +1167,68 @@ func writeUpgradeFile(t *testing.T, path string, content string) {
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func writeEmbeddedSkillsTree(t *testing.T, dir string, root string, modulePath string) {
+	t.Helper()
+	files, err := readSkillsManifestTree(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, content := range files {
+		writeUpgradeFile(t, filepath.Join(dir, filepath.FromSlash(name)), strings.ReplaceAll(content, "sample_app", modulePath))
+	}
+}
+
+func assertEmbeddedSkillsTree(t *testing.T, dir string, root string, modulePath string) {
+	t.Helper()
+	expected, err := readSkillsManifestTree(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actual := make(map[string]string)
+	skillsRoot := filepath.Join(dir, ".skills", "golazy-framework")
+	err = filepath.Walk(skillsRoot, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		relative, err := filepath.Rel(dir, path)
+		if err != nil {
+			return err
+		}
+		actual[filepath.ToSlash(relative)] = string(data)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(actual) != len(expected) {
+		t.Fatalf("skill file count = %d, want %d; actual paths = %#v", len(actual), len(expected), sortedMapKeys(actual))
+	}
+	for name, content := range expected {
+		want := strings.ReplaceAll(content, "sample_app", modulePath)
+		if got, ok := actual[name]; !ok {
+			t.Errorf("skill file %s is missing", name)
+		} else if got != want {
+			t.Errorf("skill file %s = %q, want %q", name, got, want)
+		}
+	}
+}
+
+func sortedMapKeys(values map[string]string) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	return keys
 }
 
 func assertUpgradeFileContent(t *testing.T, path string, want string) {

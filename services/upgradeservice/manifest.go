@@ -19,6 +19,7 @@ const (
 	upgradeFileAdd    upgradeFileAction = "add"
 	upgradeFileUpdate upgradeFileAction = "update"
 	upgradeFileDelete upgradeFileAction = "delete"
+	upgradeFileEnsure upgradeFileAction = "ensure"
 )
 
 type upgradeFileManifest struct {
@@ -96,9 +97,37 @@ func (e stepExecutor) applyFileOperation(operation upgradeFileOperation) error {
 		return e.applyUpdateFileOperation(relative, operation)
 	case upgradeFileDelete:
 		return e.applyDeleteFileOperation(relative, operation)
+	case upgradeFileEnsure:
+		return e.applyEnsureFileOperation(relative, operation)
 	default:
 		return fmt.Errorf("unknown upgrade file action %q for %s", operation.Action, relative)
 	}
+}
+
+func (e stepExecutor) applyEnsureFileOperation(relative string, operation upgradeFileOperation) error {
+	targetData, err := e.renderManifestContent(relative, "target", operation.Target)
+	if err != nil {
+		return err
+	}
+	path := e.manifestPath(relative)
+	data, err := os.ReadFile(path)
+	if err == nil {
+		if sameSHA256(data, targetData) {
+			fmt.Fprintf(e.out(), "  %s already exists\n", relative)
+		} else {
+			fmt.Fprintf(e.out(), "  kept existing %s; target template is unchanged\n", relative)
+		}
+		return nil
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("read %s: %w", relative, err)
+	}
+	return e.applyAddFileOperation(relative, upgradeFileOperation{
+		Action: upgradeFileAdd,
+		Path:   relative,
+		Mode:   operation.Mode,
+		Target: operation.Target,
+	})
 }
 
 func (e stepExecutor) applyAddFileOperation(relative string, operation upgradeFileOperation) error {

@@ -9,8 +9,12 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- `lazy upgrade` now recognizes the `v0.1.21` development target and migrates
-  `v0.1.20` apps by updating the `golazy.dev` module requirement.
+- `lazy upgrade` now recognizes the `v0.1.21` development target, updates the
+  `golazy.dev` module requirement, and synchronizes the generated app's
+  `.skills/golazy-framework` tree. Missing skills are installed, unchanged
+  `v0.1.20` template files are updated or removed, and customized files use
+  the existing diff, backup, and conflict flow. Running the command again on
+  an already-current `v0.1.21` app also repairs an incomplete skill tree.
 
 ## [0.1.20] - 2026-07-12
 
