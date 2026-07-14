@@ -155,16 +155,21 @@ func (c Command) Execute(modulePath string) error {
 	}
 
 	fmt.Fprintln(c.Stdout, "* Validating")
-	syncArgs := []string{"mod", "tidy"}
-	if workspaceValidation {
-		syncArgs = []string{"work", "sync"}
-	}
-	if err := runner("go", syncArgs, execservice.Options{
+	if err := runner("go", []string{"mod", "tidy"}, execservice.Options{
 		Dir:     destination,
 		Env:     commandEnv,
 		Capture: true,
 	}); err != nil {
-		return fmt.Errorf("%s: %w", strings.Join(append([]string{"go"}, syncArgs...), " "), err)
+		return fmt.Errorf("go mod tidy: %w", err)
+	}
+	if workspaceValidation {
+		if err := runner("go", []string{"work", "sync"}, execservice.Options{
+			Dir:     destination,
+			Env:     commandEnv,
+			Capture: true,
+		}); err != nil {
+			return fmt.Errorf("go work sync: %w", err)
+		}
 	}
 	testArgs := []string{"test"}
 	testArgs = append(testArgs, "./...")

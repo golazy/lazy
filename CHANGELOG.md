@@ -38,6 +38,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- `lazy new` now always runs `go mod tidy` before validation and the initial
+  commit, including when it uses a temporary local Go workspace for sibling
+  framework development.
 - Add-on planning now preserves restrictive modes on application-owned files,
   binds executable mode-only updates to file hashes, rejects leaf symlinks,
   never downgrades a newer application framework requirement, and restores an

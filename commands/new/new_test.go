@@ -539,8 +539,8 @@ func TestCopiesSourceDirectoryValidatesWithTemporaryWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(calls) != 7 {
-		t.Fatalf("calls = %d, want 7", len(calls))
+	if len(calls) != 8 {
+		t.Fatalf("calls = %d, want 8", len(calls))
 	}
 	if calls[0].command != "mise" || !reflect.DeepEqual(calls[0].args, []string{"trust", "--yes", "mise.toml"}) {
 		t.Fatalf("mise trust = %s %#v", calls[0].command, calls[0].args)
@@ -551,18 +551,24 @@ func TestCopiesSourceDirectoryValidatesWithTemporaryWorkspace(t *testing.T) {
 	if calls[2].command != "go" {
 		t.Fatalf("tidy command = %s, want go", calls[2].command)
 	}
-	if got, want := calls[2].args, []string{"work", "sync"}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("sync args = %#v, want %#v", got, want)
+	if got, want := calls[2].args, []string{"mod", "tidy"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("tidy args = %#v, want %#v", got, want)
 	}
 	if calls[3].command != "go" {
-		t.Fatalf("test command = %s, want go", calls[3].command)
+		t.Fatalf("sync command = %s, want go", calls[3].command)
 	}
-	if got, want := calls[3].args, []string{"test", "./..."}; !reflect.DeepEqual(got, want) {
+	if got, want := calls[3].args, []string{"work", "sync"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("sync args = %#v, want %#v", got, want)
+	}
+	if calls[4].command != "go" {
+		t.Fatalf("test command = %s, want go", calls[4].command)
+	}
+	if got, want := calls[4].args, []string{"test", "./..."}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("test args = %#v, want %#v", got, want)
 	}
 
 	destination := filepath.Join(dir, "my_app")
-	assertInitialGitCommitCalls(t, calls[4:], destination)
+	assertInitialGitCommitCalls(t, calls[5:], destination)
 	matches, err := filepath.Glob(filepath.Join(dir, ".lazy-go-work-*.work"))
 	if err != nil {
 		t.Fatalf("glob temporary go.work files: %v", err)
