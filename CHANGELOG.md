@@ -7,6 +7,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.21] - 2026-07-14
+
 ### Added
 
 - Added `lazy add`, `lazy remove`, `lazy update`, and `lazy addons`. Add-on
@@ -53,13 +55,14 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   signature, entitlement, and artifact-digest verification.
 - The first-party PostgreSQL catalog is embedded from a release-validated
   manifest snapshot synchronized with `golazy/pg/lazyaddon.toml`.
-
 - `lazy upgrade` now recognizes the `v0.1.21` development target, updates the
   `golazy.dev` module requirement, and synchronizes the generated app's
   `.skills/golazy-framework` tree. Missing skills are installed, unchanged
   `v0.1.20` template files are updated or removed, and customized files use
   the existing diff, backup, and conflict flow. Running the command again on
-  an already-current `v0.1.21` app also repairs an incomplete skill tree.
+  an already-current `v0.1.21` app also repairs an incomplete skill tree. Skill
+  templates render application command paths from the app name, including for
+  fully qualified module paths.
 
 ## [0.1.20] - 2026-07-12
 
@@ -601,7 +604,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The CLI version now comes from the checked-in `VERSION` file embedded into
   the binary at build time.
 
-[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.20...HEAD
+[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.21...HEAD
+[0.1.21]: https://github.com/golazy/lazy/compare/v0.1.20...v0.1.21
 [0.1.20]: https://github.com/golazy/lazy/compare/v0.1.19...v0.1.20
 [0.1.19]: https://github.com/golazy/lazy/compare/v0.1.18...v0.1.19
 [0.1.18]: https://github.com/golazy/lazy/compare/v0.1.17...v0.1.18
