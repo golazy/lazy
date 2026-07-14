@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -601,7 +602,7 @@ func TestUpgradeTo021PreservesCustomizedSkillsOnConflict(t *testing.T) {
 	assertUpgradeFileContent(
 		t,
 		filepath.Join(dir, ".golazy", "upgrade", "conflicts", "v0.1.21", ".skills", "golazy-framework", "SKILL.md"),
-		strings.ReplaceAll(target[".skills/golazy-framework/SKILL.md"], "sample_app", "example.com/app"),
+		renderEmbeddedSkill(target[".skills/golazy-framework/SKILL.md"], "example.com/app"),
 	)
 	if !strings.Contains(stderr.String(), "--- .skills/golazy-framework/SKILL.md") {
 		t.Fatalf("stderr = %q", stderr.String())
@@ -1176,7 +1177,7 @@ func writeEmbeddedSkillsTree(t *testing.T, dir string, root string, modulePath s
 		t.Fatal(err)
 	}
 	for name, content := range files {
-		writeUpgradeFile(t, filepath.Join(dir, filepath.FromSlash(name)), strings.ReplaceAll(content, "sample_app", modulePath))
+		writeUpgradeFile(t, filepath.Join(dir, filepath.FromSlash(name)), renderEmbeddedSkill(content, modulePath))
 	}
 }
 
@@ -1213,13 +1214,19 @@ func assertEmbeddedSkillsTree(t *testing.T, dir string, root string, modulePath 
 		t.Fatalf("skill file count = %d, want %d; actual paths = %#v", len(actual), len(expected), sortedMapKeys(actual))
 	}
 	for name, content := range expected {
-		want := strings.ReplaceAll(content, "sample_app", modulePath)
+		want := renderEmbeddedSkill(content, modulePath)
 		if got, ok := actual[name]; !ok {
 			t.Errorf("skill file %s is missing", name)
 		} else if got != want {
 			t.Errorf("skill file %s = %q, want %q", name, got, want)
 		}
 	}
+}
+
+func renderEmbeddedSkill(content string, modulePath string) string {
+	appName := path.Base(modulePath)
+	content = strings.ReplaceAll(content, "cmd/app", "cmd/"+appName)
+	return strings.ReplaceAll(content, "sample_app", appName)
 }
 
 func sortedMapKeys(values map[string]string) []string {
