@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -240,7 +241,12 @@ func (e stepExecutor) renderManifestContent(relative string, label string, conte
 		}
 	}
 	if e.modulePath != "" {
-		data = bytes.ReplaceAll(data, []byte("sample_app"), []byte(e.modulePath))
+		replacement := e.modulePath
+		if strings.HasPrefix(relative, ".skills/") {
+			replacement = path.Base(e.modulePath)
+			data = bytes.ReplaceAll(data, []byte("cmd/app"), []byte("cmd/"+replacement))
+		}
+		data = bytes.ReplaceAll(data, []byte("sample_app"), []byte(replacement))
 	}
 	return data, nil
 }
