@@ -13,7 +13,6 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `lazy upgrade` recognizes `v0.1.22` and updates the GoLazy module while
   preserving the generated framework skill when its template is unchanged.
-
 ## [0.1.21] - 2026-07-14
 
 ### Added
