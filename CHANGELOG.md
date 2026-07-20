@@ -7,6 +7,10 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- `lazy upgrade` recognizes the `v0.1.23` development target.
+
 ## [0.1.22] - 2026-07-20
 
 ### Changed

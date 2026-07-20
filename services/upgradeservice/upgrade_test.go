@@ -707,11 +707,11 @@ func TestUpgradeForceRejectsTarget(t *testing.T) {
 
 func TestUpgradeForceRejectsLatestVersion(t *testing.T) {
 	dir := t.TempDir()
-	writeUpgradeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n\ngo 1.26.0\n\nrequire golazy.dev v0.1.22\n")
+	writeUpgradeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n\ngo 1.26.0\n\nrequire golazy.dev v0.1.23\n")
 
 	code, err := (Command{
 		Dir:   dir,
-		Force: "v0.1.22",
+		Force: "v0.1.23",
 	}).Execute()
 	if err == nil {
 		t.Fatal("err = nil, want no next step error")
@@ -719,7 +719,7 @@ func TestUpgradeForceRejectsLatestVersion(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("code = %d, want 1", code)
 	}
-	if !strings.Contains(err.Error(), "v0.1.22 has no later upgrade step") {
+	if !strings.Contains(err.Error(), "v0.1.23 has no later upgrade step") {
 		t.Fatalf("err = %v", err)
 	}
 }
@@ -742,7 +742,7 @@ func TestUpgradeRejectsUnimplementedNextVersion(t *testing.T) {
 
 func TestUpgradeAlreadyCurrentCommentsObsoleteMiseGoTool(t *testing.T) {
 	dir := t.TempDir()
-	writeUpgradeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n\ngo 1.26.0\n\nrequire golazy.dev v0.1.22\n")
+	writeUpgradeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n\ngo 1.26.0\n\nrequire golazy.dev v0.1.23\n")
 	writeUpgradeFile(t, filepath.Join(dir, "mise.toml"), "[tools]\ngo = \"1.26.0\"\nnode = \"24\"\n")
 	writeEmbeddedSkillsTree(t, dir, v021SkillsTargetRoot, "example.com/app")
 
@@ -759,14 +759,14 @@ func TestUpgradeAlreadyCurrentCommentsObsoleteMiseGoTool(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code = %d, want 0", code)
 	}
-	assertUpgradeFileContent(t, filepath.Join(dir, "mise.toml"), "[tools]\n# go = \"1.26.0\" # not needed by GoLazy v0.1.22; Go uses the go.mod go directive and toolchain selection.\nnode = \"24\"\n")
+	assertUpgradeFileContent(t, filepath.Join(dir, "mise.toml"), "[tools]\n# go = \"1.26.0\" # not needed by GoLazy v0.1.23; Go uses the go.mod go directive and toolchain selection.\nnode = \"24\"\n")
 	if stderr.Len() != 0 {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
 	if !strings.Contains(stdout.String(), "* Sync app skills ... DONE") {
 		t.Fatalf("stdout = %q", stdout.String())
 	}
-	if !strings.Contains(stdout.String(), "already at v0.1.22") {
+	if !strings.Contains(stdout.String(), "already at v0.1.23") {
 		t.Fatalf("stdout = %q", stdout.String())
 	}
 }
