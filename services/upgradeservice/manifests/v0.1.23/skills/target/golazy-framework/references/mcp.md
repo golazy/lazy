@@ -101,6 +101,20 @@ Apply authorization at the adapter boundary and repeat critical permission
 checks inside the service when they are domain policy. Keep tool descriptions
 specific enough for a model to choose correctly.
 
+## OAuth Login Redirects
+
+The built-in `lazyoauth` login page is standalone HTML. It does not render the
+application layout or load Turbo, Stimulus, or app JavaScript. Its form posts
+explicitly to the server's authorization endpoint.
+
+Do not add `form-action 'self'` to an OAuth login page that completes with a
+cross-origin callback redirect. Chromium may carry that CSP restriction across
+the successful form POST and block navigation to the client's validated
+redirect URI. Keep the credential POST same-origin through the explicit form
+action, and let `lazyoauth` enforce exact redirect-URI matching server-side.
+Cover the flow with a POST test that expects `302 Found` and the external
+client callback in `Location`.
+
 ## Related
 
 [Services](services.md) | [Views](views.md) | [Controllers/Base](controllers-base.md)
