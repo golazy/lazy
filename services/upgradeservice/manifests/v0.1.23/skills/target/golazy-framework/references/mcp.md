@@ -64,6 +64,15 @@ or custom-encoded result shape. For Apps, set `Domain` to the dedicated HTTPS
 widget origin and declare only required outbound origins in `CSP`. Empty slices
 are a valid policy for a self-contained widget.
 
+Keep large or widget-only values out of `structuredContent`, because the model
+reads it verbatim. A result can implement `lazymcp.ResultMetadata` by defining
+`MCPResultMeta() map[string]any`; GoLazy then emits that map as the tool
+result's top-level `_meta`. Mark those fields `json:"-"` on the typed result so
+the reflected output schema, text fallback, and structured content stay small.
+MCP Apps receive `_meta` through `ui/notifications/tool-result`; ChatGPT also
+preserves it inside `window.openai.toolResponseMetadata`. Treat `_meta` as
+user-visible widget data, never as storage for credentials or server secrets.
+
 ```go
 // init/mcp.go
 func RegisterMCP(ctx context.Context, scope *lazymcp.Scope) error {
