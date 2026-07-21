@@ -60,7 +60,9 @@ func (c Command) Execute() (int, error) {
 	if err != nil {
 		return 1, err
 	}
-	output, err := runner("go", appservice.GoRunArgs("lazydev,printroutes", filepath.ToSlash(candidate), buildFlags...), execservice.Options{
+	goArgs := appservice.GoRunArgs("lazydev", filepath.ToSlash(candidate), buildFlags...)
+	goArgs = append(goArgs, "routes", "--json")
+	output, err := runner("go", goArgs, execservice.Options{
 		Dir:    dir,
 		Stdout: c.Stdout,
 		Stderr: c.Stderr,

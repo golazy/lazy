@@ -548,7 +548,173 @@ func (e stepExecutor) upgradeTo022() error {
 }
 
 func (e stepExecutor) upgradeTo023() error {
+	if err := e.rewriteLazyappConfigEntrypoint(); err != nil {
+		return err
+	}
+	return e.rewriteLazyappMainEntrypoint()
+}
+
+func (e stepExecutor) rewriteLazyappConfigEntrypoint() error {
+	path := filepath.Join(e.dir, "init", "app.go")
+	changed, err := lazycodeservice.RewriteFile(path, e.dryRun, rewriteLazyappConfigFile)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			fmt.Fprintln(e.stdout, "  init/app.go not present; skipping lazyapp CLI entrypoint rewrite")
+			return nil
+		}
+		return err
+	}
+	if changed {
+		fmt.Fprintln(e.stdout, "  exposed lazyapp.Config for the application CLI")
+	}
 	return nil
+}
+
+func rewriteLazyappConfigFile(_ *token.FileSet, file *ast.File) (bool, error) {
+	for _, declaration := range file.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if ok && function.Name.Name == "Config" {
+			return false, nil
+		}
+	}
+	for index, declaration := range file.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok || function.Name.Name != "App" || function.Body == nil || len(function.Body.List) != 1 {
+			continue
+		}
+		result, ok := function.Body.List[0].(*ast.ReturnStmt)
+		if !ok || len(result.Results) != 1 {
+			continue
+		}
+		call, ok := result.Results[0].(*ast.CallExpr)
+		if !ok || len(call.Args) != 1 || !isSelector(call.Fun, "lazyapp", "New") {
+			continue
+		}
+		literal, ok := call.Args[0].(*ast.CompositeLit)
+		if !ok || !isLazyappConfig(literal.Type) {
+			continue
+		}
+		call.Args[0] = &ast.CallExpr{Fun: ast.NewIdent("Config")}
+		config := &ast.FuncDecl{
+			Name: ast.NewIdent("Config"),
+			Type: &ast.FuncType{Params: &ast.FieldList{}, Results: &ast.FieldList{List: []*ast.Field{{Type: &ast.SelectorExpr{X: ast.NewIdent("lazyapp"), Sel: ast.NewIdent("Config")}}}}},
+			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{literal}}}},
+		}
+		file.Decls = append(file.Decls[:index+1], append([]ast.Decl{config}, file.Decls[index+1:]...)...)
+		return true, nil
+	}
+	return false, nil
+}
+
+func (e stepExecutor) rewriteLazyappMainEntrypoint() error {
+	path := filepath.Join(e.dir, "cmd", "app", "main.go")
+	changed, err := lazycodeservice.RewriteFile(path, e.dryRun, rewriteLazyappMainFile)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			fmt.Fprintln(e.stdout, "  cmd/app/main.go not present; skipping lazyapp CLI entrypoint rewrite")
+			return nil
+		}
+		return err
+	}
+	if changed {
+		fmt.Fprintln(e.stdout, "  routed cmd/app through lazyapp.Run")
+	}
+	return nil
+}
+
+func rewriteLazyappMainFile(_ *token.FileSet, file *ast.File) (bool, error) {
+	for _, declaration := range file.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok || function.Name.Name != "main" || function.Body == nil {
+			continue
+		}
+		alreadyRun := false
+		ast.Inspect(function.Body, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if ok && isSelector(call.Fun, "lazyapp", "Run") {
+				alreadyRun = true
+			}
+			return true
+		})
+		if alreadyRun {
+			return false, nil
+		}
+		usesApp := false
+		ast.Inspect(function.Body, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if ok && isSelector(call.Fun, "appinit", "App") {
+				usesApp = true
+			}
+			return true
+		})
+		if !usesApp {
+			return false, nil
+		}
+		function.Body.List = []ast.Stmt{&ast.ExprStmt{X: &ast.CallExpr{
+			Fun: &ast.SelectorExpr{X: ast.NewIdent("os"), Sel: ast.NewIdent("Exit")},
+			Args: []ast.Expr{&ast.CallExpr{
+				Fun:  &ast.SelectorExpr{X: ast.NewIdent("lazyapp"), Sel: ast.NewIdent("Run")},
+				Args: []ast.Expr{&ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent("appinit"), Sel: ast.NewIdent("Config")}}},
+			}},
+		}}}
+		removeImport(file, "log")
+		ensureImport(file, "", "os")
+		ensureImport(file, "", "golazy.dev/lazyapp")
+		return true, nil
+	}
+	return false, nil
+}
+
+func ensureImport(file *ast.File, name string, path string) {
+	for _, imported := range file.Imports {
+		if imported.Path.Value == strconv.Quote(path) {
+			return
+		}
+	}
+	spec := &ast.ImportSpec{Path: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(path)}}
+	if name != "" {
+		spec.Name = ast.NewIdent(name)
+	}
+	for _, declaration := range file.Decls {
+		group, ok := declaration.(*ast.GenDecl)
+		if ok && group.Tok == token.IMPORT {
+			group.Specs = append(group.Specs, spec)
+			file.Imports = append(file.Imports, spec)
+			return
+		}
+	}
+	group := &ast.GenDecl{Tok: token.IMPORT, Specs: []ast.Spec{spec}}
+	file.Decls = append([]ast.Decl{group}, file.Decls...)
+	file.Imports = append(file.Imports, spec)
+}
+
+func removeImport(file *ast.File, path string) {
+	quoted := strconv.Quote(path)
+	for declarationIndex := len(file.Decls) - 1; declarationIndex >= 0; declarationIndex-- {
+		group, ok := file.Decls[declarationIndex].(*ast.GenDecl)
+		if !ok || group.Tok != token.IMPORT {
+			continue
+		}
+		group.Specs = slices.DeleteFunc(group.Specs, func(spec ast.Spec) bool {
+			imported, ok := spec.(*ast.ImportSpec)
+			return ok && imported.Path.Value == quoted
+		})
+		if len(group.Specs) == 0 {
+			file.Decls = slices.Delete(file.Decls, declarationIndex, declarationIndex+1)
+		}
+	}
+	file.Imports = slices.DeleteFunc(file.Imports, func(imported *ast.ImportSpec) bool {
+		return imported.Path.Value == quoted
+	})
+}
+
+func isSelector(expression ast.Expr, packageName string, name string) bool {
+	selector, ok := expression.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+	identifier, identifierOK := selector.X.(*ast.Ident)
+	return identifierOK && identifier.Name == packageName && selector.Sel.Name == name
 }
 
 func (e stepExecutor) rewriteStaticJobConfigs() error {

@@ -1,27 +1,24 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
 	"os"
-	"strings"
 
-	addonscommand "golazy.dev/lazy/commands/addons"
 	"golazy.dev/lazy/commands/appcmd"
 	bastardcommand "golazy.dev/lazy/commands/bastard"
 	commandcenter "golazy.dev/lazy/commands/commandcenter"
 	datasetscommand "golazy.dev/lazy/commands/datasets"
 	docscommand "golazy.dev/lazy/commands/docs"
-	jscommand "golazy.dev/lazy/commands/js"
 	"golazy.dev/lazy/commands/miseconfig"
 	nativecommand "golazy.dev/lazy/commands/native"
-	newcommand "golazy.dev/lazy/commands/new"
 	routescommand "golazy.dev/lazy/commands/routes"
 	runcommand "golazy.dev/lazy/commands/run"
 	tailwindcommand "golazy.dev/lazy/commands/tailwind"
 	upgradecommand "golazy.dev/lazy/commands/upgrade"
-	"golazy.dev/lazy/services/addonservice"
+	"golazy.dev/lazytui/lazycli"
 )
 
 func main() {
@@ -36,105 +33,18 @@ func execute(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer)
 	if handled, code := maybeExecuteProjectVersion(args, stdin, stdout, stderr); handled {
 		return code
 	}
-
-	if len(args) == 0 {
-		return executeRun(args, stdin, stdout, stderr)
-	}
-
-	switch args[0] {
-	case "--version":
+	if len(args) > 0 && args[0] == "--version" {
 		if len(args) != 1 {
 			fmt.Fprintln(stderr, "lazy: version does not accept arguments")
 			return 1
 		}
 		fmt.Fprintf(stdout, "lazy %s\n", currentVersion())
 		return 0
-	case "js":
-		if len(args) != 1 {
-			fmt.Fprintln(stderr, "lazy: js does not accept arguments")
-			return 1
-		}
-		code, err := (jscommand.Command{
-			Stdout: stdout,
-			Stderr: stderr,
-		}).Execute()
-		if err != nil {
-			fmt.Fprintf(stderr, "lazy: %v\n", err)
-		}
-		return code
-	case "tailwind":
-		return executeTailwind(args[1:], stdout, stderr)
-	case "add", "remove", "update", "addons":
-		code, err := (addonscommand.Command{
-			FrameworkVersion: currentVersion(),
-			Stdout:           stdout,
-			Stderr:           stderr,
-			Sources: []addonservice.Source{
-				addonservice.FirstPartySource(currentVersion()),
-			},
-		}).Execute(args[0], args[1:])
-		if err != nil {
-			fmt.Fprintf(stderr, "lazy: %v\n", err)
-		}
-		return code
-	case "new":
-		flags := flag.NewFlagSet("new", flag.ContinueOnError)
-		flags.SetOutput(stderr)
-		sourceDir := flags.String("source-dir", "", "copy the template from a local directory")
-		templateVersion := flags.String("version", "", "sample app version to clone")
-		skipUpdateCheck := flags.Bool("skip-update-check", false, "skip the online lazy version check")
-		if err := flags.Parse(args[1:]); err != nil {
-			return 1
-		}
-		if flags.NArg() != 1 {
-			fmt.Fprintln(stderr, "lazy: usage: lazy new [--version <version>] [--skip-update-check] <module>")
-			return 1
-		}
-		if *sourceDir != "" && *templateVersion != "" {
-			fmt.Fprintln(stderr, "lazy: --source-dir and --version cannot be used together")
-			return 1
-		}
-		version := currentVersion()
-		if *templateVersion != "" {
-			version = *templateVersion
-		}
-		err := (newcommand.Command{
-			Version:         version,
-			CurrentVersion:  currentVersion(),
-			SourceDir:       *sourceDir,
-			GoWork:          Config.GoWork,
-			SkipUpdateCheck: *skipUpdateCheck,
-			Stdout:          stdout,
-			Stderr:          stderr,
-		}).Execute(flags.Arg(0))
-		if err != nil {
-			fmt.Fprintf(stderr, "lazy: %v\n", err)
-			return 1
-		}
-		return 0
-	case "routes":
-		return executeRoutes(args[1:], stdout, stderr)
-	case "dump":
-		return executeDatasetDump(args[1:], stdin, stdout, stderr)
-	case "load":
-		return executeDatasetLoad(args[1:], stdin, stdout, stderr)
-	case "upgrade":
-		return executeUpgrade(args[1:], stdin, stdout, stderr)
-	case "native":
-		return executeNative(args[1:], stdin, stdout, stderr)
-	case "docs":
-		return executeDocs(args[1:], stdout, stderr)
-	case "command-center":
-		return executeCommandCenter(args[1:], stdin, stdout, stderr)
-	case "bastard":
-		return executeBastard(args[1:], stdin, stdout, stderr)
-	default:
-		if strings.HasPrefix(args[0], "-") {
-			return executeRun(args, stdin, stdout, stderr)
-		}
-		fmt.Fprintf(stderr, "lazy: unknown command %q\n", args[0])
-		return 1
 	}
+
+	return lazycli.Execute(context.Background(), CLI, lazycli.ExecuteConfig{
+		Args: args, Stdin: stdin, Stdout: stdout, Stderr: stderr, Name: "lazy",
+	})
 }
 
 func executeBastard(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {

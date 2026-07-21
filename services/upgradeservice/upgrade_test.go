@@ -2,6 +2,10 @@ package upgradeservice
 
 import (
 	"bytes"
+	"go/ast"
+	"go/format"
+	"go/parser"
+	"go/token"
 	"io"
 	"os"
 	"path"
@@ -13,6 +17,64 @@ import (
 
 	"golazy.dev/lazy/services/execservice"
 )
+
+func TestRewriteLazyappEntrypoints(t *testing.T) {
+	appSource := `package appinit
+import "golazy.dev/lazyapp"
+func App() *lazyapp.App { return lazyapp.New(lazyapp.Config{Name: "example"}) }
+`
+	app := parseUpgradeSource(t, appSource)
+	changed, err := rewriteLazyappConfigFile(token.NewFileSet(), app)
+	if err != nil || !changed {
+		t.Fatalf("changed = %v, err = %v", changed, err)
+	}
+	got := formatUpgradeSource(t, app)
+	for _, want := range []string{"return lazyapp.New(Config())", "func Config() lazyapp.Config", `Name: "example"`} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("rewritten init/app.go = %s, missing %q", got, want)
+		}
+	}
+
+	mainSource := `package main
+import (
+    "log"
+    appinit "example.com/app/init"
+)
+func main() { if err := appinit.App().ListenAndServe(); err != nil { log.Fatal(err) } }
+`
+	mainFile := parseUpgradeSource(t, mainSource)
+	changed, err = rewriteLazyappMainFile(token.NewFileSet(), mainFile)
+	if err != nil || !changed {
+		t.Fatalf("changed = %v, err = %v", changed, err)
+	}
+	got = formatUpgradeSource(t, mainFile)
+	for _, want := range []string{`"os"`, `"golazy.dev/lazyapp"`, "os.Exit(lazyapp.Run(appinit.Config()))"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("rewritten cmd/app/main.go = %s, missing %q", got, want)
+		}
+	}
+	if strings.Contains(got, `"log"`) {
+		t.Fatalf("rewritten cmd/app/main.go retains log import: %s", got)
+	}
+}
+
+func parseUpgradeSource(t *testing.T, source string) *ast.File {
+	t.Helper()
+	file, err := parser.ParseFile(token.NewFileSet(), "source.go", source, parser.ParseComments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return file
+}
+
+func formatUpgradeSource(t *testing.T, file *ast.File) string {
+	t.Helper()
+	var output bytes.Buffer
+	if err := format.Node(&output, token.NewFileSet(), file); err != nil {
+		t.Fatal(err)
+	}
+	return output.String()
+}
 
 type upgradeInvocation struct {
 	command string

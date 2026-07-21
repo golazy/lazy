@@ -116,7 +116,7 @@ func TestNewRequiresModuleName(t *testing.T) {
 	if code := execute([]string{"new"}, nil, &bytes.Buffer{}, &stderr); code != 1 {
 		t.Fatalf("exit code = %d, want 1", code)
 	}
-	if !strings.Contains(stderr.String(), "usage: lazy new") {
+	if !strings.Contains(stderr.String(), "module is required") {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
 }
@@ -124,10 +124,10 @@ func TestNewRequiresModuleName(t *testing.T) {
 func TestNewRejectsMissingSourceDirArgument(t *testing.T) {
 	var stderr bytes.Buffer
 
-	if code := execute([]string{"new", "--source-dir"}, nil, &bytes.Buffer{}, &stderr); code != 1 {
-		t.Fatalf("exit code = %d, want 1", code)
+	if code := execute([]string{"new", "--source-dir"}, nil, &bytes.Buffer{}, &stderr); code != 2 {
+		t.Fatalf("exit code = %d, want 2", code)
 	}
-	if !strings.Contains(stderr.String(), "flag needs an argument") {
+	if !strings.Contains(stderr.String(), "requires a value") {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
 }
@@ -135,10 +135,10 @@ func TestNewRejectsMissingSourceDirArgument(t *testing.T) {
 func TestNewRejectsMissingVersionArgument(t *testing.T) {
 	var stderr bytes.Buffer
 
-	if code := execute([]string{"new", "--version"}, nil, &bytes.Buffer{}, &stderr); code != 1 {
-		t.Fatalf("exit code = %d, want 1", code)
+	if code := execute([]string{"new", "--version"}, nil, &bytes.Buffer{}, &stderr); code != 2 {
+		t.Fatalf("exit code = %d, want 2", code)
 	}
-	if !strings.Contains(stderr.String(), "flag needs an argument") {
+	if !strings.Contains(stderr.String(), "requires a value") {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
 }
@@ -159,10 +159,10 @@ func TestRoutesRejectsArguments(t *testing.T) {
 	reloadConfigForTest(t)
 	var stderr bytes.Buffer
 
-	if code := execute([]string{"routes", "extra"}, nil, &bytes.Buffer{}, &stderr); code != 1 {
-		t.Fatalf("exit code = %d, want 1", code)
+	if code := execute([]string{"routes", "extra"}, nil, &bytes.Buffer{}, &stderr); code != 2 {
+		t.Fatalf("exit code = %d, want 2", code)
 	}
-	if !strings.Contains(stderr.String(), "usage: lazy routes") {
+	if !strings.Contains(stderr.String(), "unexpected argument") {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
 }
@@ -175,7 +175,7 @@ func TestDumpRequiresDatasetName(t *testing.T) {
 	if code := execute([]string{"dump"}, nil, &bytes.Buffer{}, &stderr); code != 1 {
 		t.Fatalf("exit code = %d, want 1", code)
 	}
-	if !strings.Contains(stderr.String(), "usage: lazy dump") {
+	if !strings.Contains(stderr.String(), "dataset name") {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
 }
@@ -188,7 +188,7 @@ func TestLoadRequiresDatasetName(t *testing.T) {
 	if code := execute([]string{"load"}, nil, &bytes.Buffer{}, &stderr); code != 1 {
 		t.Fatalf("exit code = %d, want 1", code)
 	}
-	if !strings.Contains(stderr.String(), "usage: lazy load") {
+	if !strings.Contains(stderr.String(), "dataset name") {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
 }
@@ -198,10 +198,10 @@ func TestJSRejectsArguments(t *testing.T) {
 	reloadConfigForTest(t)
 	var stderr bytes.Buffer
 
-	if code := execute([]string{"js", "extra"}, nil, &bytes.Buffer{}, &stderr); code != 1 {
-		t.Fatalf("exit code = %d, want 1", code)
+	if code := execute([]string{"js", "extra"}, nil, &bytes.Buffer{}, &stderr); code != 2 {
+		t.Fatalf("exit code = %d, want 2", code)
 	}
-	if !strings.Contains(stderr.String(), "js does not accept arguments") {
+	if !strings.Contains(stderr.String(), "unexpected argument") {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
 }
@@ -211,10 +211,10 @@ func TestTailwindRejectsArguments(t *testing.T) {
 	reloadConfigForTest(t)
 	var stderr bytes.Buffer
 
-	if code := execute([]string{"tailwind", "extra"}, nil, &bytes.Buffer{}, &stderr); code != 1 {
-		t.Fatalf("exit code = %d, want 1", code)
+	if code := execute([]string{"tailwind", "extra"}, nil, &bytes.Buffer{}, &stderr); code != 2 {
+		t.Fatalf("exit code = %d, want 2", code)
 	}
-	if !strings.Contains(stderr.String(), "usage: lazy tailwind") {
+	if !strings.Contains(stderr.String(), "unexpected argument") {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
 }
@@ -269,10 +269,10 @@ func App() *lazyapp.App {
 func TestBastardRejectsArguments(t *testing.T) {
 	var stderr bytes.Buffer
 
-	if code := execute([]string{"bastard", "extra"}, nil, &bytes.Buffer{}, &stderr); code != 1 {
-		t.Fatalf("exit code = %d, want 1", code)
+	if code := execute([]string{"bastard", "extra"}, nil, &bytes.Buffer{}, &stderr); code != 2 {
+		t.Fatalf("exit code = %d, want 2", code)
 	}
-	if !strings.Contains(stderr.String(), "usage: lazy bastard") {
+	if !strings.Contains(stderr.String(), "unexpected argument") {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
 }
@@ -280,10 +280,10 @@ func TestBastardRejectsArguments(t *testing.T) {
 func TestUpgradeRejectsExtraArguments(t *testing.T) {
 	var stderr bytes.Buffer
 
-	if code := execute([]string{"upgrade", "extra"}, nil, &bytes.Buffer{}, &stderr); code != 1 {
-		t.Fatalf("exit code = %d, want 1", code)
+	if code := execute([]string{"upgrade", "extra"}, nil, &bytes.Buffer{}, &stderr); code != 2 {
+		t.Fatalf("exit code = %d, want 2", code)
 	}
-	if !strings.Contains(stderr.String(), "usage: lazy upgrade") {
+	if !strings.Contains(stderr.String(), "unexpected argument") {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
 }
@@ -462,10 +462,10 @@ func TestSkipVersionCheckFlagIsRejected(t *testing.T) {
 	}
 
 	var stderr bytes.Buffer
-	if code := execute([]string{"--skip-version-check", "js"}, nil, &bytes.Buffer{}, &stderr); code != 1 {
-		t.Fatalf("exit code = %d, want 1", code)
+	if code := execute([]string{"--skip-version-check", "js"}, nil, &bytes.Buffer{}, &stderr); code != 2 {
+		t.Fatalf("exit code = %d, want 2", code)
 	}
-	if !strings.Contains(stderr.String(), "flag provided but not defined: -skip-version-check") {
+	if !strings.Contains(stderr.String(), "unknown parameter") {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
 }

@@ -9,6 +9,13 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- `lazy` now declares its complete command tree through `lazycli`, derives
+  options from controller parameter structs, offers lightweight shell
+  completion, and uses the GoLazy website palette.
+- `lazy routes` now invokes the application's built-in `routes --json`
+  controller instead of compiling a separate print-routes entrypoint.
+- `lazy upgrade` rewrites generated application entrypoints to expose
+  `appinit.Config()` and delegate process execution to `lazyapp.Run`.
 - `lazy upgrade` recognizes the `v0.1.23` development target.
 
 ## [0.1.22] - 2026-07-20

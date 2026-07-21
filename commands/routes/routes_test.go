@@ -18,7 +18,7 @@ type invocation struct {
 	options commands.Options
 }
 
-func TestCommandRunsApplicationWithPrintRoutesTag(t *testing.T) {
+func TestCommandRunsApplicationRoutesCommand(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "go.mod"), "module example.com/team/my_app\n")
 	writeFile(t, filepath.Join(dir, "app", "views", "layouts", "app.html.tpl"), "layout")
@@ -53,13 +53,15 @@ func TestCommandRunsApplicationWithPrintRoutesTag(t *testing.T) {
 	if got, want := calls[0].args, []string{
 		"run",
 		"-tags",
-		"lazydev,printroutes",
+		"lazydev",
 		"-ldflags",
 		appcmd.LazyDevLDFlags(appcmd.LazyDevPaths{
 			Views:  filepath.Join(dir, "app", "views"),
 			Public: filepath.Join(dir, "app", "public"),
 		}),
 		"./cmd/app",
+		"routes",
+		"--json",
 	}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("args = %#v, want %#v", got, want)
 	}
@@ -103,13 +105,15 @@ func TestCommandUsesExplicitCommandAndViewPath(t *testing.T) {
 	if got, want := calls[0].args, []string{
 		"run",
 		"-tags",
-		"lazydev,printroutes",
+		"lazydev",
 		"-ldflags",
 		appcmd.LazyDevLDFlags(appcmd.LazyDevPaths{
 			Views:  filepath.Join(dir, "views"),
 			Public: filepath.Join(dir, "public_files"),
 		}),
 		"./cmd/blog",
+		"routes",
+		"--json",
 	}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("args = %#v, want %#v", got, want)
 	}

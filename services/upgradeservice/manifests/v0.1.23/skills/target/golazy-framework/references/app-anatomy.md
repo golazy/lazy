@@ -33,13 +33,17 @@ hooks. Reusable domain policy still belongs in a service.
 
 ## Startup
 
-1. `cmd/app` calls `appinit.App().ListenAndServe()`.
-2. `init/app.go` calls `lazyapp.New` with embedded views, public files,
+1. `cmd/app` passes `appinit.Config()` to `lazyapp.Run`, which serves by
+   default and routes application CLI commands when arguments are present.
+2. `init/app.go` exposes `Config()` and calls `lazyapp.New(Config())` from
+   `App()` with embedded views, public files,
    dependencies, routes, and optional jobs, SEO, PWA, or MCP configuration.
-3. `init/dependencies.go` constructs clients, starts dependencies through
+3. Generated `init/addons_gen.go` blank-imports installed add-on packages and
+   provides their exact application-local selection.
+4. `init/dependencies.go` constructs clients, starts dependencies through
    `lazydeps.Service`, and builds the typed application context.
-4. `init/routes.go` registers resource routes through `Draw`.
-5. GoLazy constructs request-local controllers and renders embedded views.
+5. `init/routes.go` registers resource routes through `Draw`.
+6. GoLazy constructs request-local controllers and renders embedded views.
 
 ## Feature Recipe
 
