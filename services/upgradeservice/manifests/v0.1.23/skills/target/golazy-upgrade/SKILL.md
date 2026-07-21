@@ -20,12 +20,27 @@ application patterns synchronized by each upgrade.
    user how to isolate them.
 3. Read the current `golazy.dev` requirement from `go.mod` and record the final
    requested target. Do not infer the current version from an installed CLI.
-4. Run the application's existing verification commands before changing the
+4. Discover every application migration path before changing the version.
+   Read `AGENTS.md`, `README.md`, `lazy.toml`, `.mise/tasks/*/migrate`, database
+   documentation, and `init/` wiring such as `LAZYAPP_MIGRATE`. Use the app's
+   documented command; do not invent a second migration mechanism.
+5. Run all pending migrations for the current GoLazy version against the
+   local or designated upgrade-test database. This clears migrations that may
+   have been added by an earlier version but never applied. Never migrate a
+   production database without explicit authorization and its documented
+   backup or rollout procedure.
+6. If the app has no migration mechanism, record `Migrations before <version>:
+   no application migration command configured`. If the mechanism exists but
+   reports no pending work, record `Migrations before <version>: no pending
+   migrations`. Do not silently treat an unavailable database or failed command
+   as either case.
+7. Run the application's existing verification commands before changing the
    version. At minimum run `go test ./...` and `go vet ./...`; also run the
    app-specific integration, asset, race, build, or service checks required by
    `AGENTS.md`.
-5. If the baseline fails, record the failure and stop. Do not make an upgrade
-   responsible for an unrelated broken baseline without explicit direction.
+8. If the migration or baseline gate fails, record the failure and stop. Do
+   not make an upgrade responsible for an unrelated broken baseline without
+   explicit direction.
 
 ## Upgrade One Version
 
@@ -49,10 +64,18 @@ Repeat this loop until `go.mod` reaches the requested target:
 6. Resolve migration conflicts and failing checks before continuing. Prefer
    the new version's normal pattern over compatibility shims that preserve an
    obsolete application structure.
-7. Run the full verification gate below.
-8. Commit only this version's dependency, migration, generated, and manual
-   repair changes. Use a message such as `upgrade: golazy v0.1.21 to v0.1.22`.
-9. Confirm the commit exists and the worktree is clean before beginning the
+7. Run every documented application migration command again using the upgraded
+   version. This applies migrations introduced by the target version and is a
+   required gate before tests or the next version.
+8. Record the target-side result as the command plus applied migrations,
+   `Migrations after <version>: no pending migrations`, or `Migrations after
+   <version>: no application migration command configured`.
+9. Run the full verification gate below.
+10. Commit only this version's dependency, migration, generated, and manual
+   repair changes. Use a subject such as `upgrade: golazy v0.1.21 to v0.1.22`
+   and include both before- and after-upgrade migration results in the commit
+   body.
+11. Confirm the commit exists and the worktree is clean before beginning the
    next loop.
 
 Running `lazy upgrade` without a target intentionally advances one supported
@@ -75,6 +98,9 @@ test is failing.
 - Regenerate committed assets when their source or manifest changed. Never edit
   generated CSS, importmaps, or lazyshaft output by hand.
 - Add or update focused tests when a manual repair changes behavior.
+- Treat a migration failure as a version failure. Fix the migration, service
+  readiness, configuration, or source compatibility and rerun it before tests.
+  Do not continue merely because unit tests can run without the database.
 - If the upgrade cannot be repaired safely, stop with the current version,
   exact failing command, diff summary, and unresolved decision. Do not skip the
   release or commit a knowingly broken step.
@@ -127,4 +153,6 @@ After the final version:
 4. Confirm the worktree is clean, except for explicitly preserved unrelated
    user changes.
 5. Report each version transition, its commit, any manual pattern migration,
-   and every verification command. Report skipped or failing checks exactly.
+   database migrations before and after the transition, and every verification
+   command. Explicitly report when no migration command is configured or no
+   migrations were pending. Report skipped or failing checks exactly.
