@@ -1,0 +1,4 @@
+interface:
+  display_name: "Upgrade GoLazy"
+  short_description: "Upgrade GoLazy one verified version at a time"
+  default_prompt: "Use $golazy-upgrade to upgrade this application one GoLazy version at a time, fixing and committing each verified step."

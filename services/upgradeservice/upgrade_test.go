@@ -21,6 +21,32 @@ type upgradeInvocation struct {
 	env     []string
 }
 
+const v023SkillsTargetRoot = "manifests/v0.1.23/skills/target"
+
+func TestV023SkillsManifestAddsUpgradeSkill(t *testing.T) {
+	manifest, ok, err := currentSkillsManifest("v0.1.23")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatal("v0.1.23 skills manifest is missing")
+	}
+	var added []string
+	for _, operation := range manifest.Files {
+		if operation.Action == upgradeFileAdd {
+			added = append(added, operation.Path)
+		}
+	}
+	for _, want := range []string{
+		".skills/golazy-upgrade/SKILL.md",
+		".skills/golazy-upgrade/agents/openai.yaml",
+	} {
+		if !slices.Contains(added, want) {
+			t.Fatalf("added skill files = %#v, want %q", added, want)
+		}
+	}
+}
+
 func TestUpgradeTo011AddsMiseTaskFiles(t *testing.T) {
 	dir := t.TempDir()
 	writeUpgradeFile(t, filepath.Join(dir, "go.mod"), "module example.com/app\n\ngo 1.26.0\n\nrequire golazy.dev v0.1.10\n")
@@ -759,6 +785,7 @@ func TestUpgradeAlreadyCurrentCommentsObsoleteMiseGoTool(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code = %d, want 0", code)
 	}
+	assertEmbeddedSkillsTree(t, dir, v023SkillsTargetRoot, "example.com/app")
 	assertUpgradeFileContent(t, filepath.Join(dir, "mise.toml"), "[tools]\n# go = \"1.26.0\" # not needed by GoLazy v0.1.23; Go uses the go.mod go directive and toolchain selection.\nnode = \"24\"\n")
 	if stderr.Len() != 0 {
 		t.Fatalf("stderr = %q", stderr.String())
@@ -1187,7 +1214,7 @@ func assertEmbeddedSkillsTree(t *testing.T, dir string, root string, modulePath 
 		t.Fatal(err)
 	}
 	actual := make(map[string]string)
-	skillsRoot := filepath.Join(dir, ".skills", "golazy-framework")
+	skillsRoot := filepath.Join(dir, ".skills")
 	err = filepath.Walk(skillsRoot, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err

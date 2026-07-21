@@ -35,6 +35,8 @@ All paths in this skill are relative to the application root. The skill is
 self-contained: do not search for a sibling framework checkout, website
 repository, or workspace documentation to perform ordinary app work. Use
 `lazy docs <package>` when an uncommon API needs exact local documentation.
+Use the sibling [GoLazy upgrade skill](../golazy-upgrade/SKILL.md) instead when
+moving the application between framework versions.
 
 ## Application Workflow
 
