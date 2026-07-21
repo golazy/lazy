@@ -62,5 +62,11 @@ The base `postgres` add-on owns the pgx pool and migration backend.
 and supplies the durable jobs backend. App migrations live under
 `db/postgres/migrations`.
 
+Installing `postgres` adds a pinned PostgreSQL tool to `mise.toml` unless the
+app already selected one. Its `postgres:start`, `postgres:check`,
+`postgres:create`, and `postgres:reset` tasks use the mise-managed PostgreSQL
+commands directly and keep local data under `.tmp/postgres` by default. Do not
+replace these tasks with Docker merely to run PostgreSQL in development.
+
 SEE OTHERS: [Services](services.md), [Jobs](jobs.md), [Js](js.md),
 [Controllers/Base](controllers-base.md), [Views](views.md)

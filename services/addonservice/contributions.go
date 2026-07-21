@@ -22,6 +22,7 @@ const (
 	lazyServiceBegin        = "# golazy:begin addon postgres service"
 	lazyServiceEnd          = "# golazy:end addon postgres service"
 	postgresEnvPropertyV1   = "golazy-postgres-env-v1:"
+	postgresToolPropertyV1  = "golazy-postgres-tool-v1:"
 )
 
 var postgresTasks = []string{
@@ -285,20 +286,25 @@ func editPostgresMise(source []byte, enabled bool, owned []string, slug string) 
 		return nil, false, nil, fmt.Errorf("parse %s: %w", miseConfigFilename, err)
 	}
 	current := tomlTableStrings(source, "env")
+	tools := tomlTableStrings(source, "tools")
 	if !enabled {
 		changed := false
 		for _, property := range owned {
-			if !strings.HasPrefix(property, postgresEnvPropertyV1) {
+			prefix, table := postgresEnvPropertyV1, "env"
+			values := current
+			if strings.HasPrefix(property, postgresToolPropertyV1) {
+				prefix, table, values = postgresToolPropertyV1, "tools", tools
+			} else if !strings.HasPrefix(property, postgresEnvPropertyV1) {
 				continue
 			}
-			key, expected, ok := strings.Cut(strings.TrimPrefix(property, postgresEnvPropertyV1), "=")
-			value, exists := current[key]
+			key, expected, ok := strings.Cut(strings.TrimPrefix(property, prefix), "=")
+			value, exists := values[key]
 			if !ok || !exists || value != expected {
 				continue
 			}
-			removed, err := document.Remove("env", key)
+			removed, err := document.Remove(table, key)
 			if err != nil {
-				return nil, false, nil, fmt.Errorf("remove %s env.%s: %w", miseConfigFilename, key, err)
+				return nil, false, nil, fmt.Errorf("remove %s %s.%s: %w", miseConfigFilename, table, key, err)
 			}
 			changed = removed || changed
 		}
@@ -306,19 +312,17 @@ func editPostgresMise(source []byte, enabled bool, owned []string, slug string) 
 	}
 
 	values := map[string]string{
-		"DB_CONTAINER": slug + "-postgres",
-		"DB_NAME":      slug + "_development",
-		"DB_USER":      "postgres",
-		"DB_PASS":      "postgres",
-		"DB_PORT":      "5432",
-		"DB_VOLUME":    slug + "-postgres-data",
+		"DB_DATA": ".tmp/postgres",
+		"DB_NAME": slug + "_development",
+		"DB_USER": "postgres",
+		"DB_PORT": "5432",
 	}
 	for key := range values {
 		if value, exists := current[key]; exists {
 			values[key] = value
 		}
 	}
-	values["DATABASE_URL"] = "postgres://{{env.DB_USER}}:{{env.DB_PASS}}@127.0.0.1:{{env.DB_PORT}}/{{env.DB_NAME}}?sslmode=disable"
+	values["DATABASE_URL"] = "postgres://{{env.DB_USER}}@127.0.0.1:{{env.DB_PORT}}/{{env.DB_NAME}}?sslmode=disable"
 
 	ownedValues := map[string]string{}
 	for _, property := range owned {
@@ -330,8 +334,31 @@ func editPostgresMise(source []byte, enabled bool, owned []string, slug string) 
 		}
 	}
 	changed := false
-	for _, key := range []string{"DB_CONTAINER", "DB_NAME", "DB_USER", "DB_PASS", "DB_PORT", "DB_VOLUME", "DATABASE_URL"} {
-		if _, exists := current[key]; exists {
+	desired := map[string]bool{"DB_DATA": true, "DB_NAME": true, "DB_USER": true, "DB_PORT": true, "DATABASE_URL": true}
+	for key, expected := range ownedValues {
+		if desired[key] || current[key] != expected {
+			continue
+		}
+		removed, err := document.Remove("env", key)
+		if err != nil {
+			return nil, false, nil, fmt.Errorf("remove obsolete %s env.%s: %w", miseConfigFilename, key, err)
+		}
+		changed = removed || changed
+		delete(ownedValues, key)
+	}
+	for _, key := range []string{"DB_DATA", "DB_NAME", "DB_USER", "DB_PORT", "DATABASE_URL"} {
+		if currentValue, exists := current[key]; exists {
+			ownedValue, wasOwned := ownedValues[key]
+			if !wasOwned || currentValue != ownedValue || currentValue == values[key] {
+				continue
+			}
+			set, err := document.SetString("env", key, values[key])
+			if err != nil {
+				return nil, false, nil, fmt.Errorf("update %s env.%s: %w", miseConfigFilename, key, err)
+			}
+			changed = set || changed
+			current[key] = values[key]
+			ownedValues[key] = values[key]
 			continue
 		}
 		set, err := document.SetString("env", key, values[key])
@@ -341,9 +368,29 @@ func editPostgresMise(source []byte, enabled bool, owned []string, slug string) 
 		changed = set || changed
 		ownedValues[key] = values[key]
 	}
+	toolVersion := "17"
+	toolOwned := false
+	for _, property := range owned {
+		if property == postgresToolPropertyV1+"postgres="+toolVersion {
+			toolOwned = true
+			break
+		}
+	}
+	if _, exists := tools["postgres"]; !exists {
+		set, err := document.SetString("tools", "postgres", toolVersion)
+		if err != nil {
+			return nil, false, nil, fmt.Errorf("set %s tools.postgres: %w", miseConfigFilename, err)
+		}
+		changed = set || changed
+		tools["postgres"] = toolVersion
+		toolOwned = true
+	}
 	properties := make([]string, 0, len(ownedValues))
 	for key, value := range ownedValues {
 		properties = append(properties, postgresEnvPropertyV1+key+"="+value)
+	}
+	if toolOwned && tools["postgres"] == toolVersion {
+		properties = append(properties, postgresToolPropertyV1+"postgres="+toolVersion)
 	}
 	sort.Strings(properties)
 	return document.Bytes(), changed, properties, nil
@@ -443,44 +490,33 @@ func containsString(values []string, target string) bool {
 	return false
 }
 
-func postgresStartTask(slug string) string {
+func postgresStartTask(_ string) string {
 	return `#!/usr/bin/env bash
-#MISE description="Start PostgreSQL in Docker in the foreground"
+#MISE description="Start the mise-managed PostgreSQL server in the foreground"
 set -euo pipefail
 
-CONTAINER="${DB_CONTAINER:-` + slug + `-postgres}"
-DB_NAME="${DB_NAME:-` + slug + `_development}"
+DB_DATA="${DB_DATA:-.tmp/postgres}"
 DB_USER="${DB_USER:-postgres}"
-DB_PASS="${DB_PASS:-postgres}"
 DB_PORT="${DB_PORT:-5432}"
-DB_VOLUME="${DB_VOLUME:-` + slug + `-postgres-data}"
 
-if docker inspect "${CONTAINER}" >/dev/null 2>&1; then
-	if docker ps --format '{{.Names}}' | grep -Fxq "${CONTAINER}"; then
-		exec docker attach --sig-proxy=true "${CONTAINER}"
-	fi
-	exec docker start -a "${CONTAINER}"
+mkdir -p "${DB_DATA}"
+if [ ! -f "${DB_DATA}/PG_VERSION" ]; then
+	initdb -D "${DB_DATA}" -U "${DB_USER}" --auth=trust
 fi
 
-exec docker run --name "${CONTAINER}" \
-	-e "POSTGRES_DB=${DB_NAME}" \
-	-e "POSTGRES_USER=${DB_USER}" \
-	-e "POSTGRES_PASSWORD=${DB_PASS}" \
-	-p "${DB_PORT}:5432" \
-	-v "${DB_VOLUME}:/var/lib/postgresql/data" \
-	postgres:17-alpine
+exec postgres -D "${DB_DATA}" -p "${DB_PORT}"
 `
 }
 
-func postgresCheckTask(slug string) string {
+func postgresCheckTask(_ string) string {
 	return `#!/usr/bin/env bash
 #MISE description="Check local PostgreSQL readiness"
 set -euo pipefail
 
-CONTAINER="${DB_CONTAINER:-` + slug + `-postgres}"
+DB_PORT="${DB_PORT:-5432}"
 DB_USER="${DB_USER:-postgres}"
 
-if docker exec "${CONTAINER}" pg_isready -U "${DB_USER}" -q >/dev/null 2>&1; then
+if pg_isready -h 127.0.0.1 -p "${DB_PORT}" -U "${DB_USER}" -d postgres -q; then
 	echo "READY"
 	exit 0
 fi
@@ -495,37 +531,46 @@ func postgresCreateTask(slug string) string {
 #MISE description="Create the local PostgreSQL database if it does not exist"
 set -euo pipefail
 
-CONTAINER="${DB_CONTAINER:-` + slug + `-postgres}"
 DB_NAME="${DB_NAME:-` + slug + `_development}"
 DB_USER="${DB_USER:-postgres}"
+DB_PORT="${DB_PORT:-5432}"
 
-if ! docker exec "${CONTAINER}" pg_isready -U "${DB_USER}" -q >/dev/null 2>&1; then
+if ! pg_isready -h 127.0.0.1 -p "${DB_PORT}" -U "${DB_USER}" -d postgres -q; then
 	echo "PostgreSQL is not ready. Start it with: mise run postgres:start" >&2
 	exit 1
 fi
 
 escaped_db_name="${DB_NAME//\'/\'\'}"
-exists="$(docker exec "${CONTAINER}" psql -U "${DB_USER}" -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname = '${escaped_db_name}'")"
+exists="$(psql -h 127.0.0.1 -p "${DB_PORT}" -U "${DB_USER}" -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname = '${escaped_db_name}'")"
 if [ "${exists}" = "1" ]; then
 	printf 'Database %s already exists\n' "${DB_NAME}"
 	exit 0
 fi
 
-docker exec "${CONTAINER}" createdb -U "${DB_USER}" "${DB_NAME}"
+createdb -h 127.0.0.1 -p "${DB_PORT}" -U "${DB_USER}" "${DB_NAME}"
 printf 'Created database %s\n' "${DB_NAME}"
 `
 }
 
-func postgresResetTask(slug string) string {
+func postgresResetTask(_ string) string {
 	return `#!/usr/bin/env bash
-#MISE description="Destroy local PostgreSQL data"
+#MISE description="Stop PostgreSQL and destroy its local data"
 set -euo pipefail
 
-CONTAINER="${DB_CONTAINER:-` + slug + `-postgres}"
-DB_VOLUME="${DB_VOLUME:-` + slug + `-postgres-data}"
+DB_DATA="${DB_DATA:-.tmp/postgres}"
 
-docker rm -f "${CONTAINER}" >/dev/null 2>&1 || true
-docker volume rm "${DB_VOLUME}" >/dev/null 2>&1 || true
-echo "Removed ${CONTAINER} and ${DB_VOLUME}. Start again with: mise run postgres:start"
+if [ -z "${DB_DATA}" ] || [ "${DB_DATA}" = "/" ] || [ "${DB_DATA}" = "." ] || [ "${DB_DATA}" = ".." ]; then
+	echo "Refusing to reset unsafe DB_DATA: ${DB_DATA}" >&2
+	exit 1
+fi
+if [ ! -f "${DB_DATA}/PG_VERSION" ]; then
+	echo "No PostgreSQL data directory at ${DB_DATA}"
+	exit 0
+fi
+if [ -f "${DB_DATA}/postmaster.pid" ]; then
+	pg_ctl -D "${DB_DATA}" stop -m fast
+fi
+rm -rf -- "${DB_DATA}"
+echo "Removed ${DB_DATA}. Start again with: mise run postgres:start"
 `
 }

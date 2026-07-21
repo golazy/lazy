@@ -143,9 +143,11 @@ func TestAddPlansAndAppliesPinnedStateGeneratedImportsAndGoMod(t *testing.T) {
 	}
 	miseConfig := readFile(t, dir, "mise.toml")
 	for _, expected := range []string{
+		`postgres = "17"`,
+		`DB_DATA = ".tmp/postgres"`,
 		`DB_NAME = "app_development"`,
 		`DB_PORT = "5432"`,
-		`DATABASE_URL = "postgres://{{env.DB_USER}}:{{env.DB_PASS}}@127.0.0.1:{{env.DB_PORT}}/{{env.DB_NAME}}?sslmode=disable"`,
+		`DATABASE_URL = "postgres://{{env.DB_USER}}@127.0.0.1:{{env.DB_PORT}}/{{env.DB_NAME}}?sslmode=disable"`,
 	} {
 		if !strings.Contains(miseConfig, expected) {
 			t.Fatalf("mise.toml does not contain %q:\n%s", expected, miseConfig)
@@ -611,7 +613,7 @@ func TestRemoveUsesLockedSnapshotRestoresGoModAndProtectsGeneratedDrift(t *testi
 
 func TestPostgresMiseContributionPreservesPreexistingValuesAndOwnership(t *testing.T) {
 	dir := fixtureApp(t, "v0.1.21")
-	writeFile(t, dir, "mise.toml", "[env]\nDB_USER = \"developer\"\nDB_PORT = \"5544\"\n")
+	writeFile(t, dir, "mise.toml", "[tools]\npostgres = \"16\"\n\n[env]\nDB_USER = \"developer\"\nDB_PORT = \"5544\"\n")
 	manager := addonservice.Manager{Dir: dir, ManifestPaths: []string{"lazyaddon.toml"}}
 	install, err := manager.Add("postgres")
 	if err != nil {
@@ -624,7 +626,10 @@ func TestPostgresMiseContributionPreservesPreexistingValuesAndOwnership(t *testi
 	if !strings.Contains(mise, `DB_USER = "developer"`) || !strings.Contains(mise, `DB_PORT = "5544"`) {
 		t.Fatalf("preexisting mise values changed:\n%s", mise)
 	}
-	if !strings.Contains(mise, `DATABASE_URL = "postgres://{{env.DB_USER}}:{{env.DB_PASS}}@127.0.0.1:{{env.DB_PORT}}/{{env.DB_NAME}}?sslmode=disable"`) {
+	if !strings.Contains(mise, `postgres = "16"`) {
+		t.Fatalf("preexisting postgres tool changed:\n%s", mise)
+	}
+	if !strings.Contains(mise, `DATABASE_URL = "postgres://{{env.DB_USER}}@127.0.0.1:{{env.DB_PORT}}/{{env.DB_NAME}}?sslmode=disable"`) {
 		t.Fatalf("DATABASE_URL did not use preserved values:\n%s", mise)
 	}
 	remove, err := manager.Remove("postgres")
@@ -635,7 +640,7 @@ func TestPostgresMiseContributionPreservesPreexistingValuesAndOwnership(t *testi
 		t.Fatal(err)
 	}
 	mise = readFile(t, dir, "mise.toml")
-	if !strings.Contains(mise, `DB_USER = "developer"`) || !strings.Contains(mise, `DB_PORT = "5544"`) || strings.Contains(mise, "DATABASE_URL") {
+	if !strings.Contains(mise, `postgres = "16"`) || !strings.Contains(mise, `DB_USER = "developer"`) || !strings.Contains(mise, `DB_PORT = "5544"`) || strings.Contains(mise, "DATABASE_URL") {
 		t.Fatalf("mise ownership removal =\n%s", mise)
 	}
 }

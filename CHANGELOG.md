@@ -9,6 +9,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The bundled `postgres` add-on now adds PostgreSQL 17 as a mise tool and
+  generates lifecycle tasks that use `initdb`, `postgres`, `pg_isready`,
+  `psql`, `createdb`, and `pg_ctl` directly instead of Docker.
 - `lazy` now declares its complete command tree through `lazycli`, derives
   options from controller parameter structs, offers lightweight shell
   completion, and uses the GoLazy website palette.

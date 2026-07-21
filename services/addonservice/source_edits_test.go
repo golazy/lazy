@@ -255,8 +255,12 @@ func TestSourceEditsComposeWithPostgresTypedTOMLContributions(t *testing.T) {
 	if lazyConfig := readFile(t, dir, "lazy.toml"); !strings.Contains(lazyConfig, `services = ["postgres"]`) || !strings.Contains(lazyConfig, `session = "addon-kept"`) {
 		t.Fatalf("composed lazy.toml =\n%s", lazyConfig)
 	}
-	if miseConfig := readFile(t, dir, "mise.toml"); !strings.Contains(miseConfig, `DATABASE_URL = `) || !strings.Contains(miseConfig, `SEO_MODE = "strict"`) {
+	if miseConfig := readFile(t, dir, "mise.toml"); !strings.Contains(miseConfig, `postgres = "17"`) || !strings.Contains(miseConfig, `DB_DATA = ".tmp/postgres"`) || !strings.Contains(miseConfig, `DATABASE_URL = `) || !strings.Contains(miseConfig, `SEO_MODE = "strict"`) {
 		t.Fatalf("composed mise.toml =\n%s", miseConfig)
+	}
+	startTask := readFile(t, dir, ".mise/tasks/postgres/start")
+	if !strings.Contains(startTask, `exec postgres -D "${DB_DATA}" -p "${DB_PORT}"`) || strings.Contains(startTask, "docker") {
+		t.Fatalf("postgres start task =\n%s", startTask)
 	}
 
 	removePostgres, err := manager.Remove("postgres")
@@ -269,7 +273,7 @@ func TestSourceEditsComposeWithPostgresTypedTOMLContributions(t *testing.T) {
 	if lazyConfig := readFile(t, dir, "lazy.toml"); strings.Contains(lazyConfig, "postgres") || !strings.Contains(lazyConfig, `session = "addon-kept"`) {
 		t.Fatalf("lazy.toml after removing postgres =\n%s", lazyConfig)
 	}
-	if miseConfig := readFile(t, dir, "mise.toml"); strings.Contains(miseConfig, "DB_NAME") || !strings.Contains(miseConfig, `SEO_MODE = "strict"`) {
+	if miseConfig := readFile(t, dir, "mise.toml"); strings.Contains(miseConfig, "DB_NAME") || strings.Contains(miseConfig, `postgres = "17"`) || !strings.Contains(miseConfig, `SEO_MODE = "strict"`) {
 		t.Fatalf("mise.toml after removing postgres =\n%s", miseConfig)
 	}
 
