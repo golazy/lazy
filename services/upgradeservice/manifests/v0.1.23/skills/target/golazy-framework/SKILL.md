@@ -1,14 +1,16 @@
 ---
 name: golazy-framework
-description: Develop, extend, debug, or review a GoLazy application using its generated-app conventions. Use for app architecture, add-ons, services and dependency lifecycle, routes, controllers, views, forms, SEO, caching, Turbo, Tailwind, JavaScript, assets, mailers, jobs, PWA, MCP, and application tests.
+description: Develop, extend, debug, or review a GoLazy application using its generated-app conventions. Use for app architecture, add-ons, clients, services and dependency lifecycle, routes, controllers, views, forms, SEO, caching, Turbo, Tailwind, JavaScript, assets, mailers, jobs, PWA, MCP, and application tests.
 ---
 
 # Develop A GoLazy Application
 
-Treat the application as two layers:
+Treat the application as three ownership areas plus a composition root:
 
 - `services/` owns the domain: business rules, use cases, domain models, data
-  access, and external systems used to perform business work.
+  access, and application-facing use of external systems.
+- `clients/` owns low-level external-system integration: provider protocols,
+  authentication, SDK setup, wire types, parsing, and transport behavior.
 - `app/` owns presentation and communication: controllers, views, forms,
   browser code, mail rendering, job adapters, and MCP adapters.
 
@@ -23,7 +25,8 @@ business behavior.
 2. Read [App Anatomy](references/app-anatomy.md).
 3. Read only the topic files needed for the change. Every topic below links to
    its closest related topics.
-4. For behavior changes, begin with [Services](references/services.md), then
+4. For behavior changes, begin with [Services](references/services.md). Read
+   [Clients](references/clients.md) when an external system is involved, then
    wire dependencies, routes, controllers, and views in that order.
 5. Finish with [Views](references/views.md) when rendering changes and
    [Testing](references/testing-verification.md) for every change.
@@ -36,19 +39,22 @@ repository, or workspace documentation to perform ordinary app work. Use
 ## Application Workflow
 
 1. Define or extend one focused domain service under `services/<name>/`.
-2. Give the service a `New` constructor with the `lazydeps` lifecycle return
+2. When the operation uses an external system, decide whether direct use or a
+   focused package under `clients/<name>/` creates the better Go boundary.
+3. Give the service a `New` constructor with the `lazydeps` lifecycle return
    shape when practical, including typed context installation and cleanup.
-3. Register it in `init/dependencies.go`. Use dependency references inside
+4. Register it in `init/dependencies.go`. Construct clients there and use
+   dependency references inside
    another service initializer so startup and reverse-order shutdown remain
    explicit.
-4. Add a request-local controller under `app/controllers/<name>_controller/`.
+5. Add a request-local controller under `app/controllers/<name>_controller/`.
    Resolve services in its constructor and keep actions thin.
-5. Register the controller with `router.Resources`. Add collection, member, or
+6. Register the controller with `router.Resources`. Add collection, member, or
    nested routes through the resource callback. Use top-level verb routes only
    when the endpoint is not meaningfully a resource.
-6. Add templates under `app/views`, browser behavior under `app/js`, and styles
+7. Add templates under `app/views`, browser behavior under `app/js`, and styles
    under `app/styles`.
-7. Test domain behavior beside the service and test the composed HTTP behavior
+8. Test domain behavior beside the service and test the composed HTTP behavior
    under `test/`.
 
 ## Topic Index
@@ -59,6 +65,8 @@ repository, or workspace documentation to perform ordinary app work. Use
   the end-to-end feature recipe.
 - [Framework Parts](references/framework-parts.md): which GoLazy package owns
   each framework concern.
+- [Clients](references/clients.md): external-system boundaries, constructors,
+  lifecycle, and when to expose client or upstream types directly.
 - [Views](references/views.md): templates, layouts, partials, data, and choosing
   another view from a conventional action.
 - [Testing](references/testing-verification.md): service and full-app tests.
@@ -108,6 +116,7 @@ repository, or workspace documentation to perform ordinary app work. Use
 - [Add-ons](references/addons.md)
 - [Mailers](references/mailers.md)
 - [Jobs](references/jobs.md)
+- [Clients](references/clients.md)
 - [Services](references/services.md)
 - [PWA](references/pwa.md)
 - [MCP](references/mcp.md)
@@ -116,6 +125,9 @@ repository, or workspace documentation to perform ordinary app work. Use
 
 - Put business decisions in `services/`, never in controllers, templates,
   mailers, jobs, MCP tools, `init/`, or `main`.
+- Do not create client wrappers that only rename, embed, or shadow an upstream
+  API. Add an application-owned boundary only when it owns useful behavior or
+  semantics.
 - Keep controllers concerned with authorization, request/response behavior,
   presentation data, content negotiation, and service orchestration.
 - Prefer conventional resource actions: `Index`, `New`, `Create`, `Show`,

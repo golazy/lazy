@@ -7,7 +7,8 @@ without inventing another architecture.
 
 | Path | Responsibility |
 | --- | --- |
-| `services/` | Business rules, use cases, domain models, repositories, data access, and domain-facing integrations. |
+| `services/` | Business rules, use cases, domain models, repositories, data access, and application-facing use of external systems. |
+| `clients/` | Low-level external-system clients, provider configuration, wire formats, parsing, and transport behavior. |
 | `app/controllers/` | HTTP authorization, request translation, response status, redirects, content negotiation, and view data. |
 | `app/views/` | HTML, text, Turbo Stream, mail, and MCP UI presentation. |
 | `app/js/` | App-owned browser behavior. |
@@ -35,8 +36,8 @@ hooks. Reusable domain policy still belongs in a service.
 1. `cmd/app` calls `appinit.App().ListenAndServe()`.
 2. `init/app.go` calls `lazyapp.New` with embedded views, public files,
    dependencies, routes, and optional jobs, SEO, PWA, or MCP configuration.
-3. `init/dependencies.go` starts services through `lazydeps.Service` and builds
-   the typed application context.
+3. `init/dependencies.go` constructs clients, starts dependencies through
+   `lazydeps.Service`, and builds the typed application context.
 4. `init/routes.go` registers resource routes through `Draw`.
 5. GoLazy constructs request-local controllers and renders embedded views.
 
@@ -45,18 +46,20 @@ hooks. Reusable domain policy still belongs in a service.
 For a normal domain-backed screen:
 
 1. Add the operation and tests in `services/<domain>/`.
-2. Add or update the service `New` constructor and typed context helpers.
-3. Register the service in `init/dependencies.go`.
-4. Add a controller constructor that resolves the service.
-5. Add a conventional resource action that calls the service and sets view
+2. If it calls an external system, use the decision criteria in
+   [Clients](clients.md) before adding a focused `clients/<provider>/` package.
+3. Add or update the service `New` constructor and typed context helpers.
+4. Construct clients and register the service in `init/dependencies.go`.
+5. Add a controller constructor that resolves the service.
+6. Add a conventional resource action that calls the service and sets view
    data.
-6. Register the resource in `init/routes.go`.
-7. Add the matching view and a full app test.
+7. Register the resource in `init/routes.go`.
+8. Add the matching view and a full app test.
 
 Skip a layer only when the change genuinely does not use it. A static template
 still uses a resource controller; it simply may not need a service operation.
 
 ## Related
 
-[Services](services.md) | [Routes](routes.md) | [Controllers](controllers.md) |
+[Services](services.md) | [Clients](clients.md) | [Routes](routes.md) | [Controllers](controllers.md) |
 [Views](views.md) | [Testing](testing-verification.md)

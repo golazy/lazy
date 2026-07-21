@@ -17,11 +17,17 @@ templates, mail rendering, jobs, or MCP.
 - Use cases that coordinate repositories or domain-facing clients.
 - Domain models and typed domain errors.
 - Data access and persistence interfaces or implementations.
-- Concurrency and lifecycle of long-lived domain resources.
+- Application-facing use of external systems.
 
 Controllers own authorization and presentation. Mailers own communication
 formatting. Jobs and MCP modules are adapters. All of them call services for
 business work.
+
+Provider protocols, SDK setup, authentication, wire parsing, and transport
+behavior belong in `clients/` when a separate client adds a useful boundary.
+Services may accept concrete clients directly; do not introduce an interface
+unless substitution, focused testing, or multiple implementations justify it.
+Read [Clients](clients.md) before wrapping an external dependency.
 
 ## Lifecycle-Compatible Constructor
 
@@ -118,12 +124,18 @@ template names, controller types, or form structs from a service. Use `context`
 for cancellation and deadlines on I/O operations, not as an untyped parameter
 bag.
 
+Prefer service-owned result types when they carry business meaning or protect
+the domain from provider changes. Reuse normalized types from `clients/` when
+another service type would only copy fields. Expose a canonical upstream type
+or client when a wrapper would mostly shadow a large, stable Go API. This is a
+case-by-case coupling decision, not a rule to hide every dependency.
+
 Services are shared across requests and must be concurrency-safe. Test them
 beside the package, including domain failures and lifecycle cleanup. Run
 `go test -race ./...` when shared state changes.
 
 ## Related
 
-[App Anatomy](app-anatomy.md) | [Controllers](controllers.md) |
+[App Anatomy](app-anatomy.md) | [Clients](clients.md) | [Controllers](controllers.md) |
 [Forms](forms.md) | [Jobs](jobs.md) | [Mailers](mailers.md) | [MCP](mcp.md) |
 [Testing](testing-verification.md)
