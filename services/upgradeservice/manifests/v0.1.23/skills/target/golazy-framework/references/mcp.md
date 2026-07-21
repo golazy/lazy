@@ -45,13 +45,24 @@ func (m *AdminMCP) UserCount(ctx context.Context, params UserCountParams) (UserC
 
 func (m *AdminMCP) DashboardApp(ctx context.Context) lazymcp.AppSpec {
 	return lazymcp.AppSpec{
-		Name:      "dashboard",
-		Desc:      "Admin dashboard.",
-		View:      "dashboard",
-		UseLayout: true,
+		Name:          "dashboard",
+		Desc:          "Admin dashboard.",
+		View:          "dashboard",
+		UseLayout:     true,
+		Domain:        "https://mcp.example.com",
+		CSP: lazymcp.AppCSP{
+			ConnectDomains:  []string{},
+			ResourceDomains: []string{},
+		},
 	}
 }
 ```
+
+GoLazy reflects the first tool return value into `outputSchema`. Keep result
+structs and JSON tags accurate; set `ToolSpec.OutputSchema` only for a dynamic
+or custom-encoded result shape. For Apps, set `Domain` to the dedicated HTTPS
+widget origin and declare only required outbound origins in `CSP`. Empty slices
+are a valid policy for a self-contained widget.
 
 ```go
 // init/mcp.go
