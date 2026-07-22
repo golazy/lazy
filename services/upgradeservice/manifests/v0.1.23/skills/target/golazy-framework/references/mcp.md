@@ -124,6 +124,48 @@ action, and let `lazyoauth` enforce exact redirect-URI matching server-side.
 Cover the flow with a POST test that expects `302 Found` and the external
 client callback in `Location`.
 
+## Durable Refresh Tokens
+
+GoLazy refresh tokens are signed, self-contained grants. The JWT carries the
+user, client, scope, resource, token family, current `jti`, and expiry while a
+small `lazyoauth.RefreshTokenStateStore` tracks rotation and replay state:
+
+```go
+type RefreshTokenStateStore interface {
+    CreateFamily(context.Context, lazyoauth.RefreshTokenFamily) error
+    Rotate(context.Context, lazyoauth.RefreshTokenRotation) error
+    RevokeFamily(context.Context, string) error
+}
+```
+
+Production MCP servers should keep the signing key stable and implement this
+interface with durable storage. Resolve that dependency inside the
+context-aware `lazyapp.Config.OAuth` hook:
+
+```go
+func OAuth(ctx context.Context) (lazyoauth.Config, error) {
+    states, ok := oauthstateservice.FromContext(ctx)
+    if !ok {
+        return lazyoauth.Config{}, errors.New("refresh token state store is missing")
+    }
+    return lazyoauth.Config{
+        Issuer:             "https://mcp.example.com",
+        Resource:           "https://mcp.example.com/mcp",
+        Signer:             signingKey(),
+        RefreshTokenStates: states,
+    }, nil
+}
+```
+
+`Rotate` must use one database transaction to compare the presented token ID
+with the family's current token ID. On a match, replace it with the next token
+ID and expiry. On a mismatch, revoke the family and return
+`lazyoauth.ErrRefreshTokenReplay`. Missing, expired, or already-revoked
+families return `lazyoauth.ErrInvalidGrant`. `RevokeFamily` is idempotent.
+Expired or revoked families may be deleted opportunistically; a later request
+for a deleted family still returns `ErrInvalidGrant`. Never store the signed
+refresh token itself or write it to logs.
+
 ## Related
 
 [Services](services.md) | [Views](views.md) | [Controllers/Base](controllers-base.md)
