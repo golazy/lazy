@@ -827,6 +827,11 @@ func lazyappConfig(file *ast.File) (*ast.CompositeLit, error) {
 	if literal := lazyappConfigLiteral(constructor.Args[0], alias); literal != nil {
 		return literal, nil
 	}
+	if call, ok := constructor.Args[0].(*ast.CallExpr); ok && len(call.Args) == 0 {
+		if factory, ok := call.Fun.(*ast.Ident); ok && factory.Name == "Config" {
+			return configFunctionLiteral(file, alias, factory.Name)
+		}
+	}
 	identifier, ok := constructor.Args[0].(*ast.Ident)
 	if !ok {
 		return nil, fmt.Errorf("%s.New Config argument is not a literal or local identifier", alias)
@@ -836,6 +841,41 @@ func lazyappConfig(file *ast.File) (*ast.CompositeLit, error) {
 		return nil, fmt.Errorf("Config identifier %q has %d unambiguous local literal bindings", identifier.Name, len(bindings))
 	}
 	return bindings[0], nil
+}
+
+func configFunctionLiteral(file *ast.File, alias, name string) (*ast.CompositeLit, error) {
+	var functions []*ast.FuncDecl
+	for _, declaration := range file.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if ok && function.Recv == nil && function.Name.Name == name && function.Body != nil {
+			functions = append(functions, function)
+		}
+	}
+	if len(functions) != 1 {
+		return nil, fmt.Errorf("expected exactly one %s function, found %d", name, len(functions))
+	}
+	var literals []*ast.CompositeLit
+	ast.Inspect(functions[0].Body, func(node ast.Node) bool {
+		if _, nested := node.(*ast.FuncLit); nested {
+			return false
+		}
+		statement, ok := node.(*ast.ReturnStmt)
+		if !ok || len(statement.Results) != 1 {
+			return true
+		}
+		if literal := lazyappConfigLiteral(statement.Results[0], alias); literal != nil {
+			literals = append(literals, literal)
+			return true
+		}
+		if identifier, ok := statement.Results[0].(*ast.Ident); ok {
+			literals = append(literals, localConfigBindings(functions[0].Body, statement.Pos(), identifier.Name, alias)...)
+		}
+		return true
+	})
+	if len(literals) != 1 {
+		return nil, fmt.Errorf("%s has %d unambiguous returned %s.Config literals", name, len(literals), alias)
+	}
+	return literals[0], nil
 }
 
 func importedPackageName(file *ast.File, importPath string) (string, error) {
