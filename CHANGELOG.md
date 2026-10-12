@@ -28,6 +28,14 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - PostgreSQL add-on source planning supports applications whose configuration
   lives in an `appinit.Config()` factory.
 
+### Fixed
+
+- `lazy upgrade` migrates the generated `cmd/<app-name>/main.go` entrypoint
+  as well as the conventional `cmd/app/main.go`, so upgraded generated apps
+  receive built-in application CLI commands.
+- Skill upgrades preserve the unrenamed sample app's `cmd/app` references
+  instead of reporting a false local-edit conflict.
+
 ## [0.1.22] - 2026-07-20
 
 ### Changed

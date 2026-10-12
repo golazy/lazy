@@ -1438,3 +1438,61 @@ func applyFakeGoGet(t *testing.T, dir string, spec string) {
 		t.Fatal(err)
 	}
 }
+
+func TestV023SkillsManifestUpgradesUnrenamedSample(t *testing.T) {
+	dir := t.TempDir()
+	previous, err := readSkillsManifestTree("manifests/v0.1.23/skills/previous")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, content := range previous {
+		writeUpgradeFile(t, filepath.Join(dir, filepath.FromSlash(name)), content)
+	}
+	manifest, ok, err := currentSkillsManifest("v0.1.23")
+	if err != nil || !ok {
+		t.Fatalf("manifest = %v, %v", ok, err)
+	}
+	var stdout, stderr bytes.Buffer
+	executor := stepExecutor{dir: dir, modulePath: "sample_app", from: "v0.1.22", to: "v0.1.23", stdout: &stdout, stderr: &stderr}
+	if err := executor.applySkillsManifest(manifest); err != nil {
+		t.Fatal(err)
+	}
+	target, err := readSkillsManifestTree(v023SkillsTargetRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, content := range target {
+		assertUpgradeFileContent(t, filepath.Join(dir, filepath.FromSlash(name)), content)
+	}
+	if strings.Contains(stderr.String(), "local changes") {
+		t.Fatalf("unexpected conflict: %s", stderr.String())
+	}
+}
+
+func TestV023MigratesNamedApplicationEntrypoint(t *testing.T) {
+	for _, name := range []string{"tickets", "app"} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			mainPath := filepath.Join(dir, "cmd", name, "main.go")
+			writeUpgradeFile(t, mainPath, `package main
+import (
+ "log"
+ appinit "example.com/tickets/init"
+)
+func main() { if err := appinit.App().ListenAndServe(); err != nil { log.Fatal(err) } }
+`)
+			unrelated := filepath.Join(dir, "cmd", "worker", "main.go")
+			writeUpgradeFile(t, unrelated, "package main\nfunc main() {}\n")
+			var stdout bytes.Buffer
+			executor := stepExecutor{dir: dir, modulePath: "example.com/tickets", stdout: &stdout}
+			if err := executor.rewriteLazyappMainEntrypoint(); err != nil {
+				t.Fatal(err)
+			}
+			assertUpgradeFileContains(t, mainPath, "os.Exit(lazyapp.Run(appinit.Config()))")
+			assertUpgradeFileContent(t, unrelated, "package main\nfunc main() {}\n")
+			if err := executor.rewriteLazyappMainEntrypoint(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}

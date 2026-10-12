@@ -607,18 +607,27 @@ func rewriteLazyappConfigFile(_ *token.FileSet, file *ast.File) (bool, error) {
 }
 
 func (e stepExecutor) rewriteLazyappMainEntrypoint() error {
-	path := filepath.Join(e.dir, "cmd", "app", "main.go")
-	changed, err := lazycodeservice.RewriteFile(path, e.dryRun, rewriteLazyappMainFile)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			fmt.Fprintln(e.stdout, "  cmd/app/main.go not present; skipping lazyapp CLI entrypoint rewrite")
-			return nil
+	candidates := []string{filepath.Join("cmd", "app", "main.go")}
+	if e.modulePath != "" {
+		name := filepath.Base(e.modulePath)
+		if name != "app" && name != "." {
+			candidates = append([]string{filepath.Join("cmd", name, "main.go")}, candidates...)
 		}
-		return err
 	}
-	if changed {
-		fmt.Fprintln(e.stdout, "  routed cmd/app through lazyapp.Run")
+	for _, relative := range candidates {
+		changed, err := lazycodeservice.RewriteFile(filepath.Join(e.dir, relative), e.dryRun, rewriteLazyappMainFile)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if changed {
+			fmt.Fprintf(e.stdout, "  routed %s through lazyapp.Run\n", filepath.ToSlash(relative))
+		}
+		return nil
 	}
+	fmt.Fprintln(e.stdout, "  application main.go not present; skipping lazyapp CLI entrypoint rewrite")
 	return nil
 }
 
