@@ -33,6 +33,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `lazy upgrade` migrates the generated `cmd/<app-name>/main.go` entrypoint
   as well as the conventional `cmd/app/main.go`, so upgraded generated apps
   receive built-in application CLI commands.
+- Skill manifests retain full Go module paths in imports and use only the
+  module basename for generated command directories, matching `lazy new`.
 - Skill upgrades preserve the unrenamed sample app's `cmd/app` references
   instead of reporting a false local-edit conflict.
 

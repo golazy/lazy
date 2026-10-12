@@ -241,13 +241,11 @@ func (e stepExecutor) renderManifestContent(relative string, label string, conte
 		}
 	}
 	if e.modulePath != "" {
-		replacement := e.modulePath
+		data = bytes.ReplaceAll(data, []byte("sample_app"), []byte(e.modulePath))
 		// The unrenamed sample keeps cmd/app; generated apps rename it.
 		if strings.HasPrefix(relative, ".skills/") && e.modulePath != "sample_app" {
-			replacement = path.Base(e.modulePath)
-			data = bytes.ReplaceAll(data, []byte("cmd/app"), []byte("cmd/"+replacement))
+			data = bytes.ReplaceAll(data, []byte("cmd/app"), []byte("cmd/"+path.Base(e.modulePath)))
 		}
-		data = bytes.ReplaceAll(data, []byte("sample_app"), []byte(replacement))
 	}
 	return data, nil
 }

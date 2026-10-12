@@ -1312,9 +1312,14 @@ func assertEmbeddedSkillsTree(t *testing.T, dir string, root string, modulePath 
 }
 
 func renderEmbeddedSkill(content string, modulePath string) string {
-	appName := path.Base(modulePath)
-	content = strings.ReplaceAll(content, "cmd/app", "cmd/"+appName)
-	return strings.ReplaceAll(content, "sample_app", appName)
+	if modulePath == "" {
+		return content
+	}
+	content = strings.ReplaceAll(content, "sample_app", modulePath)
+	if modulePath != "sample_app" {
+		content = strings.ReplaceAll(content, "cmd/app", "cmd/"+path.Base(modulePath))
+	}
+	return content
 }
 
 func sortedMapKeys(values map[string]string) []string {
@@ -1495,4 +1500,22 @@ func main() { if err := appinit.App().ListenAndServe(); err != nil { log.Fatal(e
 			}
 		})
 	}
+}
+
+func TestSkillManifestKeepsQualifiedModuleImports(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, ".skills", "example", "SKILL.md")
+	writeUpgradeFile(t, file, "Run cmd/tickets. Import example.com/team/tickets/init.\n")
+	var output bytes.Buffer
+	executor := stepExecutor{dir: dir, modulePath: "example.com/team/tickets", stdout: &output}
+	err := executor.applyFileOperation(upgradeFileOperation{
+		Action:   upgradeFileUpdate,
+		Path:     ".skills/example/SKILL.md",
+		Previous: upgradeManifestContent("Run cmd/app. Import sample_app/init.\n"),
+		Target:   upgradeManifestContent("Run cmd/app. Import sample_app/services/ticketservice.\n"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertUpgradeFileContent(t, file, "Run cmd/tickets. Import example.com/team/tickets/services/ticketservice.\n")
 }
