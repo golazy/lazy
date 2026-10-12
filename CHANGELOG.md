@@ -7,6 +7,8 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.23] - 2026-10-12
+
 ### Changed
 
 - The bundled `postgres` add-on now adds PostgreSQL 17 as a mise tool and
@@ -19,7 +21,12 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   controller instead of compiling a separate print-routes entrypoint.
 - `lazy upgrade` rewrites generated application entrypoints to expose
   `appinit.Config()` and delegate process execution to `lazyapp.Run`.
-- `lazy upgrade` recognizes the `v0.1.23` development target.
+- `lazy upgrade` includes the `v0.1.22 -> v0.1.23` step and synchronizes
+  the complete generated skill tree, including a dedicated one-version upgrade
+  workflow and focused application client guidance. Customized skill files
+  retain conflict protection.
+- PostgreSQL add-on source planning supports applications whose configuration
+  lives in an `appinit.Config()` factory.
 
 ## [0.1.22] - 2026-07-20
 
@@ -624,7 +631,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The CLI version now comes from the checked-in `VERSION` file embedded into
   the binary at build time.
 
-[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.21...HEAD
+[Unreleased]: https://github.com/golazy/lazy/compare/v0.1.23...HEAD
+[0.1.23]: https://github.com/golazy/lazy/compare/v0.1.22...v0.1.23
+[0.1.22]: https://github.com/golazy/lazy/compare/v0.1.21...v0.1.22
 [0.1.21]: https://github.com/golazy/lazy/compare/v0.1.20...v0.1.21
 [0.1.20]: https://github.com/golazy/lazy/compare/v0.1.19...v0.1.20
 [0.1.19]: https://github.com/golazy/lazy/compare/v0.1.18...v0.1.19
