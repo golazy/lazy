@@ -549,6 +549,9 @@ func (e stepExecutor) upgradeTo022() error {
 }
 
 func (e stepExecutor) upgradeTo023() error {
+	if err := e.checkSampleReleaseManifest(); err != nil {
+		return err
+	}
 	if err := e.rewriteLazyappConfigEntrypoint(); err != nil {
 		return err
 	}

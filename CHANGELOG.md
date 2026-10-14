@@ -30,6 +30,10 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- The v0.1.23 upgrade verifies the complete bundled sample tag diff and its
+  content hashes. Skills, named source migrations, and Go module operations
+  retain their owners; project-specific README and AGENTS guidance stays manual.
+
 - App CLI entrypoint upgrades remove obsolete context imports while retaining
   context aliases still used by another function in the file.
 
