@@ -7,7 +7,7 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.1.23] - 2026-10-12
+## [0.1.23] - 2026-10-14
 
 ### Changed
 
@@ -29,6 +29,13 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   lives in an `appinit.Config()` factory.
 
 ### Fixed
+
+- App CLI entrypoint upgrades remove obsolete context imports while retaining
+  context aliases still used by another function in the file.
+
+- Multi-version upgrades raise an existing pre-split `google.golang.org/genproto`
+  parent to its supported split baseline before telemetry verification, avoiding
+  ambiguous API/RPC imports in apps with older tool dependencies.
 
 - `lazy upgrade` migrates the generated `cmd/<app-name>/main.go` entrypoint
   as well as the conventional `cmd/app/main.go`, so upgraded generated apps

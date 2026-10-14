@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"golang.org/x/mod/modfile"
+	"golang.org/x/mod/semver"
 	"golazy.dev/lazy/services/execservice"
 	"golazy.dev/lazy/services/lazycodeservice"
 	"golazy.dev/lazytui/progress"
@@ -667,11 +668,36 @@ func rewriteLazyappMainFile(_ *token.FileSet, file *ast.File) (bool, error) {
 			}},
 		}}}
 		removeImport(file, "log")
+		removeImportIfUnused(file, "context")
 		ensureImport(file, "", "os")
 		ensureImport(file, "", "golazy.dev/lazyapp")
 		return true, nil
 	}
 	return false, nil
+}
+
+func removeImportIfUnused(file *ast.File, importPath string) {
+	name := filepath.Base(importPath)
+	for _, imported := range file.Imports {
+		if imported.Path.Value == strconv.Quote(importPath) && imported.Name != nil {
+			name = imported.Name.Name
+		}
+	}
+	if name == "." || name == "_" {
+		return
+	}
+	used := false
+	ast.Inspect(file, func(node ast.Node) bool {
+		selector, ok := node.(*ast.SelectorExpr)
+		if ok {
+			identifier, ok := selector.X.(*ast.Ident)
+			used = used || ok && identifier.Name == name
+		}
+		return true
+	})
+	if !used {
+		removeImport(file, importPath)
+	}
 }
 
 func ensureImport(file *ast.File, name string, path string) {
@@ -1893,6 +1919,11 @@ func (e stepExecutor) runFollowups() error {
 			Env:    call.env,
 		}); err != nil {
 			return fmt.Errorf("%s %s: %w", displayCommand, strings.Join(displayArgs, " "), err)
+		}
+		if call.command == "go" && slices.Equal(call.args, []string{"mod", "tidy"}) && semver.Compare(e.to, "v0.1.20") >= 0 {
+			if err := e.repairLegacyGenprotoParent(); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

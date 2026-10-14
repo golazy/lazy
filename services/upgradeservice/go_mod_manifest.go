@@ -1,12 +1,14 @@
 package upgradeservice
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"golang.org/x/mod/modfile"
+	"golang.org/x/mod/semver"
 	"golazy.dev/lazy/services/execservice"
 )
 
@@ -53,6 +55,48 @@ func (e stepExecutor) applyGoModManifest(manifest upgradeGoModManifest) error {
 		if err := e.applyGoModRequirement(requirement, current[requirement.Path]); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func (e stepExecutor) repairLegacyGenprotoParent() error {
+	data, err := os.ReadFile(filepath.Join(e.dir, "go.mod"))
+	if err != nil {
+		return err
+	}
+	file, err := modfile.Parse("go.mod", data, nil)
+	if err != nil {
+		return err
+	}
+	current := directRequirements(file)
+	// Older app tools can retain the pre-split parent beside the API/RPC
+	// submodules introduced by telemetry. Google's supported split baseline
+	// removes the duplicate packages without downgrading newer app versions.
+	const parent = "google.golang.org/genproto"
+	const splitBaseline = "v0.0.0-20230526161137-0005af68ea54"
+	version := current[parent]
+	if version == "" && semver.Compare(e.to, "v0.1.20") >= 0 && !e.dryRun {
+		var selected bytes.Buffer
+		if err := e.runner("go", []string{"list", "-m", "-e", "-f", "{{.Version}}", parent}, execservice.Options{Dir: e.dir, Stdout: &selected, Stderr: e.stderr}); err != nil {
+			return fmt.Errorf("inspect genproto dependency: %w", err)
+		}
+		version = strings.TrimSpace(selected.String())
+	}
+	if semver.Compare(e.to, "v0.1.20") >= 0 && semver.IsValid(version) && semver.Compare(version, splitBaseline) < 0 {
+		for _, replacement := range file.Replace {
+			if replacement.Old.Path == parent && (replacement.Old.Version == "" || replacement.Old.Version == version) {
+				return nil // Keep an application-owned override intact.
+			}
+		}
+		if err := e.runGoGet(parent + "@" + splitBaseline); err != nil {
+			return err
+		}
+		// Workspace sync can prune the indirect parent requirement again. Keep
+		// only the incompatible old version mapped to the split baseline, so
+		// newer selected versions are never overridden.
+		replacement := parent + "@" + version + "=" + parent + "@" + splitBaseline
+		fmt.Fprintf(e.stdout, "  pinning pre-split parent %s\n", replacement)
+		return e.runner("go", []string{"mod", "edit", "-replace=" + replacement}, execservice.Options{Dir: e.dir, Stdout: e.stdout, Stderr: e.stderr})
 	}
 	return nil
 }

@@ -1385,6 +1385,11 @@ func assertExecutable(t *testing.T, path string) {
 func goGetRunner(t *testing.T, calls *[]upgradeInvocation) execservice.Runner {
 	t.Helper()
 	return func(command string, args []string, options execservice.Options) error {
+		// This runner models mutation commands; an absent graph-only module has
+		// no selected version, just as go list -m -e reports on a simple app.
+		if command == "go" && slices.Equal(args, []string{"list", "-m", "-e", "-f", "{{.Version}}", "google.golang.org/genproto"}) {
+			return nil
+		}
 		if calls != nil {
 			*calls = append(*calls, upgradeInvocation{
 				command: command,
@@ -1520,6 +1525,33 @@ func TestSkillManifestKeepsQualifiedModuleImports(t *testing.T) {
 	assertUpgradeFileContent(t, file, "Run cmd/tickets. Import example.com/team/tickets/services/ticketservice.\n")
 }
 
+func TestMainUpgradeRemovesOnlyUnusedContextImports(t *testing.T) {
+	for _, extra := range []string{"", "func background() ctx.Context { return ctx.Background() }\n"} {
+		source := `package main
+import (
+ ctx "context"
+ "log"
+ appinit "example.com/app/init"
+)
+func main() { if err := appinit.App().ListenAndServeContext(ctx.Background()); err != nil { log.Fatal(err) } }
+` + extra
+		file, err := parser.ParseFile(token.NewFileSet(), "main.go", source, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if changed, err := rewriteLazyappMainFile(token.NewFileSet(), file); err != nil || !changed {
+			t.Fatalf("changed=%v error=%v", changed, err)
+		}
+		hasContext := false
+		for _, imported := range file.Imports {
+			hasContext = hasContext || imported.Path.Value == `"context"`
+		}
+		if hasContext != (extra != "") {
+			t.Fatalf("context import retained=%v with extra=%q", hasContext, extra)
+		}
+	}
+}
+
 func TestSkillUpgradePreservesOnlyAppDisplayName(t *testing.T) {
 	const module = "example.com/team/site"
 	const previous = "Example\n\t\tName:         \"sample_app\",\nOld guide\n"
@@ -1554,6 +1586,56 @@ func TestSkillUpgradePreservesOnlyAppDisplayName(t *testing.T) {
 			assertUpgradeFileContent(t, file, strings.ReplaceAll(target, "sample_app", "My site"))
 			if err := executor.applyFileOperation(operation); err != nil {
 				t.Fatalf("repeat upgrade: %v", err)
+			}
+		})
+	}
+}
+
+func TestUpgradeRepairsOnlyPreSplitGenprotoParents(t *testing.T) {
+	for _, test := range []struct {
+		name, version, selected, replacement string
+		repair                               bool
+	}{
+		{name: "absent"},
+		{name: "pre-split", version: "v0.0.0-20200526211855-cb27e3aa2013", repair: true},
+		{name: "transitive pre-split", selected: "v0.0.0-20200526211855-cb27e3aa2013", repair: true},
+		{name: "transitive newer", selected: "v0.0.0-20260526163538-3dc84a4a5aaa"},
+		{name: "split baseline", version: "v0.0.0-20230526161137-0005af68ea54"},
+		{name: "newer", version: "v0.0.0-20260526163538-3dc84a4a5aaa"},
+		{name: "app override", version: "v0.0.0-20200526211855-cb27e3aa2013", replacement: "replace google.golang.org/genproto => example.com/custom-genproto v1.0.0\n"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			dir := t.TempDir()
+			mod := "module example.com/app\n\ngo 1.26.2\nrequire golazy.dev v0.1.19\n"
+			if test.version != "" {
+				mod += "require google.golang.org/genproto " + test.version + " // indirect\n"
+			}
+			mod += test.replacement
+			writeUpgradeFile(t, filepath.Join(dir, "go.mod"), mod)
+			var output bytes.Buffer
+			var calls []upgradeInvocation
+			get := goGetRunner(t, &calls)
+			runner := func(command string, args []string, options execservice.Options) error {
+				if slices.Equal(args, []string{"list", "-m", "-e", "-f", "{{.Version}}", "google.golang.org/genproto"}) {
+					_, err := io.WriteString(options.Stdout, test.selected)
+					return err
+				}
+				return get(command, args, options)
+			}
+			executor := stepExecutor{dir: dir, from: "v0.1.19", to: "v0.1.20", stdout: &output, runner: runner}
+			if err := executor.repairLegacyGenprotoParent(); err != nil {
+				t.Fatal(err)
+			}
+			want := 0
+			if test.repair {
+				want = 2
+				assertUpgradeFileContains(t, filepath.Join(dir, "go.mod"), "google.golang.org/genproto v0.0.0-20230526161137-0005af68ea54")
+				if calls[1].command != "go" || !strings.HasPrefix(strings.Join(calls[1].args, " "), "mod edit -replace=google.golang.org/genproto@") {
+					t.Fatalf("replacement operation = %#v", calls[1])
+				}
+			}
+			if len(calls) != want {
+				t.Fatalf("calls = %#v, want %d go get operations", calls, want)
 			}
 		})
 	}
