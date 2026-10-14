@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -186,6 +187,7 @@ func (e stepExecutor) applyUpdateFileOperation(relative string, operation upgrad
 		}
 		return fmt.Errorf("read %s: %w", relative, err)
 	}
+	previousData, targetData = e.preserveSkillAppName(relative, data, previousData, targetData)
 	switch {
 	case sameSHA256(data, targetData):
 		fmt.Fprintf(e.out(), "  %s already matches %s\n", relative, e.to)
@@ -203,6 +205,43 @@ func (e stepExecutor) applyUpdateFileOperation(relative string, operation upgrad
 	default:
 		return e.installConflict(relative, data, targetData, mode)
 	}
+}
+
+// A skill's Config.Name example may use the app's display name instead of its
+// module path. Preserve that one literal only when all other bytes match a
+// rendered template; arbitrary skill edits still use the conflict flow.
+func (e stepExecutor) preserveSkillAppName(relative string, current, previous, target []byte) ([]byte, []byte) {
+	if !strings.HasPrefix(relative, ".skills/") || e.modulePath == "" {
+		return previous, target
+	}
+	const prefix = "\t\tName:         "
+	original := []byte(prefix + strconv.Quote(e.modulePath) + ",")
+	if bytes.Count(previous, original) != 1 || bytes.Count(target, original) != 1 {
+		return previous, target
+	}
+	var customized []byte
+	for _, line := range bytes.Split(current, []byte("\n")) {
+		if !bytes.HasPrefix(line, []byte(prefix)) || !bytes.HasSuffix(line, []byte(",")) {
+			continue
+		}
+		if customized != nil {
+			return previous, target
+		}
+		value := strings.TrimSuffix(strings.TrimPrefix(string(line), prefix), ",")
+		if _, err := strconv.Unquote(value); err != nil {
+			return previous, target
+		}
+		customized = line
+	}
+	if customized == nil {
+		return previous, target
+	}
+	customPrevious := bytes.Replace(previous, original, customized, 1)
+	customTarget := bytes.Replace(target, original, customized, 1)
+	if bytes.Equal(current, customPrevious) || bytes.Equal(current, customTarget) {
+		return customPrevious, customTarget
+	}
+	return previous, target
 }
 
 func (e stepExecutor) applyDeleteFileOperation(relative string, operation upgradeFileOperation) error {

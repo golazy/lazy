@@ -1519,3 +1519,42 @@ func TestSkillManifestKeepsQualifiedModuleImports(t *testing.T) {
 	}
 	assertUpgradeFileContent(t, file, "Run cmd/tickets. Import example.com/team/tickets/services/ticketservice.\n")
 }
+
+func TestSkillUpgradePreservesOnlyAppDisplayName(t *testing.T) {
+	const module = "example.com/team/site"
+	const previous = "Example\n\t\tName:         \"sample_app\",\nOld guide\n"
+	const target = "Example\n\t\tName:         \"sample_app\",\nNew guide\n"
+	for _, test := range []struct {
+		name, relative, extra string
+		conflict              bool
+	}{
+		{name: "display name", relative: ".skills/example/SKILL.md"},
+		{name: "other edits", relative: ".skills/example/SKILL.md", extra: "App-specific instructions\n", conflict: true},
+		{name: "application source", relative: "init/example.go", conflict: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			dir := t.TempDir()
+			file := filepath.Join(dir, filepath.FromSlash(test.relative))
+			current := strings.ReplaceAll(previous, "sample_app", "My site") + test.extra
+			writeUpgradeFile(t, file, current)
+			var output bytes.Buffer
+			executor := stepExecutor{dir: dir, modulePath: module, to: "v0.1.23", stdout: &output, stderr: &output, stdin: strings.NewReader("")}
+			operation := upgradeFileOperation{Action: upgradeFileUpdate, Path: test.relative, Previous: upgradeManifestContent(previous), Target: upgradeManifestContent(target)}
+			err := executor.applyFileOperation(operation)
+			if test.conflict {
+				if err == nil || !strings.Contains(err.Error(), "upgrade conflict") {
+					t.Fatalf("error = %v, want a conflict", err)
+				}
+				assertUpgradeFileContent(t, file, current)
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertUpgradeFileContent(t, file, strings.ReplaceAll(target, "sample_app", "My site"))
+			if err := executor.applyFileOperation(operation); err != nil {
+				t.Fatalf("repeat upgrade: %v", err)
+			}
+		})
+	}
+}

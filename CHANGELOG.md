@@ -35,6 +35,9 @@ and the CLI uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   receive built-in application CLI commands.
 - Skill manifests retain full Go module paths in imports and use only the
   module basename for generated command directories, matching `lazy new`.
+- Skill updates preserve a customized app display name when that literal is
+  the only difference from the template; other customizations still require
+  review.
 - Skill upgrades preserve the unrenamed sample app's `cmd/app` references
   instead of reporting a false local-edit conflict.
 
